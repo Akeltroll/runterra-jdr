@@ -244,20 +244,67 @@ function AttackModal({ char, onClose }) {
   );
 }
 
-/* --- Écran d'identité (choix du perso ou MJ à la 1ère visite) --- */
-function IdentityModal({ onPick }) {
+/* --- Écran de connexion (bloque tout tant qu'on n'est pas authentifié) --- */
+function LoginScreen({ onSubmit }) {
+  const [u, setU] = useState('');
+  const [p, setP] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(''); setBusy(true);
+    try {
+      await onSubmit(u, p);
+    } catch (e2) {
+      setErr('Identifiant ou mot de passe incorrect.');
+      setBusy(false);
+    }
+  };
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(8,8,14,.92)', display:'grid', placeItems:'center', zIndex:1000 }}>
-      <div className="panel" style={{ padding:'28px 32px', maxWidth:540, textAlign:'center' }}>
-        <h2 style={{ marginBottom:6 }}>Qui es-tu ?</h2>
-        <p className="dim" style={{ fontSize:13, marginBottom:18 }}>Choisis ton personnage (ou MJ). Modifiable plus tard.</p>
-        <div className="row gap-2 wrap" style={{ justifyContent:'center', marginBottom:14 }}>
-          {CHARACTERS.map(c => (
-            <button key={c.id} className="btn btn-ghost" onClick={() => onPick(c.id)}>{c.name}</button>
-          ))}
+      <form className="panel" onSubmit={submit} style={{ padding:'28px 32px', maxWidth:380, width:'90%' }}>
+        <div className="row gap-2" style={{ alignItems:'center', justifyContent:'center', marginBottom:6 }}>
+          <div className="crest" style={{ width:30, height:30, position:'relative' }}><i></i><b>R</b></div>
+          <h2 style={{ margin:0 }}>Chroniques de Runeterra</h2>
         </div>
-        <button className="btn btn-gold" onClick={() => onPick('mj')}>🎲 Je suis le MJ</button>
+        <p className="dim" style={{ fontSize:13, textAlign:'center', marginBottom:18 }}>Connecte-toi pour accéder à ta fiche.</p>
+        <input className="fld" placeholder="Nom d'utilisateur" value={u} autoFocus autoComplete="username"
+          onChange={(e) => setU(e.target.value)}
+          style={{ display:'block', width:'100%', marginBottom:10, padding:'9px 11px', background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, fontSize:14, boxSizing:'border-box' }} />
+        <input className="fld" type="password" placeholder="Mot de passe" value={p} autoComplete="current-password"
+          onChange={(e) => setP(e.target.value)}
+          style={{ display:'block', width:'100%', marginBottom:12, padding:'9px 11px', background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, fontSize:14, boxSizing:'border-box' }} />
+        {err && <div style={{ color:'var(--hp)', fontSize:12, marginBottom:10, textAlign:'center' }}>{err}</div>}
+        <button className="btn btn-gold" type="submit" disabled={busy || !u || !p} style={{ width:'100%' }}>
+          {busy ? 'Connexion…' : 'Se connecter'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/* --- Compte connecté mais sans perso attribué --- */
+function PendingScreen({ username, onSignOut }) {
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(8,8,14,.92)', display:'grid', placeItems:'center', zIndex:1000 }}>
+      <div className="panel" style={{ padding:'28px 32px', maxWidth:440, textAlign:'center' }}>
+        <h2 style={{ marginBottom:6 }}>Compte en attente</h2>
+        <p className="dim" style={{ fontSize:13, marginBottom:18 }}>
+          Bonjour <b>{username}</b> — ton personnage n'a pas encore été attribué par le MJ.
+          Reviens un peu plus tard.
+        </p>
+        <button className="btn btn-ghost" onClick={onSignOut}>Se déconnecter</button>
       </div>
+    </div>
+  );
+}
+
+/* --- Bouton de déconnexion (topbar) --- */
+function SignOutButton({ username, role, onSignOut }) {
+  return (
+    <div className="row gap-2" style={{ alignItems:'center' }}>
+      <span className="session">{username} · {role}</span>
+      <button className="btn btn-sm btn-ghost" onClick={onSignOut}>Déconnexion</button>
     </div>
   );
 }
@@ -318,5 +365,5 @@ function ExportImportPanel() {
 Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, Coins,
   ToastProvider, useToast, AnnoPin, AttackModal, STAT_GLYPH, STAT_LABEL,
-  IdentityModal, NumberStepper, ExportImportPanel,
+  LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
 });
