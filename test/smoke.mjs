@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const URL = 'http://127.0.0.1:5050/index.html';
+const URL = process.argv[2] || 'http://127.0.0.1:5050/index.html';
 const errors = [];
 
 const browser = await chromium.launch();
