@@ -1,9 +1,26 @@
 {
   "rules": {
+    "users": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (auth.uid === $uid && !data.exists() && newData.child('role').val() === 'joueur' && !newData.hasChild('charId')))",
+        "role":     { ".validate": "newData.isString() && (newData.val() === 'joueur' || newData.val() === 'mj' || newData.val() === 'admin')" },
+        "username": { ".validate": "newData.isString()" },
+        "charId":   { ".validate": "newData.isString()" },
+        "$other":   { ".validate": false }
+      }
+    },
     "campaign": {
       "runeterra": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        "characters": {
+          "$charId": {
+            ".read":  "auth != null && root.child('users').child(auth.uid).child('charId').val() === $charId",
+            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('charId').val() === $charId)"
+          }
+        }
       }
     }
   }
