@@ -10,12 +10,16 @@ page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
 
 await page.goto(URL, { waitUntil: 'networkidle' });
 
-// 1) écran d'identité
-await page.getByText('Qui es-tu ?').waitFor({ timeout: 15000 });
-console.log('OK  écran d identité affiché');
+// 1) écran de connexion
+const USER = process.env.SMOKE_USER || 'smoke';
+const PASS = process.env.SMOKE_PASS || 'smoke-pass';
+await page.getByPlaceholder('Nom d\'utilisateur').waitFor({ timeout: 15000 });
+console.log('OK  écran de connexion affiché');
 
-// 2) choisir Rathäel
-await page.getByRole('button', { name: 'Rathäel' }).click();
+// 2) se connecter avec le compte de test (attribué à un perso côté Admin)
+await page.getByPlaceholder('Nom d\'utilisateur').fill(USER);
+await page.getByPlaceholder('Mot de passe').fill(PASS);
+await page.getByRole('button', { name: 'Se connecter' }).click();
 
 // 3) la fiche charge (état Firebase) -> panneau survie présent et non "Chargement…"
 const fatiguePanel = page.locator('.panel', { hasText: 'Fatigue' }).filter({ hasNotText: 'Eau' }).first();
@@ -43,10 +47,7 @@ const after = await readFatigue();
 if (after !== 1) { console.log('ÉCHEC: Fatigue attendue 1, obtenue ' + after); process.exit(1); }
 console.log(`OK  Fatigue 0 -> ${after} (écriture+lecture Firebase temps réel)`);
 
-// 5) vue MJ
-await page.getByRole('button', { name: 'Vue MJ' }).click();
-await page.getByText('Tableau de bord').waitFor({ timeout: 10000 });
-console.log('OK  vue MJ rendue');
+// (supprimé) — le compte de test est un joueur, pas d'accès Vue MJ
 
 await browser.close();
 
