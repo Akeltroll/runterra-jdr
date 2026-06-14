@@ -12,8 +12,16 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const _db = firebase.database();
 
+/* Connexion anonyme : aucun mot de passe pour les joueurs, mais les règles
+   exigent un utilisateur authentifié (auth != null) → bloque les accès
+   non authentifiés depuis internet. `ready` résout quand la session est prête. */
+const _authReady = firebase.auth().signInAnonymously()
+  .then(() => true)
+  .catch((e) => { console.error('Connexion anonyme Firebase échouée :', e); return false; });
+
 /* Helpers temps réel exposés globalement */
 window.RTDB = {
+  ready: _authReady,
   subscribePath(path, cb) {
     const ref = _db.ref(path);
     const handler = ref.on('value', (snap) => cb(snap.val()));

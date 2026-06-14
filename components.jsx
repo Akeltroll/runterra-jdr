@@ -109,6 +109,22 @@ function Coins({ coins, size='md' }) {
   );
 }
 
+/* --- Rendu sûr d'un message de toast : seul <b>…</b> devient gras, tout le
+   reste est rendu en texte (neutralise toute autre balise HTML → pas d'XSS). --- */
+function renderToastMsg(msg) {
+  if (typeof msg !== 'string') return msg;
+  const parts = [];
+  const re = /<b>(.*?)<\/b>/g;
+  let last = 0, m, i = 0;
+  while ((m = re.exec(msg)) !== null) {
+    if (m.index > last) parts.push(msg.slice(last, m.index));
+    parts.push(<b key={i++}>{m[1]}</b>);
+    last = m.index + m[0].length;
+  }
+  if (last < msg.length) parts.push(msg.slice(last));
+  return parts;
+}
+
 /* --- Système de Toast (contexte global) --- */
 const ToastCtx = React.createContext(() => {});
 function ToastProvider({ children }) {
@@ -125,7 +141,7 @@ function ToastProvider({ children }) {
         {toasts.map(t => (
           <div key={t.id} className={'toast t-' + t.kind}>
             <div className="ic">{t.kind === 'buff' ? '▲' : t.kind === 'debuff' ? '▼' : '✦'}</div>
-            <div className="msg" dangerouslySetInnerHTML={{ __html: t.msg }}></div>
+            <div className="msg">{renderToastMsg(t.msg)}</div>
           </div>
         ))}
       </div>
