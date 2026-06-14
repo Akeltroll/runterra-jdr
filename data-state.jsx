@@ -6,8 +6,10 @@ const CAMPAIGN = 'campaign/runeterra';
 function charPath(id) { return `${CAMPAIGN}/characters/${id}/state`; }
 
 /* Amorçage : si la campagne n'existe pas encore, écrit l'état par défaut
-   des 5 persos (dérivé des définitions de data.jsx). */
-async function seedIfEmpty() {
+   des 5 persos. Réservé au staff (mj/admin) : un joueur n'a pas le droit de
+   lire/écrire la collection entière (règles RTDB). Sans-effet si déjà amorcé. */
+async function seedIfEmpty(role) {
+  if (!isStaff(role)) return;
   const existing = await window.RTDB.getSnapshot(`${CAMPAIGN}/characters`);
   if (existing) return;
   const all = {};
@@ -32,11 +34,55 @@ function useAllCharStates() {
   return all; // { charId: { state: {...} } }
 }
 
-/* Identité locale (perso choisi ou 'mj'), mémorisée dans le navigateur. */
-function useIdentity() {
-  const [id, setId] = useState(() => localStorage.getItem('runeterra_identity') || null);
-  const set = (v) => { localStorage.setItem('runeterra_identity', v); setId(v); };
-  return [id, set];
+/* Identité dérivée de l'auth Firebase + /users/{uid}.
+   - user undefined/null : pas connecté.
+   - rec undefined : enregistrement /users en cours de chargement.
+   - À la 1re connexion (rec absent), auto-inscription « en attente »
+     (role joueur, sans perso) — autorisée et contrainte par les règles RTDB. */
+function useAuthIdentity() {
+  const [user, setUser] = useState(window.RTDB.currentUser);
+  const [rec, setRec] = useState(undefined);
+  useEffect(() => window.RTDB.onAuth(setUser), []);
+  useEffect(() => {
+    if (!user) { setRec(undefined); return; }
+    setRec(undefined);
+    const unsub = window.RTDB.subscribePath(`users/${user.uid}`, (val) => {
+      if (val == null) {
+        const username = (user.email || '').split('@')[0];
+        window.RTDB.setPath(`users/${user.uid}`, { username, role: 'joueur' })
+          .catch((e) => console.error('Auto-inscription /users échouée :', e));
+        // le subscribe se redéclenchera après l'écriture
+      } else {
+        setRec(val);
+      }
+    });
+    return unsub;
+  }, [user]);
+  const loading = user === undefined || (!!user && rec === undefined);
+  return {
+    user,
+    uid: user ? user.uid : null,
+    username: rec ? rec.username : null,
+    role: rec ? rec.role : null,
+    charId: rec ? rec.charId : null,
+    rec: rec || null,
+    loading,
+  };
 }
 
-Object.assign(window, { useCharState, useAllCharStates, useIdentity, seedIfEmpty, charPath, CAMPAIGN });
+/* Liste de tous les comptes (page Admin). Réservé admin par les règles. */
+function useAllUsers() {
+  const [users, setUsers] = useState(null);
+  useEffect(() => window.RTDB.subscribePath('users', setUsers), []);
+  return users; // { uid: { username, role, charId } }
+}
+
+/* Attribution rôle + perso d'un compte (page Admin). charId vide => retiré. */
+function setUserAssignment(uid, role, charId) {
+  return window.RTDB.updatePath(`users/${uid}`, { role, charId: charId || null });
+}
+
+Object.assign(window, {
+  useCharState, useAllCharStates, useAuthIdentity, useAllUsers, setUserAssignment,
+  seedIfEmpty, charPath, CAMPAIGN,
+});
