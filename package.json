@@ -1,0 +1,20 @@
+{
+  "name": "rpg-dashboard-mockups",
+  "version": "1.0.0",
+  "description": "",
+  "main": "firebase-config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  }
+}

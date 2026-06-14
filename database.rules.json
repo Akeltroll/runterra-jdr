@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "campaign": {
+      "runeterra": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}

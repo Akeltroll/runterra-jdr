@@ -1,0 +1,370 @@
+/* ============================================================
+   CHRONIQUES DE RUNETERRA — Design Tokens & Composants
+   Système de design original (dark-fantasy doré).
+   Transférable tel quel en HTML/CSS/JS vanilla.
+   ============================================================ */
+
+:root {
+  /* ---- COULEURS : FONDS ---- */
+  --bg-abyss:      #07070C;   /* fond le plus profond (page) */
+  --bg-deep:       #0A0A0F;   /* fond principal */
+  --bg-panel:      #12121C;   /* surface de panneau */
+  --bg-panel-2:    #171723;   /* surface surélevée */
+  --bg-inset:      #0D0D15;   /* champ enfoncé / piste de barre */
+  --bg-hover:      #1E1E2C;
+
+  /* ---- COULEURS : OR (accent principal) ---- */
+  --gold:          #C89B3C;   /* or primaire */
+  --gold-bright:   #E4C56B;   /* or clair / hover */
+  --gold-pale:     #F0E6D3;   /* or pâle / texte titre */
+  --gold-deep:     #8A6A22;   /* or foncé / bordures */
+  --gold-glow:     rgba(200,155,60,0.22);
+
+  /* ---- COULEURS : RESSOURCES ---- */
+  --hp:            #C8302A;   /* points de vie */
+  --hp-deep:       #5E1512;
+  --mana:          #2B6FB0;   /* mana */
+  --mana-bright:   #4D9BE0;
+  --mana-deep:     #14304F;
+  --shield:        #D8B24A;   /* bouclier (jaune) */
+  --shield-deep:   #5A4818;
+
+  /* ---- COULEURS : MAGIE / ARGENT ---- */
+  --silver:        #8BE0FF;   /* reflets magiques / stats AP */
+  --silver-deep:   #2E5C6E;
+
+  /* ---- COULEURS : ÉTATS ---- */
+  --buff:          #1E7A4F;   /* buff positif (vert arcanique) */
+  --buff-bright:   #34C77F;
+  --debuff:        #C8302A;   /* débuff négatif (rouge sang) */
+  --debuff-bright: #E85A52;
+
+  /* ---- COULEURS : TEXTE ---- */
+  --ink:           #EDE7D8;   /* texte principal */
+  --ink-dim:       #A89F8C;   /* texte secondaire */
+  --ink-faint:     #6E685A;   /* texte tertiaire / labels */
+  --ink-disabled:  #46423A;
+
+  /* ---- BORDURES ---- */
+  --line:          #26262F;   /* séparateur discret */
+  --line-gold:     rgba(200,155,60,0.30);
+  --line-strong:   #353542;
+
+  /* ---- TYPOGRAPHIE ---- */
+  --font-display: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --font-body:    'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --font-mono:    'Spline Sans Mono', 'SF Mono', ui-monospace, monospace;
+
+  --fs-display:  44px;
+  --fs-h1:       30px;
+  --fs-h2:       22px;
+  --fs-h3:       16px;
+  --fs-body:     14px;
+  --fs-sm:       13px;
+  --fs-xs:       11px;
+  --fs-num-lg:   34px;  /* grands nombres de stats */
+
+  /* ---- ESPACEMENTS (échelle 4) ---- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+
+  /* ---- RAYONS ---- */
+  --r-sm: 4px; --r-md: 7px; --r-lg: 12px; --r-pill: 999px;
+
+  /* ---- OMBRES & LUEURS ---- */
+  --shadow-panel: 0 2px 4px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.45);
+  --shadow-modal: 0 24px 80px rgba(0,0,0,.7);
+  --glow-gold:   0 0 0 1px var(--line-gold), 0 0 18px var(--gold-glow);
+}
+
+/* ============================================================
+   RESET / BASE
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--ink);
+  background: var(--bg-abyss);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+h1,h2,h3,h4 { font-family: var(--font-display); font-weight: 600; color: var(--gold-pale); line-height: 1.15; }
+button { font-family: inherit; color: inherit; cursor: pointer; border: none; background: none; }
+input, select { font-family: inherit; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-inset); }
+::-webkit-scrollbar-thumb { background: #2c2c38; border-radius: 999px; border: 2px solid var(--bg-inset); }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-deep); }
+
+/* ============================================================
+   TEXTURE DE FOND HEXAGONALE (chrome atmosphérique)
+   ============================================================ */
+.hex-bg {
+  background-color: var(--bg-deep);
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(200,155,60,0.06), transparent 60%),
+    url("data:image/svg+xml,%3Csvg width='56' height='100' viewBox='0 0 56 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23C89B3C' stroke-opacity='0.045' stroke-width='1'%3E%3Cpath d='M28 0L56 16v33L28 65 0 49V16z'/%3E%3Cpath d='M28 50l28 16v33L28 115 0 99V66z'/%3E%3C/g%3E%3C/svg%3E");
+  background-position: center top;
+}
+
+/* ============================================================
+   LABELS / OVERLINE
+   ============================================================ */
+.overline {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.gold-rule { /* filet doré ornemental */
+  height: 1px; border: none;
+  background: linear-gradient(90deg, transparent, var(--gold-deep) 20%, var(--gold) 50%, var(--gold-deep) 80%, transparent);
+  opacity: .6;
+}
+
+/* ============================================================
+   PANNEAU / CARTE
+   ============================================================ */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-panel);
+}
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+.panel-head h3 { font-size: var(--fs-h3); letter-spacing: .04em; }
+
+/* ============================================================
+   BOUTONS
+   ============================================================ */
+.btn {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  padding: 10px 18px; border-radius: var(--r-md);
+  font-size: var(--fs-sm); font-weight: 600; letter-spacing: .02em;
+  border: 1px solid var(--line-strong); background: var(--bg-panel-2);
+  color: var(--ink); transition: all .15s ease; white-space: nowrap;
+}
+.btn:hover { background: var(--bg-hover); border-color: var(--gold-deep); }
+.btn-gold {
+  border: 1px solid var(--gold-deep);
+  background: linear-gradient(180deg, #2A2310, #1A1608);
+  color: var(--gold-pale);
+  box-shadow: inset 0 1px 0 rgba(228,197,107,.18);
+}
+.btn-gold:hover { border-color: var(--gold); box-shadow: var(--glow-gold), inset 0 1px 0 rgba(228,197,107,.25); color: var(--gold-bright); }
+.btn-hp     { border-color: var(--hp-deep); background: linear-gradient(180deg,#2A0F0E,#1A0807); color: #F0B7B3; }
+.btn-hp:hover { border-color: var(--hp); box-shadow: 0 0 16px rgba(200,48,42,.25); }
+.btn-mana   { border-color: var(--mana-deep); background: linear-gradient(180deg,#0F2236,#091420); color: #A9D2F2; }
+.btn-mana:hover { border-color: var(--mana); box-shadow: 0 0 16px rgba(43,111,176,.3); }
+.btn-shield { border-color: var(--shield-deep); background: linear-gradient(180deg,#2A2410,#1A1608); color: #EBD79A; }
+.btn-ghost  { background: transparent; border-color: var(--line); }
+.btn-sm { padding: 6px 12px; font-size: var(--fs-xs); }
+.btn-lg { padding: 14px 26px; font-size: var(--fs-body); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ============================================================
+   STAT CHIP — fond sombre arrondi, icône à gauche, valeur à droite en doré
+   ============================================================ */
+.stat-chip {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 10px 12px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.stat-chip .ic {
+  width: 26px; height: 26px; flex: none; border-radius: var(--r-sm);
+  display: grid; place-items: center;
+  font-size: 13px; color: var(--gold);
+  background: rgba(200,155,60,.08); border: 1px solid var(--line-gold);
+}
+.stat-chip .lbl { font-size: var(--fs-xs); color: var(--ink-dim); letter-spacing: .04em; flex: 1; }
+.stat-chip .val { font-family: var(--font-mono); font-size: var(--fs-h3); color: var(--gold-pale); font-weight: 600; }
+.stat-chip.is-magic .ic { color: var(--silver); background: rgba(139,224,255,.07); border-color: var(--silver-deep); }
+.stat-chip.is-magic .val { color: var(--silver); }
+
+/* ============================================================
+   BARRE DE RESSOURCE (HP / Mana / Bouclier)
+   ============================================================ */
+.bar {
+  position: relative; height: 26px; border-radius: var(--r-sm);
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.bar.bar-lg { height: 34px; }
+.bar .fill {
+  position: absolute; inset: 0 auto 0 0; height: 100%;
+  border-radius: inherit;
+  transition: width .5s cubic-bezier(.2,.7,.2,1);
+}
+.bar .fill::after { /* reflet supérieur */
+  content: ''; position: absolute; inset: 0 0 50% 0;
+  background: linear-gradient(180deg, rgba(255,255,255,.18), transparent);
+}
+.bar .seg { /* graduations */
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: rgba(0,0,0,.4);
+}
+.bar .txt {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 600;
+  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.9); letter-spacing: .03em;
+  z-index: 2;
+}
+.fill-hp     { background: linear-gradient(180deg, #E0463F, var(--hp)); }
+.fill-mana   { background: linear-gradient(180deg, var(--mana-bright), var(--mana)); }
+.fill-shield { background: linear-gradient(180deg, #EBCB6E, var(--shield)); }
+.bar.flash { animation: barflash .5s ease; }
+@keyframes barflash {
+  0%,100% { box-shadow: none; }
+  30% { box-shadow: inset 0 0 0 9999px rgba(255,255,255,.5); }
+}
+.bar.flash-heal { animation: barheal .55s ease; }
+@keyframes barheal {
+  0%,100% { box-shadow: none; }
+  30% { box-shadow: inset 0 0 0 9999px rgba(52,199,127,.45); }
+}
+
+/* ============================================================
+   BUFF / DÉBUFF BADGE
+   ============================================================ */
+.buff {
+  position: relative;
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  padding: 5px 10px 5px 7px; border-radius: var(--r-pill);
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: .02em;
+  border: 1px solid; cursor: pointer; user-select: none;
+  transition: all .15s ease;
+}
+.buff .dot { width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center; font-size: 9px; }
+.buff.is-buff   { color: var(--buff-bright);   border-color: rgba(52,199,127,.4);  background: rgba(30,122,79,.14); }
+.buff.is-buff .dot   { background: var(--buff); color: #fff; }
+.buff.is-debuff { color: var(--debuff-bright); border-color: rgba(232,90,82,.4);   background: rgba(200,48,42,.14); }
+.buff.is-debuff .dot { background: var(--debuff); color: #fff; }
+.buff.off { opacity: .32; filter: grayscale(.7); }
+.buff:hover { transform: translateY(-1px); }
+/* icône carrée compacte (vue MJ) */
+.buff-ic {
+  width: 28px; height: 28px; border-radius: var(--r-sm); flex: none;
+  display: grid; place-items: center; font-size: 13px; border: 1px solid;
+}
+.buff-ic.is-buff   { color: var(--buff-bright);   border-color: rgba(52,199,127,.4);  background: rgba(30,122,79,.16); }
+.buff-ic.is-debuff { color: var(--debuff-bright); border-color: rgba(232,90,82,.4);   background: rgba(200,48,42,.16); }
+
+/* tooltip simple */
+.tip { position: relative; }
+.tip .tip-body {
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(4px);
+  background: #05050A; border: 1px solid var(--line-gold); border-radius: var(--r-sm);
+  padding: 8px 10px; width: max-content; max-width: 220px;
+  font-size: var(--fs-xs); color: var(--ink); line-height: 1.4; font-weight: 500;
+  opacity: 0; pointer-events: none; transition: all .15s ease; z-index: 50;
+  box-shadow: var(--shadow-modal);
+}
+.tip:hover .tip-body { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ============================================================
+   CARTE INVENTAIRE
+   ============================================================ */
+.inv-item {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 10px 12px; border-radius: var(--r-md);
+  background: var(--bg-inset); border: 1px solid var(--line);
+}
+.inv-item .ic { width: 30px; height: 30px; flex: none; border-radius: var(--r-sm); display: grid; place-items: center; font-size: 15px; }
+.inv-item .nm { flex: 1; font-size: var(--fs-sm); color: var(--ink); }
+.inv-item .nm small { display: block; color: var(--ink-faint); font-size: var(--fs-xs); }
+.inv-item .qty {
+  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 700;
+  min-width: 24px; height: 22px; padding: 0 7px; border-radius: var(--r-pill);
+  display: grid; place-items: center; background: var(--bg-panel-2);
+  border: 1px solid var(--line-strong); color: var(--gold-pale);
+}
+.cat-equip  { color: var(--gold);   background: rgba(200,155,60,.1); border:1px solid var(--line-gold); }
+.cat-conso  { color: var(--buff-bright); background: rgba(30,122,79,.12); border:1px solid rgba(52,199,127,.3); }
+.cat-loot   { color: var(--silver); background: rgba(139,224,255,.08); border:1px solid var(--silver-deep); }
+
+/* ============================================================
+   MONNAIE
+   ============================================================ */
+.coins { display: flex; gap: var(--sp-2); }
+.coin {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+  border-radius: var(--r-pill); background: var(--bg-inset); border: 1px solid var(--line);
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 600;
+}
+.coin .disc { width: 14px; height: 14px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.4); }
+.coin-plat .disc { background: radial-gradient(circle at 35% 30%, #EAF6FF, #9FC6D8); }
+.coin-or   .disc { background: radial-gradient(circle at 35% 30%, #FBE08A, #C89B3C); }
+.coin-arg  .disc { background: radial-gradient(circle at 35% 30%, #F2F2F5, #A9A9B4); }
+.coin-cuiv .disc { background: radial-gradient(circle at 35% 30%, #E0A579, #9C5A2E); }
+.coin-plat { color: #CFEAF6; } .coin-or { color: var(--gold-bright); }
+.coin-arg { color: #D8D8DE; } .coin-cuiv { color: #D49B70; }
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+.toast-wrap { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 200; }
+.toast {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 12px 16px; min-width: 280px;
+  background: linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
+  border: 1px solid var(--line-gold); border-left: 3px solid var(--gold);
+  border-radius: var(--r-md); box-shadow: var(--shadow-modal);
+  animation: toastIn .35s cubic-bezier(.2,.8,.2,1);
+}
+.toast.t-buff   { border-left-color: var(--buff-bright); }
+.toast.t-debuff { border-left-color: var(--debuff-bright); }
+.toast .ic { width: 30px; height: 30px; border-radius: var(--r-sm); display: grid; place-items: center; flex:none; background: rgba(200,155,60,.1); color: var(--gold); }
+.toast .msg { font-size: var(--fs-sm); }
+.toast .msg b { color: var(--gold-pale); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+.modal-scrim { position: fixed; inset: 0; background: rgba(4,4,9,.78); backdrop-filter: blur(4px); display: grid; place-items: center; z-index: 300; padding: 24px; animation: fade .2s ease; }
+.modal {
+  width: min(560px, 100%); background: var(--bg-panel);
+  border: 1px solid var(--line-gold); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-modal); overflow: hidden;
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ============================================================
+   ANNOTATIONS DEV (callouts sur les maquettes)
+   ============================================================ */
+.anno {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .04em;
+  color: #7FC8FF; background: rgba(43,111,176,.12);
+  border: 1px dashed rgba(127,200,255,.5); border-radius: var(--r-sm);
+  padding: 3px 8px;
+}
+.anno-pin {
+  position: absolute; z-index: 60;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #2B6FB0; color: #fff; font-family: var(--font-mono);
+  font-size: 11px; font-weight: 700; display: grid; place-items: center;
+  border: 2px solid #7FC8FF; box-shadow: 0 0 0 3px rgba(43,111,176,.25);
+  cursor: help;
+}
+
+/* ============================================================
+   UTILITAIRES
+   ============================================================ */
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.gap-1 { gap: var(--sp-1);} .gap-2{gap:var(--sp-2);} .gap-3{gap:var(--sp-3);} .gap-4{gap:var(--sp-4);} .gap-5{gap:var(--sp-5);} .gap-6{gap:var(--sp-6);}
+.grow { flex: 1; } .mono { font-family: var(--font-mono); }
+.dim { color: var(--ink-dim); } .faint { color: var(--ink-faint); }
+.gold { color: var(--gold); } .center { text-align: center; }
+.wrap { flex-wrap: wrap; }

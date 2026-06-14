@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chroniques de Runeterra — Fiches JDR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="runeterra.css" />
+<style>
+  #app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  /* TOPBAR */
+  .topbar {
+    display: flex; align-items: center; gap: 24px;
+    padding: 0 24px; height: 60px; flex: none;
+    background: linear-gradient(180deg, #0E0E16, var(--bg-panel));
+    border-bottom: 1px solid var(--line-gold);
+  }
+  .topbar .brand { display: flex; align-items: center; gap: 12px; }
+  .topbar .crest { width: 30px; height: 30px; position: relative; }
+  .topbar .crest > i {
+    position: absolute; inset: 0; transform: rotate(45deg); border-radius: 5px;
+    border: 1.5px solid var(--gold); background: linear-gradient(135deg, rgba(200,155,60,.2), transparent);
+  }
+  .topbar .crest > b { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 15px; color: var(--gold-bright); }
+  .topbar .ttl { font-family: var(--font-display); font-size: 16px; color: var(--gold-pale); letter-spacing: .06em; }
+  .nav { display: flex; gap: 2px; flex: 1; }
+  .nav button {
+    padding: 8px 15px; border-radius: 7px; font-size: 13px; font-weight: 600; letter-spacing: .02em;
+    color: var(--ink-dim); border: 1px solid transparent; transition: all .15s ease;
+  }
+  .nav button:hover { color: var(--ink); background: var(--bg-hover); }
+  .nav button.active { color: var(--gold-bright); background: var(--bg-inset); border-color: var(--line-gold); }
+  .topbar .session { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+  .page { flex: 1; min-height: 0; overflow: hidden; }
+
+  /* RESPONSIVE — tablette 768px : colonnes empilées, pas de scroll horizontal */
+  @media (max-width: 980px) {
+    .sheet-grid { grid-template-columns: 1fr !important; }
+    .prog-grid { grid-template-columns: 1fr !important; }
+    .rune-grid { grid-template-columns: 1fr !important; }
+  }
+  @media (max-width: 768px) {
+    .topbar { gap: 12px; overflow-x: auto; }
+    .nav { gap: 0; }
+    .nav button { padding: 8px 10px; font-size: 12px; white-space: nowrap; }
+    .topbar .ttl, .topbar .session { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" fill="#0A0A0F"/>
+    <rect x="32" y="32" width="36" height="36" transform="rotate(45 50 50)" fill="none" stroke="#C89B3C" stroke-width="3"/>
+    <text x="50" y="58" font-family="Georgia,serif" font-size="22" fill="#E4C56B" text-anchor="middle">R</text>
+  </svg>
+</template>
+
+<!-- React + Babel (versions épinglées) -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Hooks React partagés globalement entre tous les scripts babel -->
+<script>
+  window.useState = React.useState;
+  window.useEffect = React.useEffect;
+  window.useRef = React.useRef;
+  window.useCallback = React.useCallback;
+  window.useMemo = React.useMemo;
+</script>
+
+<!-- Firebase (compat = objet global `firebase`, compatible zéro-build) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" integrity="sha384-AQ3POAMqIhwS81FrUH95ekxqBZHeP5tG2JfEL3+7GuTtfRLWnrRh32UxwzM+//A9" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js" integrity="sha384-1/m+A1jVWbD3yiK3/vtFvm1+LjK1WLpSoDY+Kaxppwn/yP9BVSgdHTNQVOjrzUO5" crossorigin="anonymous"></script>
+<script src="firebase-config.js"></script>
+
+<!-- Logique de jeu pure (testable en Node, chargée ici en global) -->
+<script src="game-logic.js"></script>
+
+<!-- Données & composants -->
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="data-state.jsx"></script>
+<script type="text/babel" src="components.jsx"></script>
+<!-- Pages -->
+<script type="text/babel" src="pages-lobby.jsx"></script>
+<script type="text/babel" src="pages-mj.jsx"></script>
+<script type="text/babel" src="pages-sheet.jsx"></script>
+<script type="text/babel" src="pages-journal.jsx"></script>
+<script type="text/babel" src="pages-progression.jsx"></script>
+<script type="text/babel" src="pages-ds.jsx"></script>
+
+<!-- Shell -->
+<script type="text/babel">
+const PAGES = [
+  { id:'lobby',   label:'Accueil',     comp:() => <LobbyPage go={setRoute} /> },
+  { id:'mj',      label:'Vue MJ',      comp:() => <MJPage go={setRoute} /> },
+  { id:'sheet',   label:'Fiche Joueur',comp:() => <SheetPage /> },
+  { id:'journal', label:'Journal',     comp:() => <JournalPage /> },
+  { id:'prog',    label:'Progression', comp:() => <ProgressionPage /> },
+  { id:'ds',      label:'Design System',comp:() => <DesignSystemPage /> },
+];
+let setRoute; // remonté par App pour la navigation depuis les pages
+
+function App() {
+  const [identity, setIdentity] = useIdentity();
+  const [route, _setRoute] = useState(() =>
+    localStorage.getItem('runeterra_route') ||
+    (localStorage.getItem('runeterra_identity') === 'mj' ? 'mj' : 'sheet'));
+  setRoute = (r) => { _setRoute(r); localStorage.setItem('runeterra_route', r); };
+  useEffect(() => { seedIfEmpty(); }, []);
+  const cur = PAGES.find(p => p.id === route) || PAGES[0];
+  return (
+    <ToastProvider>
+      {!identity && <IdentityModal onPick={setIdentity} />}
+      <div className="topbar">
+        <div className="brand">
+          <div className="crest"><i></i><b>R</b></div>
+          <span className="ttl">Chroniques de Runeterra</span>
+        </div>
+        <nav className="nav">
+          {PAGES.map(p => (
+            <button key={p.id} className={p.id === route ? 'active' : ''} onClick={() => setRoute(p.id)}>{p.label}</button>
+          ))}
+        </nav>
+        <span className="session">SESSION · VX-7K2</span>
+      </div>
+      <div className="page hex-bg">{cur.comp()}</div>
+    </ToastProvider>
+  );
+}
+ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+</script>
+</body>
+</html>
