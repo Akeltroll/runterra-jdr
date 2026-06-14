@@ -12,16 +12,33 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const _db = firebase.database();
 
-/* Connexion anonyme : aucun mot de passe pour les joueurs, mais les règles
-   exigent un utilisateur authentifié (auth != null) → bloque les accès
-   non authentifiés depuis internet. `ready` résout quand la session est prête. */
-const _authReady = firebase.auth().signInAnonymously()
-  .then(() => true)
-  .catch((e) => { console.error('Connexion anonyme Firebase échouée :', e); return false; });
+/* Auth Email/Password (les pseudos sont mappés en e-mails factices côté UI).
+   `ready` résout dès que l'état d'auth initial est connu (connecté OU non).
+   La sécurité réelle est dans database.rules.json (cloisonnement par /users). */
+const _auth = firebase.auth();
+let _currentUser = null;
+let _resolveReady;
+const _authReady = new Promise((res) => { _resolveReady = res; });
+const _authCbs = new Set();
+let _readyDone = false;
+_auth.onAuthStateChanged((user) => {
+  _currentUser = user;
+  if (!_readyDone) { _readyDone = true; _resolveReady(true); }
+  _authCbs.forEach((cb) => cb(user));
+});
 
-/* Helpers temps réel exposés globalement */
+/* Helpers temps réel + auth exposés globalement */
 window.RTDB = {
   ready: _authReady,
+  get currentUser() { return _currentUser; },
+  /* Abonnement aux changements d'état d'auth. Rappelle immédiatement avec l'état courant. */
+  onAuth(cb) { _authCbs.add(cb); cb(_currentUser); return () => _authCbs.delete(cb); },
+  signIn(username, password) {
+    const email = usernameToEmail(username);
+    if (!email) return Promise.reject(new Error('auth/invalid-username'));
+    return _auth.signInWithEmailAndPassword(email, password);
+  },
+  signOut() { return _auth.signOut(); },
   subscribePath(path, cb) {
     const ref = _db.ref(path);
     const handler = ref.on('value', (snap) => cb(snap.val()));
