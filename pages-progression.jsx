@@ -8,6 +8,7 @@ function ProgressionPage() {
   const a = char.attrs;
   const totalUsed = a.force + a.hab + a.mental + a.magie;
   const lvlRow = LEVELS.find(l => l.lvl === char.level) || LEVELS[LEVELS.length - 1];
+  const bonus = totalUsed - lvlRow.total; // ex. point bonus de création (>0 => affiché en gold)
 
   return (
     <div style={{ padding:'24px', height:'100%', overflow:'auto' }}>
@@ -29,7 +30,11 @@ function ProgressionPage() {
         <div className="col gap-5">
           <div className="panel">
             <div className="panel-head"><h3>Attributs principaux</h3>
-              <span className="mono faint" style={{ fontSize:11 }}>{totalUsed} / {lvlRow.total} pts · limite {lvlRow.limit}</span>
+              <span className="mono faint" style={{ fontSize:11 }}>
+                {totalUsed} / {lvlRow.total} pts
+                {bonus > 0 && <span style={{ color:'var(--gold-bright)', fontWeight:700 }}> (+{bonus} bonus)</span>}
+                {` · limite ${lvlRow.limit}`}
+              </span>
             </div>
             <div className="col gap-4" style={{ padding:'18px' }}>
               {ATTRIBUTES.map(attr => {

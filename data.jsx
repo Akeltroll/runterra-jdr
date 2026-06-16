@@ -114,11 +114,12 @@ function mkChar(o) {
 }
 
 /* Données fidèles aux feuilles : JB→Rathäel, Baptiste→Urskaar, Erwan→Smith,
-   Fab→Lunick, Steph→Jett. Attributs réels (total 12 = niveau 3, limite 7).
+   Fab→Elias Crowe (id interne 'lunick'), Steph→Jett. Niveau 2 (total 11 + 1 point
+   bonus de création = 12, limite 6).
    HP/Mana max = formules Excel (validées : 495/265, 685/180, 290/310, 520/180, 150/460). */
 const CHARACTERS = [
   mkChar({ id:'rathael', name:'Rathäel', player:'JB', title:'Le Serment Brisé', cls:'Chevalier déchu',
-    F:4, H:3, M:4, C:1, level:3, color:'var(--hp)', initial:'R', img:'players/rathael.jpg',
+    F:4, H:3, M:4, C:1, level:2, color:'var(--hp)', initial:'R', img:'players/rathael.jpg',
     weaponId:'claymore', weaponIds:['claymore','epeebouclier'], mode:'offensif', lethality:0, fatigue:1, eau:3,
     hpCur:1.0, manaCur:205/265, shieldCur:99, shieldMax:200,
     rune:'Sadisme',
@@ -132,7 +133,7 @@ const CHARACTERS = [
     coins:{ plat:0, or:10, arg:10, cuiv:10 },
   }),
   mkChar({ id:'urskaar', name:'Urskaar', player:'Baptiste', title:'Le Poing de Fer', cls:'Pugiliste',
-    F:6, H:1, M:5, C:0, level:3, color:'var(--gold)', initial:'U', img:'players/urskaar.jpg',
+    F:6, H:1, M:5, C:0, level:2, color:'var(--gold)', initial:'U', img:'players/urskaar.jpg',
     weaponId:'gantelet', weaponIds:['gantelet','dague','epeeni'], mode:'offensif', lethality:0, fatigue:1, eau:2,
     hpCur:312/685, manaCur:30/180, shieldCur:0, shieldMax:200,
     rune:null,
@@ -147,7 +148,7 @@ const CHARACTERS = [
     coins:{ plat:0, or:10, arg:10, cuiv:10 },
   }),
   mkChar({ id:'smith', name:'Smith', player:'Erwan', title:'La Lame Silencieuse', cls:'Duelliste',
-    F:3, H:6, M:1, C:2, level:3, color:'var(--buff)', initial:'S', img:'players/smith.jpg',
+    F:3, H:6, M:1, C:2, level:2, color:'var(--buff)', initial:'S', img:'players/smith.jpg',
     weaponId:'dague', weaponIds:['dague','epeeni'], mode:'offensif', lethality:0, fatigue:0, eau:3,
     hpCur:1.0, manaCur:1.0, shieldCur:0, shieldMax:200,
     rune:null,
@@ -164,8 +165,9 @@ const CHARACTERS = [
     ],
     coins:{ plat:0, or:10, arg:10, cuiv:10 },
   }),
-  mkChar({ id:'lunick', name:'Lunick', player:'Fab', title:"L'Œil des Marées", cls:'Navigateur arcanique',
-    F:5, H:4, M:3, C:0, level:3, color:'var(--mana)', initial:'L', img:'players/lunick.jpg',
+  // id interne 'lunick' conservé (clé Firebase/Admin) ; affiché « Elias Crowe » — pas de migration.
+  mkChar({ id:'lunick', name:'Elias Crowe', player:'Fab', title:'Capitaine corsaire', cls:'Navigateur arcanique',
+    F:5, H:4, M:3, C:0, level:2, color:'var(--mana)', initial:'E', img:'players/Elias.png',
     weaponId:'relique', weaponIds:['relique','arbalete','dague','hachette'], mode:'offensif', lethality:0, fatigue:0, eau:1,
     hpCur:1.0, manaCur:150/180, shieldCur:0, shieldMax:200,
     rune:null,
@@ -184,7 +186,7 @@ const CHARACTERS = [
     coins:{ plat:0, or:10, arg:10, cuiv:10 },
   }),
   mkChar({ id:'jett', name:'Jett', player:'Steph', title:'La Flèche Hextech', cls:'Artificier',
-    F:1, H:6, M:1, C:4, level:3, color:'var(--silver)', initial:'J', img:'players/jett.jpg',
+    F:1, H:6, M:1, C:4, level:2, color:'var(--silver)', initial:'J', img:'players/jett.jpg',
     weaponId:'epeecourte', weaponIds:['archextech','epeecourte','dague'], mode:'offensif', lethality:0, fatigue:0, eau:2,
     hpCur:1.0, manaCur:90/460, shieldCur:35, shieldMax:200,
     rune:null,
