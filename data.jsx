@@ -89,21 +89,13 @@ const WEAPONS = [
   { id:'hachette',     name:'Hachette',              cat:'Physique', type:'1H',     stat:'ad', ic:'🪓' },
 ];
 
-const ATTACK_MODES = [
-  { id:'offensif',  label:'Offensif',  mult:1.0,  desc:'Dégâts pleins, aucune défense' },
-  { id:'equilibre', label:'Équilibré', mult:0.8,  desc:'80% dégâts, garde partielle' },
-  { id:'defensif',  label:'Défensif',  mult:0.0,  desc:'0 dégât, posture de garde' },
-];
-
-/* --- Calcul d'une attaque (transparent, annoté pour le dev) --- */
-function computeAttack({ weapon, mode, stats, lethality, isCrit }) {
+/* --- Calcul d'une attaque (dégâts pleins ; le système de mode de combat a été retiré) --- */
+function computeAttack({ weapon, stats, lethality, isCrit }) {
   const power = weapon.stat === 'ap' ? stats.ap : stats.ad;
-  const m = ATTACK_MODES.find(x => x.id === mode);
-  let base = Math.round(power * m.mult);
-  let dmg = base;
-  if (isCrit && mode !== 'defensif') dmg = Math.round(base * (stats.dcrit / 100));
+  const base = power; // dégâts pleins
+  const dmg = isCrit ? Math.round(base * (stats.dcrit / 100)) : base;
   const pen = lethality * 10; // léthalité = pénétration d'armure forfaitaire
-  return { power, base, dmg, crit: isCrit, pen, modeMult: m.mult };
+  return { power, base, dmg, crit: isCrit, pen };
 }
 
 /* --- 5 personnages (renommés depuis Erwan/Baptiste/JB/Steph/Fab) --- */
@@ -120,7 +112,7 @@ function mkChar(o) {
 const CHARACTERS = [
   mkChar({ id:'rathael', name:'Rathäel', player:'JB', title:'Le Serment Brisé', cls:'Chevalier déchu',
     F:4, H:3, M:4, C:1, level:2, color:'var(--hp)', initial:'R', img:'players/rathael.jpg',
-    weaponId:'claymore', weaponIds:['claymore','epeebouclier'], mode:'offensif', lethality:0, fatigue:1, eau:3,
+    weaponId:'claymore', weaponIds:['claymore','epeebouclier'], lethality:0, fatigue:1, eau:3,
     hpCur:1.0, manaCur:205/265, shieldCur:99, shieldMax:200,
     rune:'Sadisme',
     buffs:[],
@@ -134,7 +126,7 @@ const CHARACTERS = [
   }),
   mkChar({ id:'urskaar', name:'Urskaar', player:'Baptiste', title:'Le Poing de Fer', cls:'Pugiliste',
     F:6, H:1, M:5, C:0, level:2, color:'var(--gold)', initial:'U', img:'players/urskaar.jpg',
-    weaponId:'gantelet', weaponIds:['gantelet','dague','epeeni'], mode:'offensif', lethality:0, fatigue:1, eau:2,
+    weaponId:'gantelet', weaponIds:['gantelet','dague','epeeni'], lethality:0, fatigue:1, eau:2,
     hpCur:312/685, manaCur:30/180, shieldCur:0, shieldMax:200,
     rune:null,
     buffs:['bravoure'],
@@ -149,7 +141,7 @@ const CHARACTERS = [
   }),
   mkChar({ id:'smith', name:'Smith', player:'Erwan', title:'La Lame Silencieuse', cls:'Duelliste',
     F:3, H:6, M:1, C:2, level:2, color:'var(--buff)', initial:'S', img:'players/smith.jpg',
-    weaponId:'dague', weaponIds:['dague','epeeni'], mode:'offensif', lethality:0, fatigue:0, eau:3,
+    weaponId:'dague', weaponIds:['dague','epeeni'], lethality:0, fatigue:0, eau:3,
     hpCur:1.0, manaCur:1.0, shieldCur:0, shieldMax:200,
     rune:null,
     buffs:['peaufer'],
@@ -168,7 +160,7 @@ const CHARACTERS = [
   // id interne 'lunick' conservé (clé Firebase/Admin) ; affiché « Elias Crowe » — pas de migration.
   mkChar({ id:'lunick', name:'Elias Crowe', player:'Fab', title:'Capitaine corsaire', cls:'Navigateur arcanique',
     F:5, H:4, M:3, C:0, level:2, color:'var(--mana)', initial:'E', img:'players/Elias.png',
-    weaponId:'relique', weaponIds:['relique','arbalete','dague','hachette'], mode:'offensif', lethality:0, fatigue:0, eau:1,
+    weaponId:'relique', weaponIds:['relique','arbalete','dague','hachette'], lethality:0, fatigue:0, eau:1,
     hpCur:1.0, manaCur:150/180, shieldCur:0, shieldMax:200,
     rune:null,
     buffs:['foi'],
@@ -187,7 +179,7 @@ const CHARACTERS = [
   }),
   mkChar({ id:'jett', name:'Jett', player:'Steph', title:'La Flèche Hextech', cls:'Artificier',
     F:1, H:6, M:1, C:4, level:2, color:'var(--silver)', initial:'J', img:'players/jett.jpg',
-    weaponId:'epeecourte', weaponIds:['archextech','epeecourte','dague'], mode:'offensif', lethality:0, fatigue:0, eau:2,
+    weaponId:'epeecourte', weaponIds:['archextech','epeecourte','dague'], lethality:0, fatigue:0, eau:2,
     hpCur:1.0, manaCur:90/460, shieldCur:35, shieldMax:200,
     rune:null,
     buffs:['aiguisage'],
@@ -204,24 +196,24 @@ const CHARACTERS = [
 
 /* --- Journal de combat (extrait réel du fichier source) --- */
 const JOURNAL = [
-  { t:'14:32', arme:'Lance',    type:'Physique', mode:'offensif',  crit:false, dmg:131 },
-  { t:'14:33', arme:'Lance',    type:'Physique', mode:'défensif',  crit:false, dmg:0   },
-  { t:'15:18', arme:'Lance',    type:'Physique', mode:'offensif',  crit:false, dmg:43  },
-  { t:'15:18', arme:'Lance',    type:'Physique', mode:'défensif',  crit:false, dmg:0   },
-  { t:'15:19', arme:'Lance',    type:'Physique', mode:'offensif',  crit:false, dmg:43  },
-  { t:'15:19', arme:'Lance',    type:'Physique', mode:'offensif',  crit:false, dmg:43  },
-  { t:'15:43', arme:'Dague',    type:'Physique', mode:'offensif',  crit:false, dmg:131 },
-  { t:'15:44', arme:'Lance',    type:'Physique', mode:'équilibré', crit:true,  dmg:318 },
-  { t:'15:45', arme:'Dague',    type:'Physique', mode:'équilibré', crit:false, dmg:105 },
-  { t:'15:45', arme:'Dague',    type:'Physique', mode:'défensif',  crit:false, dmg:0   },
-  { t:'16:02', arme:'Dague',    type:'Physique', mode:'offensif',  crit:false, dmg:131 },
-  { t:'16:02', arme:'Dague',    type:'Physique', mode:'offensif',  crit:false, dmg:131 },
-  { t:'16:21', arme:'Grimoire', type:'Magique',  mode:'—',         crit:false, dmg:135 },
-  { t:'16:21', arme:'Grimoire', type:'Magique',  mode:'—',         crit:false, dmg:135 },
-  { t:'16:22', arme:'Grimoire', type:'Magique',  mode:'—',         crit:true,  dmg:357 },
-  { t:'16:23', arme:'Grimoire', type:'Magique',  mode:'—',         crit:false, dmg:135 },
-  { t:'16:41', arme:'Grimoire', type:'Magique',  mode:'—',         crit:false, dmg:135 },
-  { t:'16:42', arme:'Grimoire', type:'Magique',  mode:'—',         crit:true,  dmg:357 },
+  { t:'14:32', arme:'Lance',    type:'Physique', crit:false, dmg:131 },
+  { t:'14:33', arme:'Lance',    type:'Physique', crit:false, dmg:0   },
+  { t:'15:18', arme:'Lance',    type:'Physique', crit:false, dmg:43  },
+  { t:'15:18', arme:'Lance',    type:'Physique', crit:false, dmg:0   },
+  { t:'15:19', arme:'Lance',    type:'Physique', crit:false, dmg:43  },
+  { t:'15:19', arme:'Lance',    type:'Physique', crit:false, dmg:43  },
+  { t:'15:43', arme:'Dague',    type:'Physique', crit:false, dmg:131 },
+  { t:'15:44', arme:'Lance',    type:'Physique', crit:true,  dmg:318 },
+  { t:'15:45', arme:'Dague',    type:'Physique', crit:false, dmg:105 },
+  { t:'15:45', arme:'Dague',    type:'Physique', crit:false, dmg:0   },
+  { t:'16:02', arme:'Dague',    type:'Physique', crit:false, dmg:131 },
+  { t:'16:02', arme:'Dague',    type:'Physique', crit:false, dmg:131 },
+  { t:'16:21', arme:'Grimoire', type:'Magique',  crit:false, dmg:135 },
+  { t:'16:21', arme:'Grimoire', type:'Magique',  crit:false, dmg:135 },
+  { t:'16:22', arme:'Grimoire', type:'Magique',  crit:true,  dmg:357 },
+  { t:'16:23', arme:'Grimoire', type:'Magique',  crit:false, dmg:135 },
+  { t:'16:41', arme:'Grimoire', type:'Magique',  crit:false, dmg:135 },
+  { t:'16:42', arme:'Grimoire', type:'Magique',  crit:true,  dmg:357 },
 ];
 
 /* --- Rune Domination : 3 voies --- */
@@ -253,6 +245,6 @@ const RUNE = {
 };
 
 Object.assign(window, {
-  computeStats, computeAttack, CHARACTERS, BUFFS, WEAPONS, ATTACK_MODES,
+  computeStats, computeAttack, CHARACTERS, BUFFS, WEAPONS,
   LEVELS, ATTRIBUTES, JOURNAL, RUNE,
 });

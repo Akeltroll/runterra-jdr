@@ -68,8 +68,8 @@ function JournalPage() {
         <table style={{ width:'100%', borderCollapse:'collapse' }}>
           <thead>
             <tr style={{ background:'var(--bg-inset)' }}>
-              {['Heure','Arme','Type','Mode','Critique','Dégâts'].map((h, i) => (
-                <th key={h} style={{ textAlign: i===5?'right':'left', padding:'11px 18px', fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--ink-faint)', borderBottom:'1px solid var(--line)' }}>{h}</th>
+              {['Heure','Arme','Type','Critique','Dégâts'].map((h, i) => (
+                <th key={h} style={{ textAlign: i===4?'right':'left', padding:'11px 18px', fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--ink-faint)', borderBottom:'1px solid var(--line)' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -82,7 +82,6 @@ function JournalPage() {
                   <span style={{ fontSize:11, padding:'3px 9px', borderRadius:99, color: r.type==='Magique'?'var(--silver)':'var(--gold-bright)',
                     background: r.type==='Magique'?'rgba(139,224,255,.08)':'rgba(200,155,60,.08)', border:'1px solid ' + (r.type==='Magique'?'var(--silver-deep)':'var(--line-gold)') }}>{r.type}</span>
                 </td>
-                <td style={{ padding:'10px 18px', fontSize:12, color:'var(--ink-dim)', textTransform:'capitalize' }}>{r.mode}</td>
                 <td style={{ padding:'10px 18px' }}>
                   {r.crit ? <span className="gold mono" style={{ fontSize:12, fontWeight:700 }}>★ OUI</span> : <span className="faint mono" style={{ fontSize:12 }}>—</span>}
                 </td>
