@@ -166,11 +166,9 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers }) {
 /* ---- Colonne 2 : combat & armes ---- */
 function CombatColumn({ char, onAttack, hp, setHp, mana, setMana, shield, setShield, fatigue, eau, setField, activeBuffs }) {
   const [lethality, setLethality] = useState(char.lethality);
-  const [mode, setMode] = useState(char.mode);
   const weapon = WEAPONS.find(w => w.id === char.weaponId);
   const power = weapon.stat === 'ap' ? char.stats.ap : char.stats.ad;
-  const m = ATTACK_MODES.find(x => x.id === mode);
-  const estimate = Math.round(power * m.mult);
+  const estimate = power;
   return (
     <div className="col gap-5">
       <div className="panel">
@@ -189,13 +187,6 @@ function CombatColumn({ char, onAttack, hp, setHp, mana, setMana, shield, setShi
               <div style={{ fontFamily:'var(--font-display)', fontSize:18, color:'var(--gold-pale)' }}>{weapon.name}</div>
               <div className="faint" style={{ fontSize:12 }}>{weapon.cat} · {weapon.type} · base {weapon.stat.toUpperCase()}</div>
             </div>
-          </div>
-          {/* mode */}
-          <div className="overline" style={{ marginBottom:7 }}>Mode de combat</div>
-          <div className="row gap-2" style={{ marginBottom:14 }}>
-            {ATTACK_MODES.map(x => (
-              <button key={x.id} onClick={() => setMode(x.id)} className={'btn btn-sm' + (x.id === mode ? ' btn-gold' : ' btn-ghost')} style={{ flex:1, justifyContent:'center' }}>{x.label}</button>
-            ))}
           </div>
           {/* léthalité */}
           <div className="row" style={{ justifyContent:'space-between', marginBottom:7 }}>

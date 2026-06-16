@@ -165,17 +165,15 @@ function AttackModal({ char, onClose }) {
   const toast = useToast();
   const owned = (char.weaponIds && char.weaponIds.length) ? WEAPONS.filter(w => char.weaponIds.includes(w.id)) : WEAPONS;
   const [weaponId, setWeaponId] = useState(char.weaponId);
-  const [mode, setMode] = useState(char.mode);
   const [lethality, setLethality] = useState(char.lethality);
   const [result, setResult] = useState(null);
   const weapon = WEAPONS.find(w => w.id === weaponId);
 
   const launch = () => {
     const isCrit = Math.random() * 100 < char.stats.crit;
-    const r = computeAttack({ weapon, mode, stats: char.stats, lethality, isCrit });
+    const r = computeAttack({ weapon, stats: char.stats, lethality, isCrit });
     setResult(r);
-    if (mode === 'defensif') toast(`<b>${char.name}</b> adopte une posture défensive`, 'gold');
-    else toast(`<b>${char.name}</b> inflige <b>${r.dmg}</b> dégâts ${weapon.cat.toLowerCase()}s${isCrit ? ' — CRITIQUE !' : ''}`, isCrit ? 'buff' : 'gold');
+    toast(`<b>${char.name}</b> inflige <b>${r.dmg}</b> dégâts ${weapon.cat.toLowerCase()}s${isCrit ? ' — CRITIQUE !' : ''}`, isCrit ? 'buff' : 'gold');
   };
 
   return (
@@ -193,17 +191,6 @@ function AttackModal({ char, onClose }) {
               <button key={w.id} onClick={() => setWeaponId(w.id)}
                 className={'btn btn-sm' + (w.id === weaponId ? ' btn-gold' : ' btn-ghost')}>
                 {w.name} <span className="faint mono" style={{ fontSize:10 }}>{w.type}</span>
-              </button>
-            ))}
-          </div>
-          {/* mode */}
-          <div className="overline" style={{ marginBottom:8 }}>Mode de combat</div>
-          <div className="row gap-2" style={{ marginBottom:18 }}>
-            {ATTACK_MODES.map(m => (
-              <button key={m.id} onClick={() => setMode(m.id)}
-                className={'btn' + (m.id === mode ? ' btn-gold' : ' btn-ghost')} style={{ flex:1, flexDirection:'column', alignItems:'flex-start', gap:2 }}>
-                <span>{m.label}</span>
-                <span className="faint" style={{ fontSize:10, fontWeight:400 }}>{m.desc}</span>
               </button>
             ))}
           </div>
@@ -229,7 +216,6 @@ function AttackModal({ char, onClose }) {
               <hr className="gold-rule" style={{ margin:'14px 0' }} />
               <div className="row gap-4" style={{ justifyContent:'center', flexWrap:'wrap', fontSize:12 }} >
                 <span className="dim">Base <b className="mono gold">{result.base}</b></span>
-                <span className="dim">×Mode <b className="mono gold">{result.modeMult}</b></span>
                 <span className="dim">{weapon.stat === 'ap' ? 'AP' : 'AD'} <b className="mono gold">{result.power}</b></span>
                 <span className="dim">Pén. <b className="mono gold">{result.pen}</b></span>
               </div>
