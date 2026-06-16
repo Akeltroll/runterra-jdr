@@ -100,7 +100,7 @@ function SecondaryStats({ stats, variant }) {
 }
 
 /* ---- Colonne 3 : buffs + inventaire ---- */
-function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers }) {
+function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventory, onSaveItem, onRemoveItem }) {
   const toast = useToast();
   const active = new Set(activeBuffs);
   const toggle = (b) => {
@@ -108,8 +108,7 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers }) {
     setBuff(b.id, on);
     if (on) toast(`<b>${char.name}</b> — ${b.name} ${b.type === 'buff' ? 'activé' : 'subi'}`, b.type);
   };
-  const cats = ['Équipement', 'Consommables', 'Butin'];
-  const MOD_STATS = [['hp','HP'],['mana','Mana'],['ad','AD'],['ap','AP'],['armure','Armure'],['resmag','Rés.Mag'],['crit','%Crit'],['dcrit','%D.Crit'],['sapience','Sapience']];
+  const MOD_STATS =[['hp','HP'],['mana','Mana'],['ad','AD'],['ap','AP'],['armure','Armure'],['resmag','Rés.Mag'],['crit','%Crit'],['dcrit','%D.Crit'],['sapience','Sapience']];
   return (
     <div className="col gap-5">
       <div className="panel">
@@ -141,18 +140,11 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers }) {
       </div>
 
       <div className="panel">
-        <div className="panel-head"><h3>Inventaire</h3><span className="mono faint" style={{ fontSize:11 }}>{char.inv.length} objets</span></div>
+        <div className="panel-head"><h3>Inventaire</h3>
+          <span className="mono faint" style={{ fontSize:11 }}>{inventory ? Object.keys(inventory).length : 0} objets</span>
+        </div>
         <div className="col gap-4" style={{ padding:'14px 16px' }}>
-          {cats.map(cat => {
-            const items = char.inv.filter(i => i.cat === cat);
-            if (!items.length) return null;
-            return (
-              <div key={cat}>
-                <div className="overline" style={{ marginBottom:7 }}>{cat}</div>
-                <div className="col gap-2">{items.map((it, i) => <InvItem key={i} item={it} />)}</div>
-              </div>
-            );
-          })}
+          <InventoryPanel items={inventory} editable={true} onSave={(it) => onSaveItem(it.id, it)} onRemove={onRemoveItem} />
           <div>
             <div className="overline" style={{ marginBottom:7 }}>Bourse</div>
             <Coins coins={char.coins} />
@@ -271,7 +263,13 @@ function HealPanel({ char, hp, setHp, mana, setMana, shield, setShield, activeBu
 /* ---- Corps de la fiche (3 colonnes) ---- */
 function SheetBody({ char, variant }) {
   const [modal, setModal] = useState(false);
-  const { state, setField, setBuff, setMod } = useCharState(char.id);
+  const { state, setField, setBuff, setMod, setInvItem, removeInvItem } = useCharState(char.id);
+  useEffect(() => {
+    if (state && state.inventory === undefined) {
+      // migration : initialise l'inventaire depuis les valeurs par défaut du perso
+      window.RTDB.updatePath(charPath(char.id), { inventory: buildDefaultState(char).inventory });
+    }
+  }, [state, char.id]);
   if (!state) return <div style={{ padding:40 }} className="dim">Chargement…</div>;
   const hp = state.hpCur, mana = state.manaCur, shield = state.shield;
   const setHp     = (v) => setField('hpCur',   typeof v === 'function' ? v(hp) : v);
@@ -300,7 +298,8 @@ function SheetBody({ char, variant }) {
           hp={hp} setHp={setHp} mana={mana} setMana={setMana} shield={shield} setShield={setShield}
           fatigue={state.fatigue} eau={state.eau} setField={setField} activeBuffs={activeBuffs} />
         {/* COLONNE 3 — BUFFS + MODIFICATEURS + INVENTAIRE */}
-        <BuffInvColumn char={char} activeBuffs={activeBuffs} setBuff={setBuff} setMod={setMod} modifiers={state.modifiers} />
+        <BuffInvColumn char={char} activeBuffs={activeBuffs} setBuff={setBuff} setMod={setMod} modifiers={state.modifiers}
+          inventory={state.inventory} onSaveItem={setInvItem} onRemoveItem={removeInvItem} />
       </div>
       {modal && <AttackModal char={char} onClose={() => setModal(false)} />}
     </div>
