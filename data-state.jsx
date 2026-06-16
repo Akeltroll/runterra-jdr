@@ -39,8 +39,8 @@ function useAllCharStates() {
 /* Inventaire commun partagé (accès total). */
 const SHARED_INV = `${CAMPAIGN}/sharedInventory`;
 function useSharedInventory() {
-  const [items, setItems] = useState(null);
-  useEffect(() => window.RTDB.subscribePath(SHARED_INV, setItems), []);
+  const [items, setItems] = useState(null); // null = en chargement ; {} = vide chargé
+  useEffect(() => window.RTDB.subscribePath(SHARED_INV, (v) => setItems(v || {})), []);
   const setItem    = useCallback((id, item) => window.RTDB.updatePath(SHARED_INV, { [id]: item }), []);
   const removeItem = useCallback((id)       => window.RTDB.updatePath(SHARED_INV, { [id]: null }), []);
   return { items, setItem, removeItem }; // items = { id: item } | null
