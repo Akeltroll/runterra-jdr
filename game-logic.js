@@ -70,11 +70,36 @@
     return Math.round(amount * f);
   }
 
+  /* --- Inventaire : modèle d'item + helpers --- */
+  let _itemSeq = 0;
+  function newItemId() {
+    _itemSeq += 1;
+    return 'it_' + Date.now().toString(36) + '_' + _itemSeq.toString(36);
+  }
+  function makeItem(p) {
+    p = p || {};
+    return {
+      id:   p.id || newItemId(),
+      cat:  p.cat || 'Butin',
+      name: p.name || 'Objet',
+      sub:  p.sub || '',
+      qty:  (p.qty == null) ? 1 : p.qty,
+      ic:   p.ic || '',
+      img:  p.img || '',
+      mods: p.mods || {},   // vide pour l'instant — hook futur des bonus de stats
+    };
+  }
+
   /* --- État de départ d'un perso (conversion ratios -> valeurs absolues) --- */
   function buildDefaultState(char) {
     const arr = char.buffs || [];
     const buffs = {};
     for (const id of arr) buffs[id] = true;
+    const inventory = {};
+    (char.inv || []).forEach((it, i) => {
+      const id = `${char.id}_inv_${i}`;
+      inventory[id] = makeItem({ id, cat: it.cat, name: it.name, sub: it.sub, qty: it.qty, ic: it.ic });
+    });
     return {
       hpCur:   Math.round((char.hpCur || 0) * char.stats.hp),
       manaCur: Math.round((char.manaCur || 0) * char.stats.mana),
@@ -83,12 +108,13 @@
       eau:     char.eau || 0,
       buffs:   buffs,
       modifiers: DEFAULT_MODIFIERS[char.id] || {},
+      inventory,
     };
   }
 
   return {
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective,
-    applyHealMods, buildDefaultState,
+    applyHealMods, buildDefaultState, makeItem, newItemId,
   };
 });
