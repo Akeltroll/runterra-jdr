@@ -67,3 +67,38 @@ test('buildDefaultState convertit ratios en valeurs absolues', () => {
   assert.deepEqual(s.buffs, { bravoure: true });
   assert.equal(s.modifiers.ad, 10);
 });
+
+test('makeItem remplit les valeurs par défaut et conserve celles fournies', () => {
+  const it = L.makeItem({ id: 'x1', name: 'Claymore', cat: 'Équipement' });
+  assert.equal(it.id, 'x1');
+  assert.equal(it.name, 'Claymore');
+  assert.equal(it.cat, 'Équipement');
+  assert.equal(it.qty, 1);
+  assert.equal(it.sub, '');
+  assert.equal(it.img, '');
+  assert.deepEqual(it.mods, {});
+});
+
+test('buildDefaultState produit un inventaire indexé par id depuis char.inv', () => {
+  const char = {
+    id: 'rathael',
+    stats: { hp: 100, mana: 50 },
+    hpCur: 1, manaCur: 1, shieldCur: 0, fatigue: 0, eau: 0, buffs: [],
+    inv: [
+      { cat: 'Équipement', name: 'Claymore', sub: '2H', qty: 1, ic: '⚔' },
+      { cat: 'Consommables', name: 'Potion', sub: 'soin', qty: 2, ic: '🧪' },
+    ],
+  };
+  const st = L.buildDefaultState(char);
+  const ids = Object.keys(st.inventory);
+  assert.equal(ids.length, 2);
+  assert.equal(ids[0], 'rathael_inv_0');
+  assert.equal(st.inventory['rathael_inv_0'].name, 'Claymore');
+  assert.equal(st.inventory['rathael_inv_1'].qty, 2);
+});
+
+test('buildDefaultState gère un perso sans inventaire', () => {
+  const char = { id: 'x', stats: { hp: 1, mana: 1 }, inv: undefined };
+  const st = L.buildDefaultState(char);
+  assert.deepEqual(st.inventory, {});
+});

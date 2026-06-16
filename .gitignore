@@ -1,3 +1,9 @@
 node_modules/
 *.log
 .DS_Store
+
+# Assets lourds de travail (modèles 3D, mockups) — ne pas committer dans le dépôt public
+idée/
+*.obj
+*.glb
+*.fbx

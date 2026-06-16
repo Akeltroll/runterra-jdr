@@ -97,6 +97,7 @@
 <script type="text/babel" src="pages-progression.jsx"></script>
 <script type="text/babel" src="pages-ds.jsx"></script>
 <script type="text/babel" src="pages-admin.jsx"></script>
+<script type="text/babel" src="pages-inventory.jsx"></script>
 
 <!-- Shell -->
 <script type="text/babel">
@@ -107,6 +108,7 @@ const PAGES = [
   { id:'journal', label:'Journal',      render:() => <JournalPage /> },
   { id:'prog',    label:'Progression',  render:() => <ProgressionPage /> },
   { id:'ds',      label:'Design System',render:() => <DesignSystemPage /> },
+  { id:'inv',     label:'Inventaire commun', render:() => <CommonInventoryPage /> },
   { id:'admin',   label:'Admin',        render:() => <AdminPage /> },
 ];
 let setRoute; // remonté par App pour la navigation depuis les pages

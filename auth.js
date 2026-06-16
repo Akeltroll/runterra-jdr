@@ -29,9 +29,9 @@
 
   /* Pages visibles selon le rôle (ids alignés sur PAGES dans index.html). */
   const PAGE_ACCESS = {
-    joueur: ['sheet'],
-    mj:     ['lobby', 'mj', 'sheet', 'journal', 'prog', 'ds'],
-    admin:  ['lobby', 'mj', 'sheet', 'journal', 'prog', 'ds', 'admin'],
+    joueur: ['sheet', 'inv'],
+    mj:     ['lobby', 'mj', 'sheet', 'journal', 'prog', 'ds', 'inv'],
+    admin:  ['lobby', 'mj', 'sheet', 'journal', 'prog', 'ds', 'inv', 'admin'],
   };
   const pagesForRole = (role) => PAGE_ACCESS[role] || [];
   const canSeePage = (pageId, role) => pagesForRole(role).indexOf(pageId) !== -1;
