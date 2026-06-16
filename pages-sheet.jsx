@@ -317,8 +317,9 @@ function SheetBody({ char, variant }) {
 }
 
 /* ---- Page complète avec sélecteur de perso + bascule de direction ---- */
-function SheetPage() {
+function SheetPage({ lockedCharId }) {
   const [charId, setCharId] = useState(() => {
+    if (lockedCharId) return lockedCharId;
     const id = localStorage.getItem('runeterra_identity');
     return (id && id !== 'mj' && CHARACTERS.some(c => c.id === id)) ? id : 'rathael';
   });
@@ -340,13 +341,15 @@ function SheetPage() {
           </div>
         </div>
         <div className="row gap-4 wrap">
-          <div className="row gap-2">
-            <span className="overline">Perso</span>
-            <select value={charId} onChange={e => setCharId(e.target.value)}
-              style={{ background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'7px 10px', fontSize:13 }}>
-              {CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
+          {!lockedCharId && (
+            <div className="row gap-2">
+              <span className="overline">Perso</span>
+              <select value={charId} onChange={e => setCharId(e.target.value)}
+                style={{ background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'7px 10px', fontSize:13 }}>
+                {CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="row gap-1" style={{ padding:3, background:'var(--bg-inset)', borderRadius:8, border:'1px solid var(--line)' }}>
             {variants.map(([v, lbl]) => (
               <button key={v} onClick={() => setVariant(v)} className={'btn btn-sm' + (v === variant ? ' btn-gold' : ' btn-ghost')} style={{ border: v===variant?undefined:'1px solid transparent' }}>{lbl}</button>

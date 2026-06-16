@@ -78,6 +78,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" integrity="sha384-AQ3POAMqIhwS81FrUH95ekxqBZHeP5tG2JfEL3+7GuTtfRLWnrRh32UxwzM+//A9" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js" integrity="sha384-1/m+A1jVWbD3yiK3/vtFvm1+LjK1WLpSoDY+Kaxppwn/yP9BVSgdHTNQVOjrzUO5" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" integrity="sha384-TnlRYaR4JYz/lpaGuaiU61PjNberSA4vjLjtF+oRC/IkohkJqnWxw5EmDSOt1vA1" crossorigin="anonymous"></script>
+<!-- Logique d'auth pure (chargée avant firebase-config qui l'utilise) -->
+<script src="auth.js"></script>
 <script src="firebase-config.js"></script>
 
 <!-- Logique de jeu pure (testable en Node, chargée ici en global) -->
@@ -94,44 +96,64 @@
 <script type="text/babel" src="pages-journal.jsx"></script>
 <script type="text/babel" src="pages-progression.jsx"></script>
 <script type="text/babel" src="pages-ds.jsx"></script>
+<script type="text/babel" src="pages-admin.jsx"></script>
 
 <!-- Shell -->
 <script type="text/babel">
 const PAGES = [
-  { id:'lobby',   label:'Accueil',     comp:() => <LobbyPage go={setRoute} /> },
-  { id:'mj',      label:'Vue MJ',      comp:() => <MJPage go={setRoute} /> },
-  { id:'sheet',   label:'Fiche Joueur',comp:() => <SheetPage /> },
-  { id:'journal', label:'Journal',     comp:() => <JournalPage /> },
-  { id:'prog',    label:'Progression', comp:() => <ProgressionPage /> },
-  { id:'ds',      label:'Design System',comp:() => <DesignSystemPage /> },
+  { id:'lobby',   label:'Accueil',      render:() => <LobbyPage go={setRoute} /> },
+  { id:'mj',      label:'Vue MJ',       render:() => <MJPage go={setRoute} /> },
+  { id:'sheet',   label:'Fiche Joueur', render:(auth) => <SheetPage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
+  { id:'journal', label:'Journal',      render:() => <JournalPage /> },
+  { id:'prog',    label:'Progression',  render:() => <ProgressionPage /> },
+  { id:'ds',      label:'Design System',render:() => <DesignSystemPage /> },
+  { id:'admin',   label:'Admin',        render:() => <AdminPage /> },
 ];
 let setRoute; // remonté par App pour la navigation depuis les pages
 
 function App() {
-  const [identity, setIdentity] = useIdentity();
-  const [route, _setRoute] = useState(() =>
-    localStorage.getItem('runeterra_route') ||
-    (localStorage.getItem('runeterra_identity') === 'mj' ? 'mj' : 'sheet'));
-  setRoute = (r) => { _setRoute(r); localStorage.setItem('runeterra_route', r); };
+  const auth = useAuthIdentity();
   const [ready, setReady] = useState(false);
-  useEffect(() => { window.RTDB.ready.then((ok) => { if (ok) seedIfEmpty(); setReady(true); }); }, []);
-  const cur = PAGES.find(p => p.id === route) || PAGES[0];
+  const [route, _setRoute] = useState(() => localStorage.getItem('runeterra_route') || null);
+  setRoute = (r) => { _setRoute(r); localStorage.setItem('runeterra_route', r); };
+
+  useEffect(() => { window.RTDB.ready.then(() => setReady(true)); }, []);
+  useEffect(() => { if (auth.role) seedIfEmpty(auth.role); }, [auth.role]);
+
+  // Tant que l'état d'auth n'est pas connu : rien (ni login ni contenu).
+  if (!ready || auth.loading) {
+    return <div className="page hex-bg" style={{ display:'grid', placeItems:'center', height:'100vh' }}><div className="dim">Connexion…</div></div>;
+  }
+  // Pas connecté : uniquement l'écran de connexion.
+  if (!auth.user) {
+    return <ToastProvider><LoginScreen onSubmit={(u, p) => window.RTDB.signIn(u, p)} /></ToastProvider>;
+  }
+  // Connecté mais sans perso attribué.
+  if (isPending(auth.rec)) {
+    return <ToastProvider><PendingScreen username={auth.username} onSignOut={() => window.RTDB.signOut()} /></ToastProvider>;
+  }
+
+  // Navigation filtrée par rôle.
+  const allowed = PAGES.filter(p => canSeePage(p.id, auth.role));
+  const fallback = defaultRoute(auth.role);
+  const activeId = allowed.some(p => p.id === route) ? route : fallback;
+  const cur = allowed.find(p => p.id === activeId) || allowed[0];
+
   return (
     <ToastProvider>
-      {!identity && <IdentityModal onPick={setIdentity} />}
       <div className="topbar">
         <div className="brand">
           <div className="crest"><i></i><b>R</b></div>
           <span className="ttl">Chroniques de Runeterra</span>
         </div>
         <nav className="nav">
-          {PAGES.map(p => (
-            <button key={p.id} className={p.id === route ? 'active' : ''} onClick={() => setRoute(p.id)}>{p.label}</button>
+          {allowed.map(p => (
+            <button key={p.id} className={p.id === activeId ? 'active' : ''} onClick={() => setRoute(p.id)}>{p.label}</button>
           ))}
         </nav>
-        <span className="session">SESSION · VX-7K2</span>
+        <SignOutButton username={auth.username} role={auth.role} onSignOut={() => window.RTDB.signOut()} />
       </div>
-      <div className="page hex-bg">{ready ? cur.comp() : <div style={{ padding:40 }} className="dim">Connexion…</div>}</div>
+      <div className="page hex-bg">{cur.render(auth)}</div>
     </ToastProvider>
   );
 }
