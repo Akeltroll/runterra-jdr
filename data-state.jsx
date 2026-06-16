@@ -24,7 +24,9 @@ function useCharState(charId) {
   const setField = useCallback((f, v) => window.RTDB.updatePath(charPath(charId), { [f]: v }), [charId]);
   const setBuff  = useCallback((id, on) => window.RTDB.updatePath(`${charPath(charId)}/buffs`, { [id]: on ? true : null }), [charId]);
   const setMod   = useCallback((stat, v) => window.RTDB.updatePath(`${charPath(charId)}/modifiers`, { [stat]: v || null }), [charId]);
-  return { state, setField, setBuff, setMod };
+  const setInvItem    = useCallback((id, item) => window.RTDB.updatePath(`${charPath(charId)}/inventory`, { [id]: item }), [charId]);
+  const removeInvItem = useCallback((id)       => window.RTDB.updatePath(`${charPath(charId)}/inventory`, { [id]: null }), [charId]);
+  return { state, setField, setBuff, setMod, setInvItem, removeInvItem };
 }
 
 /* Snapshot live de tous les persos (vue MJ). */
@@ -32,6 +34,16 @@ function useAllCharStates() {
   const [all, setAll] = useState(null);
   useEffect(() => window.RTDB.subscribePath(`${CAMPAIGN}/characters`, setAll), []);
   return all; // { charId: { state: {...} } }
+}
+
+/* Inventaire commun partagé (accès total). */
+const SHARED_INV = `${CAMPAIGN}/sharedInventory`;
+function useSharedInventory() {
+  const [items, setItems] = useState(null);
+  useEffect(() => window.RTDB.subscribePath(SHARED_INV, setItems), []);
+  const setItem    = useCallback((id, item) => window.RTDB.updatePath(SHARED_INV, { [id]: item }), []);
+  const removeItem = useCallback((id)       => window.RTDB.updatePath(SHARED_INV, { [id]: null }), []);
+  return { items, setItem, removeItem }; // items = { id: item } | null
 }
 
 /* Identité dérivée de l'auth Firebase + /users/{uid}.
@@ -83,6 +95,6 @@ function setUserAssignment(uid, role, charId) {
 }
 
 Object.assign(window, {
-  useCharState, useAllCharStates, useAuthIdentity, useAllUsers, setUserAssignment,
+  useCharState, useAllCharStates, useSharedInventory, useAuthIdentity, useAllUsers, setUserAssignment,
   seedIfEmpty, charPath, CAMPAIGN,
 });
