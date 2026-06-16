@@ -348,8 +348,77 @@ function ExportImportPanel() {
   );
 }
 
+/* --- Ligne d'item : affichage + édition inline (inventaire perso & commun) --- */
+function InvItemRow({ item, editable, onSave, onRemove }) {
+  const [edit, setEdit] = useState(false);
+  const [d, setD] = useState(item);
+  useEffect(() => setD(item), [item]);
+  const fld = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontSize:12, width:'100%', boxSizing:'border-box' };
+  if (edit) {
+    return (
+      <div className="col gap-2" style={{ padding:'8px', border:'1px solid var(--line-gold)', borderRadius:8 }}>
+        <input style={fld} value={d.name} placeholder="Nom" onChange={e => setD({ ...d, name: e.target.value })} />
+        <input style={fld} value={d.sub} placeholder="Description" onChange={e => setD({ ...d, sub: e.target.value })} />
+        <div className="row gap-2">
+          <select style={{ ...fld, width:'auto' }} value={d.cat} onChange={e => setD({ ...d, cat: e.target.value })}>
+            {['Équipement','Consommables','Butin'].map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <input style={{ ...fld, width:64 }} type="number" min="1" value={d.qty} onChange={e => setD({ ...d, qty: parseInt(e.target.value) || 1 })} />
+          <input style={fld} value={d.img} placeholder="items/xxx.webp" onChange={e => setD({ ...d, img: e.target.value })} />
+        </div>
+        <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
+          <button className="btn btn-sm btn-ghost" onClick={() => { setD(item); setEdit(false); }}>Annuler</button>
+          <button className="btn btn-sm btn-gold" onClick={() => { onSave(d); setEdit(false); }}>Enregistrer</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="row gap-2" style={{ alignItems:'center', padding:'6px 8px', background:'var(--bg-inset)', borderRadius:8, border:'1px solid var(--line)' }}>
+      <span style={{ width:26, height:26, flex:'none', borderRadius:6, display:'grid', placeItems:'center', fontSize:15, background:'var(--bg-panel-2)', overflow:'hidden' }}>
+        {item.img ? <img src={item.img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : (item.ic || '◆')}
+      </span>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:13, color:'var(--ink)' }}>{item.name}{item.qty > 1 ? <span className="faint mono" style={{ fontSize:11 }}> ×{item.qty}</span> : null}</div>
+        {item.sub ? <div className="faint" style={{ fontSize:11 }}>{item.sub}</div> : null}
+      </div>
+      {editable && (
+        <span className="row gap-1">
+          <button className="btn btn-sm btn-ghost" title="Éditer" onClick={() => setEdit(true)}>✎</button>
+          <button className="btn btn-sm btn-ghost" title="Supprimer" onClick={() => onRemove(item.id)}>✕</button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* --- Panneau d'inventaire réutilisable (perso = fiche ; commun = page dédiée) --- */
+function InventoryPanel({ items, editable, onSave, onRemove }) {
+  const cats = ['Équipement', 'Consommables', 'Butin'];
+  const list = items ? Object.values(items) : [];
+  const add = (cat) => { const it = makeItem({ cat, name: 'Nouvel objet' }); onSave(it); };
+  return (
+    <div className="col gap-4">
+      {cats.map(cat => {
+        const inCat = list.filter(i => i.cat === cat);
+        return (
+          <div key={cat}>
+            <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:7 }}>
+              <span className="overline">{cat}</span>
+              {editable && <button className="btn btn-sm btn-ghost" onClick={() => add(cat)}>+ Ajouter</button>}
+            </div>
+            {inCat.length === 0
+              ? <div className="faint" style={{ fontSize:11 }}>—</div>
+              : <div className="col gap-2">{inCat.map(it => <InvItemRow key={it.id} item={it} editable={editable} onSave={onSave} onRemove={onRemove} />)}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 Object.assign(window, {
-  Avatar, ResourceBar, StatChip, BuffBadge, InvItem, Coins,
+  Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
   ToastProvider, useToast, AnnoPin, AttackModal, STAT_GLYPH, STAT_LABEL,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
 });
