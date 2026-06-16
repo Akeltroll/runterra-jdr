@@ -40,30 +40,40 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `firebase-config.js` — init Firebase + auth Email/Password + helpers `window.RTDB`
   (`ready`, `currentUser`, `onAuth`, `signIn`, `signOut`, `subscribePath`,
   `updatePath`, `setPath`, `getSnapshot`).
-- `data.jsx` — règles immuables : formules `computeStats`, `CHARACTERS`, `BUFFS`,
-  `WEAPONS`, `ATTACK_MODES`, `LEVELS`, `RUNE`, `JOURNAL`. `mkChar` y attache les
-  `modifiers` par défaut.
-- `data-state.jsx` — hooks temps réel : `useCharState`, `useAllCharStates`,
-  `useAuthIdentity` (identité via Firebase + `/users/{uid}`, auto-inscription),
+- `game-logic.js` — aussi : `makeItem`/`newItemId` (modèle d'item) ; `buildDefaultState`
+  amorce `inventory` depuis `char.inv`.
+- `data.jsx` — règles immuables : formules `computeStats`, `CHARACTERS` (avec `inv`
+  par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS`, `RUNE`, `JOURNAL`.
+  `mkChar` y attache les `modifiers` par défaut. (`ATTACK_MODES` **retiré** — voir Décisions.)
+- `data-state.jsx` — hooks temps réel : `useCharState` (+ setters inventaire
+  `setInvItem`/`removeInvItem`), `useAllCharStates`, `useSharedInventory` (inventaire
+  commun), `useAuthIdentity` (identité + `/users/{uid}`, auto-inscription),
   `useAllUsers`, `setUserAssignment`, `seedIfEmpty(role)` (réservé staff).
   Constante `CAMPAIGN = 'campaign/runeterra'`.
 - `components.jsx` — UI partagée : `Avatar`, `ResourceBar`, `BuffBadge`, toasts
   (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), `LoginScreen`,
-  `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`, `AttackModal`.
+  `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`, `AttackModal`,
+  `InvItemRow` + `InventoryPanel` (inventaire éditable réutilisable).
 - `pages-sheet.jsx` — fiche joueur (3 colonnes, 3 variantes visuelles a/b/c).
-  Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel.
+  Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel, **inventaire perso
+  temps réel** (migration unique via marqueur `invInit`).
 - `pages-mj.jsx` — tableau de bord MJ temps réel (`mjLive(c, st)` fusionne règles+état).
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
+- `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé).
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
-  joueur = sa fiche seule, staff = tout.
+  joueur = sa fiche seule, staff = tout ; `sharedInventory` = R/W pour tout participant
+  inscrit, écriture au niveau `$itemId`.
 - `test/auth.test.js` — tests unitaires des helpers d'auth (`node --test`).
 - `test/game-logic.test.js` — tests unitaires (`node --test`).
 - `test/smoke.mjs` — test de démarrage Playwright (charge l'app réelle, teste le
   temps réel Firebase). **Se connecte via un compte de test** (`SMOKE_USER`/`SMOKE_PASS`,
   défaut `smoke`) ; nécessite règles publiées + compte attribué à un perso.
 - `docs/superpowers/specs/` et `docs/superpowers/plans/` — design et plan d'implémentation.
+- `ATH/` — images : `Armes/` + `Items/` (icônes d'items `.webp`) + `Perso/*.webp` (portraits).
+- `info-mj/` — **source de vérité du MJ** (règles détaillées) ; voir « Infos MJ » plus bas.
+- `idée/` — assets de travail lourds (modèle 3D abandonné) ; **gitignore** (avec `*.glb/obj/fbx`).
 
 ## Modèle de données Firebase
 ```
@@ -71,9 +81,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     hpCur, manaCur, shield (valeurs ABSOLUES), fatigue (0-5), eau (0-5)
     buffs:     { [buffId]: true }
     modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, sapience }
+    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, mods } }   ← perso, éditable
+    invInit:   true   ← marqueur de migration (amorçage unique de l'inventaire)
+/campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
+    { id, cat, name, sub, qty, ic, img, mods }
 ```
-`charId` ∈ {rathael, urskaar, smith, lunick, jett}. Amorçage auto si vide
-(`seedIfEmpty`, conversion ratios → absolu via `buildDefaultState`).
+`charId` ∈ {rathael, urskaar, smith, **lunick** (affiché « Elias Crowe »), jett}.
+Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDefaultState`).
+`mods` = bonus de stats d'item (vide pour l'instant ; **hook futur** vers `computeEffective`).
 ```
 /users/{uid}/   ← rôles & attribution (écrit par l'admin ; auto-inscription « en attente » à la 1re connexion)
     username, role (joueur|mj|admin), charId (si joueur)
@@ -92,43 +107,66 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Cas spéciaux : Aiguisage = %Crit×2 ; Miraculé/Hémorragie = ±50% soins/bouclier
   reçus ; Flétrissement = marqueur visuel.
 - Modificateurs par défaut (col. C Excel) : Rathäel ad+10 ; Urskaar hp+50 ;
-  Smith ad+20, crit+10 ; Lunick ad+20 ; Jett aucun.
+  Smith ad+20, crit+10 ; Elias (id `lunick`) ad+20 ; Jett aucun.
 - Une seule campagne partagée, mais **vraie séparation par joueur** depuis la v2 :
   cloisonnement appliqué côté serveur par les règles RTDB (joueur = sa fiche seule).
 - Sélecteur de 3 styles visuels conservé (masqué pour un joueur, verrouillé sur son perso).
+- **Lunick (mort) → Elias Crowe** : id interne `lunick` conservé (clé Firebase/Admin),
+  seul l'affichage change (nom/image/titre). Pas de migration.
+- **Niveau 2** pour tous (les 12 pts de stats = 11 du niveau + 1 point bonus de création) ;
+  page Progression affiche le bonus en gold.
+- **Système de mode de combat (offensif/équilibré/défensif) RETIRÉ** : attaques = dégâts pleins.
+- **Inventaire** : perso (par fiche) + commun (coffre partagé). Items `{id,cat,name,sub,qty,ic,img,mods}`,
+  images dans `ATH/`. Bonus `mods` non encore branchés.
+- **Rendu perso = image `.webp`** (`ATH/Perso/`), **pas de 3D** (modèle Meshy trop lourd, abandonné).
 
 ## Comment tester (dev)
 ```bash
-node --test test/game-logic.test.js          # logique pure (8 tests)
-node --test test/auth.test.js                 # helpers d'auth (5 tests)
+node --test test/game-logic.test.js          # logique pure (11 tests)
+node --test test/auth.test.js                 # helpers d'auth (6 tests)
 python -m http.server 5050 --bind 127.0.0.1  # servir le site (autre terminal)
 SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées + compte attribué)
 ```
 Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
-## État actuel (2026-06-15)
-- v1 **terminée, commitée et poussée** sur `main`. Smoke test ✅.
-- **v2 (auth comptes + rôles) implémentée** sur la branche `feat/auth-comptes-roles`
-  (10 tâches : `auth.js`, email/password, `useAuthIdentity`, écrans login/attente,
-  page Admin, verrou perso joueur, shell gaté, règles strictes, smoke, doc).
-- **Restant (côté utilisateur)** :
-  1. Activer GitHub Pages (Settings → Pages → branche `main` / root).
-     URL cible : `https://akeltroll.github.io/runterra-jdr/`
-  2. Déployer la v2 via la **check-list de déploiement** ci-dessus (créer comptes,
-     publier les règles strictes, désactiver l'anonyme, attribuer les persos).
-     ⚠️ Tant que la v2 n'est pas déployée, garder l'anonyme activé + règles ouvertes.
+## État actuel (2026-06-16)
+- v1 + **v2 (auth comptes + rôles) déployées** : GitHub Pages actif, comptes créés,
+  règles strictes publiées, anonyme désactivé, persos attribués. ✅
+- **Mergé sur `main`** depuis : retrait du mode de combat ; Lunick → **Elias Crowe** +
+  passage **niveau 2** (+ bonus affiché en Progression).
+- **Inventaire (perso + commun)** : implémenté en subagent-driven (branche `feat/inventaire`),
+  17 tests verts. Items réels + images `ATH/` câblés depuis le nouvel Excel.
+  ⚠️ **Au merge de `feat/inventaire`** : **republier `database.rules.json`** (sinon
+  l'inventaire commun est inaccessible aux joueurs).
 
-## Backlog v2 (présent dans l'Excel, pas encore intégré)
-- **Maîtrise d'armes** : niveau par catégorie → dégâts ×1.5 / ×1.75 (col. K/L/M des grilles).
-- **Compétences** : Glaciation, Âme fendue, Static, Comp.1-4 avec dégâts/soin +
-  cooldowns/compteurs (cols J/K des grilles, variable selon le perso).
-- **Journal de combat partagé** : écrire les attaques live dans Firebase.
-- Possible : règles RTDB scopées par perso (custom claims) si besoin de vraie séparation.
+## Chantiers en cours / backlog
+- **Prochaine brique : équipement (slots paperdoll)** + rendu perso (image `ATH/Perso/`).
+  En attente des **visuels** de l'utilisateur. Le `mods` des items s'y branchera (→ `computeEffective`).
+- **Compétences** (gros chantier, design validé, voir specs) : kits dans `info-mj/`.
+  COMPLETS : Smith, Urskaar, Elias. **Manque : Rathael comp 4 ; Jett comp 3+4.**
+  Approche hybride : outil calcule dégâts/charges/CD/états, narratif = rappel.
+- **Arbre de runes** (style LoL, mockup `idée/`) : règles dans `info-mj/Système de Runes.md`.
+  **Manque** : effets chiffrés des runes des 4 familles hors Domination (~45 runes au total).
+- **Nouveau système d'attaques de base** (`info-mj/`) : catégories d'armes + propriétés +
+  maîtrise (−25 % si non maîtrisée). **Remplace** l'ancienne idée ×1.5/×1.75.
+- **Journal de combat partagé** : écrire les attaques live dans Firebase (pas encore fait).
+
+## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
+- `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/
+  traits par niveau. ⚠️ La section « Lunick » = ancien perso mort (ignorer) ; voir « Elias ».
+- `info-mj/Système de Runes.md` — règles de l'arbre de runes (points = niveau, Mineure→
+  Avancée→Fondamentale, thématiques de famille = −2 CD).
+- `info-mj/Nouveau système de gestion des attaques de base (2).md` — catégories d'armes
+  (type/tenue/portée/propriétés) + descriptions des propriétés + règle de maîtrise.
+- `info-mj/Codes App Script.md` — moteur de calcul du Google Sheet (référence ; pas le
+  contenu compétences/runes).
+- Specs/plans liés : `docs/superpowers/specs/2026-06-16-competences-design.md`,
+  `…-inventaire-design.md`, `docs/superpowers/plans/2026-06-16-inventaire.md`.
 
 ## Notes
-- L'Excel : 14 feuilles (Statistiques, Runes vide, Journal, Grille Personnage modèle,
-  + Stats/Grille par joueur Erwan/Bap/JB/Steph/Fab). Correspondance perso↔joueur :
-  Rathäel=JB, Urskaar=Baptiste, Smith=Erwan, Lunick=Fab, Jett=Steph.
-- `node_modules/` est gitignore (Playwright, dev uniquement).
+- L'Excel : feuilles Statistiques/Runes/Journal/Grille Personnage + Stats/Grille par joueur.
+  Correspondance perso↔joueur : Rathäel=JB, Urskaar=Baptiste, Smith=Erwan,
+  **Elias Crowe (id `lunick`)=Fab**, Jett=Steph.
+- Gitignore : `node_modules/`, `idée/`, `*.glb`/`*.obj`/`*.fbx` (assets lourds, hors dépôt).
 ```
