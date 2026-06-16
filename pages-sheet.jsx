@@ -265,9 +265,13 @@ function SheetBody({ char, variant }) {
   const [modal, setModal] = useState(false);
   const { state, setField, setBuff, setMod, setInvItem, removeInvItem } = useCharState(char.id);
   useEffect(() => {
-    if (state && state.inventory === undefined) {
-      // migration : initialise l'inventaire depuis les valeurs par défaut du perso
-      window.RTDB.updatePath(charPath(char.id), { inventory: buildDefaultState(char).inventory });
+    // migration unique (marqueur invInit) : amorce l'inventaire si absent, une seule
+    // fois — évite de re-remplir les objets par défaut si le joueur vide son inventaire.
+    if (state && state.invInit === undefined) {
+      const inv = (state.inventory && Object.keys(state.inventory).length)
+        ? state.inventory
+        : buildDefaultState(char).inventory;
+      window.RTDB.updatePath(charPath(char.id), { inventory: inv, invInit: true });
     }
   }, [state, char.id]);
   if (!state) return <div style={{ padding:40 }} className="dim">Chargement…</div>;
