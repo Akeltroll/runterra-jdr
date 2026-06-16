@@ -16,8 +16,11 @@
         ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
         ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
         "sharedInventory": {
-          ".read": "auth != null",
-          ".write": "auth != null"
+          ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+          "$itemId": {
+            ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+            ".validate": "newData.hasChildren(['id', 'name', 'cat'])"
+          }
         },
         "characters": {
           "$charId": {
