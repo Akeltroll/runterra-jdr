@@ -86,9 +86,27 @@
       qty:  (p.qty == null) ? 1 : p.qty,
       ic:   p.ic || '',
       img:  p.img || '',
+      type: p.type || '',   // emplacement (helmet/chest/ring/weapon/accessory/boots…) ; vide = non équipable
       mods: p.mods || {},   // vide pour l'instant — hook futur des bonus de stats
     };
   }
+
+  /* --- Liste des types d'emplacements d'équipement --- */
+  var EQUIP_TYPES = [
+    { value:'helmet',    label:'Casque' },
+    { value:'shoulders', label:'Épaules' },
+    { value:'chest',     label:'Cuirasse' },
+    { value:'gloves',    label:'Gants' },
+    { value:'pants',     label:'Pantalon' },
+    { value:'boots',     label:'Bottes' },
+    { value:'belt',      label:'Ceinture' },
+    { value:'weapon',    label:'Arme principale' },
+    { value:'offhand',   label:'Arme secondaire' },
+    { value:'shield',    label:'Bouclier' },
+    { value:'amulet',    label:'Amulette' },
+    { value:'ring',      label:'Anneau' },
+    { value:'accessory', label:'Accessoire' },
+  ];
 
   /* --- État de départ d'un perso (conversion ratios -> valeurs absolues) --- */
   function buildDefaultState(char) {
@@ -117,5 +135,6 @@
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective,
     applyHealMods, buildDefaultState, makeItem, newItemId,
+    EQUIP_TYPES,
   };
 });

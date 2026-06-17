@@ -102,3 +102,14 @@ test('buildDefaultState gère un perso sans inventaire', () => {
   const st = L.buildDefaultState(char);
   assert.deepEqual(st.inventory, {});
 });
+
+test('makeItem porte un champ type (défaut vide)', () => {
+  assert.equal(L.makeItem({}).type, '');
+  assert.equal(L.makeItem({ type: 'helmet' }).type, 'helmet');
+});
+
+test('EQUIP_TYPES couvre les emplacements clés', () => {
+  const vals = L.EQUIP_TYPES.map(t => t.value);
+  for (const v of ['helmet','chest','ring','weapon','accessory','boots'])
+    assert.ok(vals.includes(v), 'manque ' + v);
+});
