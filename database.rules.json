@@ -24,7 +24,10 @@
         },
         "sharedCoins": {
           ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()"
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+          "$coin": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          }
         },
         "characters": {
           "$charId": {
