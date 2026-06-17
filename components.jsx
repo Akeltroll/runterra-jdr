@@ -375,6 +375,118 @@ function downscaleImageToDataURL(file, maxPx = 128) {
   });
 }
 
+/* --- Inventaire : styles/format partagés (grille Équipement ET coffre commun) --- */
+const INV_CAT_STYLE = {
+  'Équipement':   { border:'rgba(200,155,60,0.55)',  glow:'rgba(200,155,60,0.30)'  },
+  'Consommables': { border:'rgba(43,111,176,0.55)',  glow:'rgba(43,111,176,0.30)'  },
+  'Butin':        { border:'rgba(139,224,255,0.42)', glow:'rgba(139,224,255,0.16)' },
+};
+const INV_CAT_FALLBACK = { border:'rgba(160,128,72,0.45)', glow:'rgba(160,128,72,0.22)' };
+const invCatStyle = (it) => (it && INV_CAT_STYLE[it.cat]) || INV_CAT_FALLBACK;
+const INV_FILTERS = [
+  { key:'all', label:'Tout' }, { key:'Équipement', label:'Équip.' },
+  { key:'Consommables', label:'Conso.' }, { key:'Butin', label:'Butin' },
+];
+const INV_COINS = [
+  { key:'cuiv', label:'Fer',     img:'ATH/Items/piece-fer.webp',     col:'#b0b0b0' },
+  { key:'arg',  label:'Bronze',  img:'ATH/Items/piece-bronze.webp',  col:'#cd9a6a' },
+  { key:'or',   label:'Or',      img:'ATH/Items/piece-or.webp',      col:'#eccf8f' },
+  { key:'plat', label:'Mythril', img:'ATH/Items/piece-mythril.webp', col:'#b8d4e8' },
+];
+const invFmt = (n) => Number(n || 0).toLocaleString('fr-FR');
+const invThumbStyle = (item, inset) => ({
+  position:'absolute', inset, cursor:'grab', display:'flex', alignItems:'center', justifyContent:'center',
+  ...(item.img ? { backgroundImage:`url(${item.img})`, backgroundSize:'contain', backgroundRepeat:'no-repeat',
+    backgroundPosition:'center', filter:'drop-shadow(0 2px 6px rgba(0,0,0,0.8))' } : {}),
+  fontSize:18,
+});
+
+/* Grille d'inventaire dark-fantasy réutilisable (page Équipement + coffre commun).
+   N'gère PAS les actions : remonte les clics au parent via onItemClick/onCoinClick. */
+function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinClick, onAdd, onDropItem, capacity = 120, title = 'INVENTAIRE' }) {
+  const list = items ? Object.values(items).filter(it => it.qty == null || it.qty > 0) : [];
+  const filtered = list.filter(it => filter === 'all' || it.cat === filter);
+  const N = Math.max(49, Math.ceil(filtered.length / 7) * 7);
+  const cells = Array.from({ length:N }, (_, i) => filtered[i] || null);
+  const panelBg = 'linear-gradient(155deg,#1c1713 0%,#130f0c 55%,#0d0a08 100%)';
+  const cornerStyle = (h, v) => ({ position:'absolute', [h]:6, [v]:6, width:14, height:14,
+    [`border${h[0].toUpperCase()}${h.slice(1)}`]:'2px solid rgba(185,150,80,0.55)',
+    [`border${v[0].toUpperCase()}${v.slice(1)}`]:'2px solid rgba(185,150,80,0.55)' });
+  return (
+    <div style={{ position:'relative', display:'flex', flexDirection:'column', height:'100%', minHeight:0,
+      border:'1px solid rgba(160,128,72,0.3)', borderRadius:4, background:panelBg,
+      boxShadow:'inset 0 0 55px rgba(0,0,0,0.5)', padding:'12px 12px 0',
+      fontFamily:"'EB Garamond',serif", color:'#d8c8a8' }}>
+      <div style={cornerStyle('left','top')} /><div style={cornerStyle('right','top')} />
+      <div style={cornerStyle('left','bottom')} /><div style={cornerStyle('right','bottom')} />
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', position:'relative', marginBottom:10, flex:'0 0 auto' }}>
+        <span style={{ fontFamily:"'Cinzel',serif", fontSize:14, fontWeight:600, letterSpacing:3, color:'#c2a05a' }}>{title}</span>
+        {onAdd && <button onClick={onAdd} title="Ajouter un objet"
+          style={{ position:'absolute', right:0, top:-2, background:'transparent', color:'#c2a05a',
+            border:'1px solid rgba(160,128,72,0.4)', borderRadius:4, padding:'2px 8px', cursor:'pointer',
+            fontFamily:"'Cinzel',serif", fontSize:11 }}>+ Ajouter</button>}
+      </div>
+      <div style={{ display:'flex', gap:4, marginBottom:10, flex:'0 0 auto' }}>
+        {INV_FILTERS.map(ft => {
+          const on = filter === ft.key;
+          return <div key={ft.key} onClick={() => setFilter(ft.key)}
+            style={{ flex:1, textAlign:'center', fontFamily:'Cinzel,serif', fontSize:10, letterSpacing:0.4,
+              padding:'7px 2px', cursor:'pointer', textTransform:'uppercase', borderRadius:3,
+              border:'1px solid ' + (on ? 'rgba(160,128,72,0.5)' : 'rgba(160,128,72,0.16)'),
+              color:on ? '#eccf8f' : 'rgba(190,170,135,0.5)',
+              background:on ? 'linear-gradient(180deg,#2a1f16,#1a130e)' : 'transparent' }}>{ft.label}</div>;
+        })}
+      </div>
+      <div onDragOver={onDropItem ? (e) => e.preventDefault() : undefined}
+        onDrop={onDropItem ? (e) => { e.preventDefault(); const id = e.dataTransfer.getData('text'); if (id) onDropItem(id); } : undefined}
+        style={{ flex:'1 1 auto', overflowY:'auto', overflowX:'hidden', minHeight:0 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:5, paddingBottom:8 }}>
+          {cells.map((item, i) => {
+            const cs = invCatStyle(item);
+            return (
+              <div key={i} style={{ position:'relative', aspectRatio:'1', borderRadius:3,
+                background:item ? 'rgba(12,8,7,0.7)' : 'radial-gradient(circle at 50% 30%,#1b1510,#0e0a08)',
+                border:'1px solid ' + (item ? cs.border : 'rgba(160,128,72,0.16)'),
+                boxShadow:item ? 'inset 0 0 14px ' + cs.glow : 'none',
+                display:'flex', alignItems:'center', justifyContent:'center', overflow:'visible' }}>
+                {item && (
+                  <div draggable="true"
+                    onDragStart={(e) => e.dataTransfer.setData('text', item.id)}
+                    onClick={(e) => onItemClick && onItemClick(item, e)}
+                    style={{ ...invThumbStyle(item, '3px'), cursor:'pointer' }}>
+                    {!item.img && (item.ic || '◆')}
+                  </div>
+                )}
+                {item && item.qty > 1 && (
+                  <span style={{ position:'absolute', right:3, bottom:1, fontFamily:"'EB Garamond',serif",
+                    fontSize:13, fontWeight:600, color:'#f0e6d2', textShadow:'0 1px 3px #000,0 0 5px #000',
+                    pointerEvents:'none', zIndex:1 }}>{invFmt(item.qty)}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 4px 6px',
+        borderTop:'1px solid rgba(160,128,72,0.16)', flex:'0 0 auto' }}>
+        {INV_COINS.map(c => (
+          <div key={c.key} onClick={onCoinClick ? (e) => onCoinClick(c.key, e) : undefined}
+            style={{ display:'flex', alignItems:'center', gap:4, cursor:onCoinClick ? 'pointer' : 'default' }}>
+            <div style={{ width:30, height:30, flex:'0 0 30px', background:`url(${c.img}) center/contain no-repeat` }} />
+            <span style={{ fontFamily:"'EB Garamond',serif", fontSize:13, color:c.col, minWidth:32 }}>
+              {invFmt((coins && coins[c.key]) || 0)}
+            </span>
+          </div>
+        ))}
+        <div style={{ flex:1 }} />
+        <span style={{ fontFamily:"'Cinzel',serif", fontSize:11, color:'#c2a05a', letterSpacing:0.5 }}>
+          {list.length} / {capacity}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /* --- Ligne d'item : affichage + édition inline (inventaire perso & commun) --- */
 function InvItemRow({ item, editable, onSave, onRemove }) {
   const [edit, setEdit] = useState(false);
@@ -471,4 +583,5 @@ Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
   ToastProvider, useToast, AnnoPin, AttackModal, STAT_GLYPH, STAT_LABEL,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
+  InventoryGrid, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invThumbStyle,
 });
