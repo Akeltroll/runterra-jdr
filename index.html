@@ -109,8 +109,8 @@ const PAGES = [
   { id:'journal', label:'Journal',      render:() => <JournalPage /> },
   { id:'prog',    label:'Progression',  render:() => <ProgressionPage /> },
   { id:'ds',      label:'Design System',render:() => <DesignSystemPage /> },
-  { id:'inv',     label:'Inventaire commun', render:() => <CommonInventoryPage /> },
   { id:'equip',   label:'Équipement',   render:(auth) => <EquipPage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
+  { id:'inv',     label:'Inventaire commun', render:() => <CommonInventoryPage /> },
   { id:'admin',   label:'Admin',        render:() => <AdminPage /> },
 ];
 let setRoute; // remonté par App pour la navigation depuis les pages
