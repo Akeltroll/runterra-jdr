@@ -128,6 +128,12 @@
       modifiers: DEFAULT_MODIFIERS[char.id] || {},
       inventory,
       equipment: {},   // paperdoll { [slotKey]: itemId } — rempli via la page Équipement
+      coins: {
+        plat: (char.coins && char.coins.plat) || 0,
+        or:   (char.coins && char.coins.or)   || 0,
+        arg:  (char.coins && char.coins.arg)  || 0,
+        cuiv: (char.coins && char.coins.cuiv) || 0,
+      },
     };
   }
 

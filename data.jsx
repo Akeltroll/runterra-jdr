@@ -121,7 +121,7 @@ const CHARACTERS = [
       { cat:'Équipement', name:'Épée + Bouclier', sub:'1H', qty:1, ic:'🛡', img:'ATH/Armes/epee-bouclier.webp' },
       { cat:'Consommables', name:'Potion soin mineur', sub:'Rend 15 + 15% HP', qty:0, ic:'🧪', img:'ATH/Items/potion-soin-mineur.webp' },
       { cat:'Consommables', name:'Potion mana mineur', sub:'Rend 10 + 10% Mana', qty:1, ic:'🔵', img:'ATH/Items/potion-mana-mineur.webp' },
-      { cat:'Butin', name:'Kéminite', sub:'Sert à appeler Taliyah', qty:1, ic:'🔮', img:'ATH/Items/keminite.webp' },
+      { cat:'Butin', name:'Kéminite', sub:'Sert à appeler Taliyah', qty:1, ic:'🔮', img:'ATH/Items/keminite.webp', type:'' },
     ],
     coins:{ plat:0, or:10, arg:10, cuiv:10 },
   }),

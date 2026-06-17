@@ -113,3 +113,17 @@ test('EQUIP_TYPES couvre les emplacements clés', () => {
   for (const v of ['helmet','chest','ring','weapon','accessory','boots'])
     assert.ok(vals.includes(v), 'manque ' + v);
 });
+
+test('buildDefaultState amorce coins depuis char.coins', () => {
+  const char = {
+    id:'t', stats:{ hp:1, mana:1 }, hpCur:10, manaCur:10,
+    coins:{ plat:1, or:2, arg:3, cuiv:4 }, inv:[],
+  };
+  const st = L.buildDefaultState(char);
+  assert.deepEqual(st.coins, { plat:1, or:2, arg:3, cuiv:4 });
+});
+
+test('buildDefaultState coins défaut 0 si char.coins absent', () => {
+  const char = { id:'t', stats:{ hp:1, mana:1 }, hpCur:0, manaCur:0, inv:[] };
+  assert.deepEqual(L.buildDefaultState(char).coins, { plat:0, or:0, arg:0, cuiv:0 });
+});
