@@ -29,7 +29,9 @@ function useCharState(charId) {
   // Équipement (paperdoll) : map { [slotKey]: itemId }. Le patch permet une mise à
   // jour atomique multi-slots (déséquiper l'ancien slot d'un item en l'équipant ailleurs).
   const setEquipment  = useCallback((patch)    => window.RTDB.updatePath(`${charPath(charId)}/equipment`, patch), [charId]);
-  return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment };
+  const setCoin       = useCallback((key, value) =>
+    window.RTDB.updatePath(`${charPath(charId)}/coins`, { [key]: Math.max(0, value | 0) }), [charId]);
+  return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment, setCoin };
 }
 
 /* Snapshot live de tous les persos (vue MJ). */
@@ -47,6 +49,34 @@ function useSharedInventory() {
   const setItem    = useCallback((id, item) => window.RTDB.updatePath(SHARED_INV, { [id]: item }), []);
   const removeItem = useCallback((id)       => window.RTDB.updatePath(SHARED_INV, { [id]: null }), []);
   return { items, setItem, removeItem }; // items = { id: item } | null
+}
+
+/* Monnaie partagée (coffre commun). */
+const SHARED_COINS = `${CAMPAIGN}/sharedCoins`;
+function useSharedCoins() {
+  const [coins, setCoins] = useState(null);
+  useEffect(() => window.RTDB.subscribePath(SHARED_COINS, (v) =>
+    setCoins(v || { plat:0, or:0, arg:0, cuiv:0 })), []);
+  const setCoin = useCallback((key, value) =>
+    window.RTDB.updatePath(SHARED_COINS, { [key]: Math.max(0, value | 0) }), []);
+  return { coins, setCoin };
+}
+
+/* Transfert d'item entre deux collections RTDB ({id:item}). Utilise la logique
+   pure planItemTransfer puis applique les deux patches en temps réel. */
+function moveItem(fromPath, toPath, fromItems, toItems, itemId, n) {
+  const { srcPatch, dstPatch } = planItemTransfer(fromItems, toItems, itemId, n);
+  if (Object.keys(srcPatch).length) window.RTDB.updatePath(fromPath, srcPatch);
+  if (Object.keys(dstPatch).length) window.RTDB.updatePath(toPath, dstPatch);
+}
+
+/* Transfert de pièces (une dénomination) entre deux objets coins, montant borné. */
+function moveCoins(fromPath, toPath, fromCoins, toCoins, key, n) {
+  const avail = (fromCoins && fromCoins[key]) || 0;
+  const m = Math.max(0, Math.min(n | 0, avail));
+  if (m <= 0) return;
+  window.RTDB.updatePath(fromPath, { [key]: avail - m });
+  window.RTDB.updatePath(toPath, { [key]: ((toCoins && toCoins[key]) || 0) + m });
 }
 
 /* Identité dérivée de l'auth Firebase + /users/{uid}.
@@ -98,6 +128,7 @@ function setUserAssignment(uid, role, charId) {
 }
 
 Object.assign(window, {
-  useCharState, useAllCharStates, useSharedInventory, useAuthIdentity, useAllUsers, setUserAssignment,
-  seedIfEmpty, charPath, CAMPAIGN,
+  useCharState, useAllCharStates, useSharedInventory, useSharedCoins,
+  useAuthIdentity, useAllUsers, setUserAssignment,
+  seedIfEmpty, charPath, CAMPAIGN, SHARED_INV, SHARED_COINS, moveItem, moveCoins,
 });
