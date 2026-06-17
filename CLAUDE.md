@@ -66,7 +66,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   monnaie (`char.coins` + images `ATH/Items/piece-*`). **Équipement persisté temps réel**
   (`state/equipment` = `{slotKey: itemId}`, via `setEquipment`). Bonus d'items lus via `item.mods`
   (vide pour l'instant → s'allumera en vert quand renseigné). `EQUIP_SLOTS` = les 15 slots,
-  `equipTypeForItem` infère le type (arme→weapon, autre Équipement→accessory).
+  `equipTypeForItem` infère le type (**dague→accessory** (choix MJ), autre arme→weapon,
+  autre Équipement→accessory). **Consommables** : clic → menu « Utiliser » (`parseConsumableEffect`
+  lit « Rend X + Y% HP/Mana » dans le `sub`) → décrémente la qty, **supprime l'item à 0**, et
+  applique l'effet en temps réel (PV via `applyHealMods`, mana brut). Items à qty 0 masqués.
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
