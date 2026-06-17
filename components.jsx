@@ -348,12 +348,49 @@ function ExportImportPanel() {
   );
 }
 
+/* --- Redimensionne une image (fichier) en data URL compacte (max `maxPx`,
+   webp si dispo sinon png — l'alpha est conservé). Permet au MJ de téléverser
+   une image sans accès au code : stockée telle quelle dans `item.img` (RTDB). --- */
+function downscaleImageToDataURL(file, maxPx = 128) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('lecture échouée'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('image illisible'));
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        let out = canvas.toDataURL('image/webp', 0.85);
+        if (out.indexOf('data:image/webp') !== 0) out = canvas.toDataURL('image/png');
+        resolve(out);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /* --- Ligne d'item : affichage + édition inline (inventaire perso & commun) --- */
 function InvItemRow({ item, editable, onSave, onRemove }) {
   const [edit, setEdit] = useState(false);
   const [d, setD] = useState(item);
+  const [busy, setBusy] = useState(false);
   useEffect(() => setD(item), [item]);
   const fld = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontSize:12, width:'100%', boxSizing:'border-box' };
+  const onPickImage = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';                          // permet de re-choisir le même fichier
+    if (!file || !file.type.startsWith('image/')) return;
+    setBusy(true);
+    try { const url = await downscaleImageToDataURL(file, 128); setD(prev => ({ ...prev, img: url })); }
+    catch (err) { console.error('Image illisible :', err); }
+    finally { setBusy(false); }
+  };
   if (edit) {
     return (
       <div className="col gap-2" style={{ padding:'8px', border:'1px solid var(--line-gold)', borderRadius:8 }}>
@@ -364,8 +401,21 @@ function InvItemRow({ item, editable, onSave, onRemove }) {
             {['Équipement','Consommables','Butin'].map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <input style={{ ...fld, width:64 }} type="number" min="1" value={d.qty} onChange={e => setD({ ...d, qty: parseInt(e.target.value) || 1 })} />
-          <input style={fld} value={d.img} placeholder="items/xxx.webp" onChange={e => setD({ ...d, img: e.target.value })} />
         </div>
+        {/* Image : téléversement + aperçu (pas besoin de connaître l'arborescence) */}
+        <div className="row gap-2" style={{ alignItems:'center' }}>
+          <span style={{ width:40, height:40, flex:'none', borderRadius:6, display:'grid', placeItems:'center', fontSize:18, background:'var(--bg-panel-2)', border:'1px solid var(--line)', overflow:'hidden' }}>
+            {d.img ? <img src={d.img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : (d.ic || '◆')}
+          </span>
+          <label className="btn btn-sm btn-ghost" style={{ cursor:'pointer' }}>
+            {busy ? 'Chargement…' : '🖼 Choisir une image'}
+            <input type="file" accept="image/*" onChange={onPickImage} style={{ display:'none' }} />
+          </label>
+          {d.img ? <button className="btn btn-sm btn-ghost" title="Retirer l'image" onClick={() => setD({ ...d, img: '' })}>✕</button> : null}
+        </div>
+        {d.img && d.img.startsWith('data:')
+          ? <div className="faint" style={{ fontSize:11 }}>Image téléversée ✓ — « ✕ » pour revenir à un chemin.</div>
+          : <input style={fld} value={d.img || ''} placeholder="ou chemin/URL (ex. ATH/Items/xxx.webp)" onChange={e => setD({ ...d, img: e.target.value })} />}
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => { setD(item); setEdit(false); }}>Annuler</button>
           <button className="btn btn-sm btn-gold" onClick={() => { onSave(d); setEdit(false); }}>Enregistrer</button>

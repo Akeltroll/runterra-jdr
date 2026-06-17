@@ -53,11 +53,17 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `components.jsx` — UI partagée : `Avatar`, `ResourceBar`, `BuffBadge`, toasts
   (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), `LoginScreen`,
   `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`, `AttackModal`,
-  `InvItemRow` + `InventoryPanel` (inventaire éditable réutilisable).
+  `InvItemRow` + `InventoryPanel` (inventaire éditable réutilisable). L'éditeur
+  `InvItemRow` permet de **téléverser une image** (`downscaleImageToDataURL`, max 128px,
+  webp/png) stockée en **data URL** dans `item.img` — pas besoin d'un chemin `ATH/` ni
+  d'accès au code (le champ chemin reste dispo en fallback).
 - `pages-sheet.jsx` — fiche joueur (3 colonnes, 3 variantes visuelles a/b/c).
   Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel, **inventaire perso
   temps réel** (migration unique via marqueur `invInit`).
 - `pages-mj.jsx` — tableau de bord MJ temps réel (`mjLive(c, st)` fusionne règles+état).
+  Le mini-sac des cartes lit l'inventaire **live** (`st.inventory`, items qty>0, images
+  `item.img`), fallback `c.inv`. Édition d'un joueur = bouton **⛶ plein écran** → `SheetBody`
+  (inventaire éditable, upload d'image inclus).
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
 - `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé).
 - `pages-equip.jsx` — page **Équipement** (`EquipPage`/`EquipBody`) : paperdoll dark-fantasy

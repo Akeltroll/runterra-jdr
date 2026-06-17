@@ -311,9 +311,10 @@ function EquipBody({ char }) {
             </div>
           </div>
 
-          {/* stats réelles */}
+          {/* stats réelles — hauteur naturelle ; c'est la colonne (overflowY:auto) qui scrolle
+             si l'écran est court, sinon le bas des stats se faisait couper (flex:1 1 0 + overflow:hidden). */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginTop:14,
-            paddingTop:12, borderTop:'1px solid rgba(160,128,72,0.15)', flex:'1 1 0', overflow:'hidden' }}>
+            paddingTop:12, borderTop:'1px solid rgba(160,128,72,0.15)', flex:'0 0 auto' }}>
             {[['ATTRIBUTS', attributs], ['COMBAT', combat], ['SURVIE', survie]].map(([title, rows]) => (
               <div key={title}>
                 <div style={{ fontFamily:"'Cinzel',serif", fontSize:10, letterSpacing:1.5, color:'#c2a05a',

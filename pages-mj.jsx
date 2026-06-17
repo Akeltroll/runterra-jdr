@@ -56,6 +56,10 @@ function MJCompactCard({ c, st, onFull }) {
   const L = mjLive(c, st);
   const danger = L.hpPct < 40;
   const stats = [['ad', L.eff.ad], ['ap', L.eff.ap], ['armure', L.eff.armure], ['resmag', L.eff.resmag]];
+  // Inventaire live (objet Firebase → tableau, items à qty>0) ; fallback sur l'inv. par défaut tant qu'aucun état.
+  const inv = (st && st.inventory)
+    ? Object.values(st.inventory).filter(it => (it.qty || 0) > 0)
+    : (c.inv || []);
   return (
     <div className="panel" style={{ width:300, flex:'none', display:'flex', flexDirection:'column',
       borderColor: danger ? 'rgba(200,48,42,.45)' : 'var(--line)' }}>
@@ -98,14 +102,16 @@ function MJCompactCard({ c, st, onFull }) {
           }) : <span className="faint" style={{ fontSize:11 }}>Aucun</span>}
         </div>
       </div>
-      {/* inventaire miniature */}
+      {/* inventaire miniature — live (st.inventory) avec images, fallback sur l'inv. par défaut */}
       <div style={{ padding:'12px 16px' }}>
-        <div className="overline" style={{ marginBottom:6 }}>Sac · {c.inv.length} objets</div>
+        <div className="overline" style={{ marginBottom:6 }}>Sac · {inv.length} objets</div>
         <div className="row gap-2 wrap">
-          {c.inv.slice(0,5).map((it, i) => (
-            <div key={i} className="tip">
+          {inv.slice(0,5).map((it, i) => (
+            <div key={it.id || i} className="tip">
               <div style={{ width:30, height:30, borderRadius:6, display:'grid', placeItems:'center', fontSize:14,
-                background:'var(--bg-inset)', border:'1px solid var(--line)' }}>{it.ic}</div>
+                background:'var(--bg-inset)', border:'1px solid var(--line)', overflow:'hidden' }}>
+                {it.img ? <img src={it.img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : (it.ic || '◆')}
+              </div>
               <div className="tip-body"><b className="gold">{it.name}</b> ×{it.qty}<br/>{it.sub}</div>
             </div>
           ))}
