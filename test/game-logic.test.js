@@ -127,3 +127,37 @@ test('buildDefaultState coins défaut 0 si char.coins absent', () => {
   const char = { id:'t', stats:{ hp:1, mana:1 }, hpCur:0, manaCur:0, inv:[] };
   assert.deepEqual(L.buildDefaultState(char).coins, { plat:0, or:0, arg:0, cuiv:0 });
 });
+
+test('planItemTransfer — transfert partiel décrémente la source', () => {
+  const src = { a: L.makeItem({ id:'a', name:'Potion', cat:'Consommables', qty:3 }) };
+  const { srcPatch, dstPatch } = L.planItemTransfer(src, {}, 'a', 1);
+  assert.equal(srcPatch.a.qty, 2);
+  const dstItem = Object.values(dstPatch)[0];
+  assert.equal(dstItem.qty, 1);
+  assert.equal(dstItem.name, 'Potion');
+});
+
+test('planItemTransfer — transfert total supprime la source (null)', () => {
+  const src = { a: L.makeItem({ id:'a', name:'Épée', cat:'Équipement', type:'weapon', qty:1 }) };
+  const { srcPatch } = L.planItemTransfer(src, {}, 'a', 1);
+  assert.equal(srcPatch.a, null);
+});
+
+test('planItemTransfer — fusion sur item équivalent côté destination', () => {
+  const src = { a: L.makeItem({ id:'a', name:'Potion', cat:'Consommables', qty:2 }) };
+  const dst = { z: L.makeItem({ id:'z', name:'Potion', cat:'Consommables', qty:5 }) };
+  const { dstPatch } = L.planItemTransfer(src, dst, 'a', 2);
+  assert.equal(dstPatch.z.qty, 7);
+});
+
+test('planItemTransfer — n borné à la qty dispo', () => {
+  const src = { a: L.makeItem({ id:'a', name:'X', cat:'Butin', qty:2 }) };
+  const { srcPatch, dstPatch } = L.planItemTransfer(src, {}, 'a', 99);
+  assert.equal(srcPatch.a, null);
+  assert.equal(Object.values(dstPatch)[0].qty, 2);
+});
+
+test('planItemTransfer — item absent => patches vides', () => {
+  const r = L.planItemTransfer({}, {}, 'nope', 1);
+  assert.deepEqual(r, { srcPatch:{}, dstPatch:{} });
+});

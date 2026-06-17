@@ -91,6 +91,36 @@
     };
   }
 
+  /* --- Transfert/fusion d'items : logique pure --- */
+  function _sameKind(a, b) {
+    return a && b && a.name === b.name && (a.type || '') === (b.type || '') && a.cat === b.cat;
+  }
+  function planItemTransfer(srcItems, dstItems, itemId, n) {
+    srcItems = srcItems || {}; dstItems = dstItems || {};
+    var src = srcItems[itemId];
+    if (!src || !(n > 0)) return { srcPatch:{}, dstPatch:{} };
+    var move = Math.min(n, src.qty || 0);
+    if (move <= 0) return { srcPatch:{}, dstPatch:{} };
+
+    var remain = (src.qty || 0) - move;
+    var srcPatch = {};
+    srcPatch[itemId] = (remain <= 0) ? null : Object.assign({}, src, { qty: remain });
+
+    var dstPatch = {};
+    var twinId = null, twin = null;
+    for (var k in dstItems) { if (_sameKind(dstItems[k], src)) { twinId = k; twin = dstItems[k]; break; } }
+    if (twin) {
+      dstPatch[twinId] = Object.assign({}, twin, { qty: (twin.qty || 0) + move });
+    } else {
+      var fresh = makeItem({
+        cat: src.cat, name: src.name, sub: src.sub, qty: move,
+        ic: src.ic, img: src.img, type: src.type, mods: src.mods,
+      });
+      dstPatch[fresh.id] = fresh;
+    }
+    return { srcPatch: srcPatch, dstPatch: dstPatch };
+  }
+
   /* --- Liste des types d'emplacements d'équipement --- */
   var EQUIP_TYPES = [
     { value:'helmet',    label:'Casque' },
@@ -141,6 +171,6 @@
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective,
     applyHealMods, buildDefaultState, makeItem, newItemId,
-    EQUIP_TYPES,
+    EQUIP_TYPES, planItemTransfer,
   };
 });
