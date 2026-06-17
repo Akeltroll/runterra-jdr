@@ -260,12 +260,13 @@ function EquipBody({ char }) {
         {/* ---- GAUCHE : ÉQUIPEMENT + STATS ---- */}
         <div style={{ flex:'0 0 300px', position:'relative', display:'flex', flexDirection:'column',
           border:'1px solid rgba(160,128,72,0.3)', borderRadius:4, background:panelBg,
-          boxShadow:'inset 0 0 55px rgba(0,0,0,0.5)', padding:'12px 14px', minHeight:0, zIndex:2,
-          overflowY:'auto', overflowX:'hidden' }}>
+          boxShadow:'inset 0 0 55px rgba(0,0,0,0.5)', padding:'12px 14px', minHeight:0, zIndex:2 }}>
           <Corners />
           <div style={{ textAlign:'center', fontFamily:"'Cinzel',serif", fontSize:14, fontWeight:600,
             letterSpacing:3, color:'#c2a05a', marginBottom:12, flex:'0 0 auto' }}>ÉQUIPEMENT</div>
 
+          {/* zone défilable : seul le contenu scrolle (les crochets d'angle restent collés au cadre) */}
+          <div style={{ flex:'1 1 auto', minHeight:0, overflowY:'auto', overflowX:'hidden' }}>
           {/* grille des slots */}
           <div style={{ display:'flex', justifyContent:'center', flex:'0 0 auto' }}>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(4,46px)', gridTemplateRows:'repeat(6,46px)',
@@ -311,7 +312,7 @@ function EquipBody({ char }) {
             </div>
           </div>
 
-          {/* stats réelles — hauteur naturelle ; c'est la colonne (overflowY:auto) qui scrolle
+          {/* stats réelles — hauteur naturelle ; c'est le wrapper défilant qui scrolle
              si l'écran est court, sinon le bas des stats se faisait couper (flex:1 1 0 + overflow:hidden). */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginTop:14,
             paddingTop:12, borderTop:'1px solid rgba(160,128,72,0.15)', flex:'0 0 auto' }}>
@@ -326,6 +327,7 @@ function EquipBody({ char }) {
                 ))}
               </div>
             ))}
+          </div>
           </div>
         </div>
 
