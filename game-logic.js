@@ -146,7 +146,7 @@
     const inventory = {};
     (char.inv || []).forEach((it, i) => {
       const id = `${char.id}_inv_${i}`;
-      inventory[id] = makeItem({ id, cat: it.cat, name: it.name, sub: it.sub, qty: it.qty, ic: it.ic, img: it.img });
+      inventory[id] = makeItem({ id, cat: it.cat, name: it.name, sub: it.sub, qty: it.qty, ic: it.ic, img: it.img, type: it.type });
     });
     return {
       hpCur:   Math.round((char.hpCur || 0) * char.stats.hp),

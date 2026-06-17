@@ -74,9 +74,9 @@ function parseConsumableEffect(it) {
 
 /* ---- Corps de la page pour un perso donné ---- */
 function EquipBody({ char }) {
-  const { state, setEquipment, setField, setInvItem, removeInvItem, setCoin } = useCharState(char.id);
-  const { items: sharedItems, setItem: setSharedItem } = useSharedInventory();
-  const { coins: sharedCoins, setCoin: setSharedCoin } = useSharedCoins();
+  const { state, setEquipment, setField, setInvItem, removeInvItem } = useCharState(char.id);
+  const { items: sharedItems } = useSharedInventory();
+  const { coins: sharedCoins } = useSharedCoins();
   const toast = useToast();
   const [filter, setFilter] = useState('all');
   const [draggingId, setDraggingId] = useState(null);
@@ -230,8 +230,7 @@ function EquipBody({ char }) {
   };
   const addItem = () => { const it = makeItem({ cat:'Butin', name:'Nouvel objet' }); setInvItem(it.id, it); setEditing(it); };
 
-  /* --- Inventaire (non équipé, quantité > 0) --- */
-  const inInventory = allItems.filter(it => !equippedIds.has(it.id) && (it.qty == null || it.qty > 0));
+  /* --- Inventaire (non équipé) ; InventoryGrid filtre qty>0 en interne --- */
   const inventoryForGrid = {};
   for (const it of allItems) if (!equippedIds.has(it.id)) inventoryForGrid[it.id] = it;
 

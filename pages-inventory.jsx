@@ -3,7 +3,7 @@
    ============================================================ */
 function CommonInventoryPage() {
   const { items, setItem, removeItem } = useSharedInventory();
-  const { coins: sharedCoins, setCoin: setSharedCoin } = useSharedCoins();
+  const { coins: sharedCoins } = useSharedCoins();
   const { role, charId } = useAuthIdentity();
   const all = useAllCharStates();
   const [filter, setFilter] = useState('all');

@@ -63,20 +63,24 @@ function useSharedCoins() {
 }
 
 /* Transfert d'item entre deux collections RTDB ({id:item}). Utilise la logique
-   pure planItemTransfer puis applique les deux patches en temps réel. */
+   pure planItemTransfer puis applique les deux patches en temps réel.
+   NB : transfert NON atomique (2 écritures sur des sous-arbres distincts). On
+   crédite la destination AVANT de débiter la source : si la 2e écriture échoue,
+   on a une duplication (récupérable) plutôt qu'une perte. */
 function moveItem(fromPath, toPath, fromItems, toItems, itemId, n) {
   const { srcPatch, dstPatch } = planItemTransfer(fromItems, toItems, itemId, n);
-  if (Object.keys(srcPatch).length) window.RTDB.updatePath(fromPath, srcPatch);
   if (Object.keys(dstPatch).length) window.RTDB.updatePath(toPath, dstPatch);
+  if (Object.keys(srcPatch).length) window.RTDB.updatePath(fromPath, srcPatch);
 }
 
-/* Transfert de pièces (une dénomination) entre deux objets coins, montant borné. */
+/* Transfert de pièces (une dénomination) entre deux objets coins, montant borné.
+   Crédit-avant-débit, même raison que moveItem (échec → duplication récupérable). */
 function moveCoins(fromPath, toPath, fromCoins, toCoins, key, n) {
   const avail = (fromCoins && fromCoins[key]) || 0;
   const m = Math.max(0, Math.min(n | 0, avail));
   if (m <= 0) return;
-  window.RTDB.updatePath(fromPath, { [key]: avail - m });
   window.RTDB.updatePath(toPath, { [key]: ((toCoins && toCoins[key]) || 0) + m });
+  window.RTDB.updatePath(fromPath, { [key]: avail - m });
 }
 
 /* Identité dérivée de l'auth Firebase + /users/{uid}.
