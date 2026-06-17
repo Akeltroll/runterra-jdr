@@ -59,13 +59,29 @@ const EQUIP_CAT_FALLBACK = { border:'rgba(160,128,72,0.45)', glow:'rgba(160,128,
 const equipCatStyle = (it) => (it && EQUIP_CAT_STYLE[it.cat]) || EQUIP_CAT_FALLBACK;
 
 /* Type d'item -> slot compatible. `item.type` explicite prioritaire (futur back).
-   À défaut on infère : arme (image dans /Armes/) -> weapon ; autre équipement
-   -> accessory ; consommables/butin -> non équipables. */
+   À défaut on infère : dague -> accessory (choix MJ) ; autre arme (/Armes/) -> weapon ;
+   autre équipement -> accessory ; consommables/butin -> non équipables. */
 function equipTypeForItem(it) {
   if (!it) return null;
   if (it.type) return it.type;
+  const dague = /dague/i.test(it.img || '') || /dague/i.test(it.name || '');
+  if (dague) return 'accessory';
   if (it.img && it.img.indexOf('/Armes/') !== -1) return 'weapon';
   if (it.cat === 'Équipement') return 'accessory';
+  return null;
+}
+
+/* Effet d'un consommable, parsé depuis sa description (source de vérité MJ :
+   « Rend 15 + 15% HP », « Rend 10 + 10% Mana » = plat + % du max). Renvoie null
+   pour un consommable sans effet chiffré (juste consommé). */
+function parseConsumableEffect(it) {
+  if (!it || it.cat !== 'Consommables') return null;
+  const txt = (it.sub || '') + ' ' + (it.name || '');
+  const m = txt.match(/Rend\s+(\d+)\s*\+\s*(\d+)\s*%\s*(HP|PV|Mana)/i);
+  if (m) return { kind: /mana/i.test(m[3]) ? 'mana' : 'hp', flat: parseInt(m[1], 10), pct: parseInt(m[2], 10) };
+  // Repli par nom pour les potions standard sans description chiffrée.
+  if (/potion\s+soin/i.test(it.name || '')) return { kind:'hp',   flat:15, pct:15 };
+  if (/potion\s+mana/i.test(it.name || '')) return { kind:'mana', flat:10, pct:10 };
   return null;
 }
 
@@ -81,12 +97,14 @@ const EQUIP_FILTERS = [
 
 /* ---- Corps de la page pour un perso donné ---- */
 function EquipBody({ char }) {
-  const { state, setEquipment } = useCharState(char.id);
+  const { state, setEquipment, setField, setInvItem, removeInvItem } = useCharState(char.id);
+  const toast = useToast();
   const [filter, setFilter] = useState('all');
   const [draggingId, setDraggingId] = useState(null);
   const [hoverSlot, setHoverSlot] = useState(null);
   const [hoverValid, setHoverValid] = useState(false);
-  const [tip, setTip] = useState(null);            // { item, x, y }
+  const [tip, setTip] = useState(null);            // { item, x, y } — survol (info)
+  const [useMenu, setUseMenu] = useState(null);    // { item, x, y } — clic sur un consommable
 
   // Migration unique de l'inventaire (marqueur invInit), idempotente — identique
   // à la fiche, au cas où le joueur ouvre Équipement avant sa fiche.
@@ -172,8 +190,33 @@ function EquipBody({ char }) {
     { k:'Omnivamp',   v:sval('omni', 0, true),    col:scol('omni') },
   ];
 
-  /* --- Inventaire filtré (non équipé) --- */
-  const inInventory = allItems.filter(it => !equippedIds.has(it.id));
+  /* --- Consommables : menu « Utiliser » au clic --- */
+  const openUseMenu = (e, item) => { e.stopPropagation(); setTip(null); setUseMenu({ item, x:e.clientX, y:e.clientY }); };
+  const consumeItem = (item) => {
+    const cur = itemsById[item.id]; if (!cur || (cur.qty || 0) < 1) { setUseMenu(null); return; }
+    // Effet (potions) appliqué en live sur l'état temps réel.
+    const fx = parseConsumableEffect(cur);
+    if (fx && fx.kind === 'hp') {
+      const gain = applyHealMods(fx.flat + Math.round(eff.hp * fx.pct / 100), activeBuffs);
+      const nv = Math.min(eff.hp, (state.hpCur || 0) + gain);
+      setField('hpCur', nv);
+      toast(`<b>${char.name}</b> utilise ${cur.name} · +${gain} PV`, 'buff');
+    } else if (fx && fx.kind === 'mana') {
+      const gain = fx.flat + Math.round(eff.mana * fx.pct / 100);
+      const nv = Math.min(eff.mana, (state.manaCur || 0) + gain);
+      setField('manaCur', nv);
+      toast(`<b>${char.name}</b> utilise ${cur.name} · +${gain} mana`, 'gold');
+    } else {
+      toast(`<b>${char.name}</b> utilise ${cur.name}`, 'gold');
+    }
+    // Décrément quantité ; suppression de l'inventaire quand on atteint 0.
+    const q = (cur.qty || 1) - 1;
+    if (q <= 0) removeInvItem(cur.id); else setInvItem(cur.id, { ...cur, qty: q });
+    setUseMenu(null);
+  };
+
+  /* --- Inventaire filtré (non équipé, quantité > 0) --- */
+  const inInventory = allItems.filter(it => !equippedIds.has(it.id) && (it.qty == null || it.qty > 0));
   const filtered = inInventory.filter(it => filter === 'all' || it.cat === filter);
   const N = Math.max(49, Math.ceil(filtered.length / 7) * 7);
   const cells = Array.from({ length:N }, (_, i) => filtered[i] || null);
@@ -342,8 +385,9 @@ function EquipBody({ char }) {
                       <div draggable="true"
                         onDragStart={(e) => { e.dataTransfer.setData('text', item.id); setDraggingId(item.id); }}
                         onDoubleClick={() => autoEquip(item.id)}
+                        onClick={item.cat === 'Consommables' ? (e) => openUseMenu(e, item) : undefined}
                         onMouseEnter={(e) => showTip(e, item)} onMouseMove={moveTip} onMouseLeave={hideTip}
-                        style={itemThumbStyle(item, '3px')}>
+                        style={{ ...itemThumbStyle(item, '3px'), cursor:item.cat === 'Consommables' ? 'pointer' : 'grab' }}>
                         {!item.img && (item.ic || '◆')}
                       </div>
                     )}
@@ -427,6 +471,40 @@ function EquipBody({ char }) {
               </React.Fragment>
             )}
           </div>
+        );
+      })()}
+
+      {/* ===== MENU « UTILISER » (clic sur un consommable) ===== */}
+      {useMenu && (() => {
+        const it = itemsById[useMenu.item.id] || useMenu.item;
+        const usable = (it.qty || 0) >= 1;
+        const fx = parseConsumableEffect(it);
+        return (
+          <React.Fragment>
+            <div onClick={() => setUseMenu(null)} style={{ position:'fixed', inset:0, zIndex:9998 }} />
+            <div style={{ position:'fixed', left:Math.min(useMenu.x + 14, window.innerWidth - 230) + 'px',
+              top:Math.min(useMenu.y + 14, window.innerHeight - 150) + 'px', zIndex:9999, width:216, padding:'13px 15px',
+              background:'linear-gradient(180deg,rgba(22,16,13,0.98),rgba(12,9,7,0.99))', border:'1px solid rgba(200,155,60,0.5)',
+              borderRadius:4, boxShadow:'0 10px 32px rgba(0,0,0,0.85)', fontFamily:"'EB Garamond',serif" }}>
+              <div style={{ fontFamily:"'Cinzel',serif", fontSize:14, fontWeight:600, color:'#e9dcc4' }}>{it.name}</div>
+              <div style={{ fontSize:12.5, color:'#9a8b76', fontStyle:'italic', marginTop:2 }}>
+                {it.sub || 'Consommable'}{it.qty > 1 ? ' · ×' + equipFmt(it.qty) : ''}
+              </div>
+              {fx && (
+                <div style={{ fontSize:12.5, color:'#9fd07a', marginTop:6 }}>
+                  Rend {fx.flat} + {fx.pct}% {fx.kind === 'mana' ? 'Mana' : 'PV'}
+                </div>
+              )}
+              <button onClick={() => consumeItem(it)} disabled={!usable}
+                style={{ marginTop:11, width:'100%', padding:'8px', cursor:usable ? 'pointer' : 'not-allowed',
+                  fontFamily:"'Cinzel',serif", fontSize:12, letterSpacing:1, textTransform:'uppercase', borderRadius:3,
+                  border:'1px solid ' + (usable ? '#c2a05a' : 'rgba(160,128,72,0.3)'),
+                  color:usable ? '#1a130e' : 'rgba(216,200,168,0.4)',
+                  background:usable ? 'linear-gradient(180deg,#e4c56b,#c2a05a)' : 'transparent' }}>
+                Utiliser
+              </button>
+            </div>
+          </React.Fragment>
         );
       })()}
     </div>
