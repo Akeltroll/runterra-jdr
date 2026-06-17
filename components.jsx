@@ -487,6 +487,62 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
   );
 }
 
+/* Popover ancré pour choisir un montant (transfert de pile, pièces). */
+function AmountStepper({ max, x, y, label, confirmLabel = 'Valider', onConfirm, onClose }) {
+  const [n, setN] = useState(1);
+  const clamp = (v) => Math.max(1, Math.min(max, v | 0 || 1));
+  useEffect(() => {
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc);
+  }, [onClose]);
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:200 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ position:'fixed', left:Math.min(x, window.innerWidth-220), top:Math.min(y, window.innerHeight-130),
+        background:'var(--bg-panel-2,#181410)', border:'1px solid var(--line-gold,rgba(160,128,72,0.5))', borderRadius:8,
+        padding:12, width:200, boxShadow:'0 8px 30px rgba(0,0,0,0.6)', color:'var(--ink,#e9dcc4)' }}>
+        {label && <div style={{ fontSize:12, marginBottom:8 }}>{label}</div>}
+        <div className="row gap-2" style={{ alignItems:'center', justifyContent:'center' }}>
+          <button className="btn btn-sm btn-ghost" onClick={() => setN(v => clamp(v - 1))}>−</button>
+          <input type="number" min="1" max={max} value={n} onChange={(e) => setN(clamp(e.target.value))}
+            style={{ width:60, textAlign:'center', background:'var(--bg-inset,#0d0a08)', color:'inherit',
+              border:'1px solid var(--line,rgba(160,128,72,0.3))', borderRadius:6, padding:'5px' }} />
+          <button className="btn btn-sm btn-ghost" onClick={() => setN(v => clamp(v + 1))}>+</button>
+        </div>
+        <div className="row gap-2" style={{ marginTop:10, justifyContent:'space-between' }}>
+          <button className="btn btn-sm btn-ghost" onClick={() => setN(max)}>Max ({max})</button>
+          <button className="btn btn-sm btn-gold" onClick={() => { onConfirm(clamp(n)); onClose(); }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Popover d'actions ancré (clic sur un item de la grille). */
+function ItemActionMenu({ item, x, y, actions, onClose }) {
+  useEffect(() => {
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc);
+  }, [onClose]);
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:200 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ position:'fixed', left:Math.min(x, window.innerWidth-200), top:Math.min(y, window.innerHeight-40-actions.length*34),
+        background:'var(--bg-panel-2,#181410)', border:'1px solid var(--line-gold,rgba(160,128,72,0.5))', borderRadius:8,
+        minWidth:170, padding:6, boxShadow:'0 8px 30px rgba(0,0,0,0.6)', color:'var(--ink,#e9dcc4)' }}>
+        <div style={{ fontSize:12, fontWeight:600, padding:'4px 8px 6px', color:'var(--gold-pale,#eccf8f)',
+          borderBottom:'1px solid var(--line,rgba(160,128,72,0.2))', marginBottom:4 }}>{item.name}</div>
+        {actions.map((a, i) => (
+          <button key={i} onClick={() => { a.onClick(); onClose(); }}
+            style={{ display:'block', width:'100%', textAlign:'left', background:'transparent', border:'none',
+              color:a.danger ? 'var(--debuff-bright,#e0463f)' : 'inherit', padding:'7px 8px', borderRadius:5,
+              cursor:'pointer', fontSize:13 }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover,rgba(255,255,255,0.05))'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>{a.label}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* --- Ligne d'item : affichage + édition inline (inventaire perso & commun) --- */
 function InvItemRow({ item, editable, onSave, onRemove }) {
   const [edit, setEdit] = useState(false);
@@ -584,4 +640,5 @@ Object.assign(window, {
   ToastProvider, useToast, AnnoPin, AttackModal, STAT_GLYPH, STAT_LABEL,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
   InventoryGrid, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invThumbStyle,
+  AmountStepper, ItemActionMenu,
 });
