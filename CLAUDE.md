@@ -40,23 +40,31 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `firebase-config.js` — init Firebase + auth Email/Password + helpers `window.RTDB`
   (`ready`, `currentUser`, `onAuth`, `signIn`, `signOut`, `subscribePath`,
   `updatePath`, `setPath`, `getSnapshot`).
-- `game-logic.js` — aussi : `makeItem`/`newItemId` (modèle d'item) ; `buildDefaultState`
-  amorce `inventory` depuis `char.inv`.
+- `game-logic.js` — aussi : `makeItem`/`newItemId` (modèle d'item, avec `type`) ; `EQUIP_TYPES`
+  (liste des emplacements) ; `planItemTransfer(srcItems,dstItems,itemId,n)` (logique pure de
+  transfert/fusion → `{srcPatch,dstPatch}`) ; `buildDefaultState` amorce `inventory` depuis `char.inv`
+  et `coins` depuis `char.coins`.
 - `data.jsx` — règles immuables : formules `computeStats`, `CHARACTERS` (avec `inv`
   par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS`, `RUNE`, `JOURNAL`.
   `mkChar` y attache les `modifiers` par défaut. (`ATTACK_MODES` **retiré** — voir Décisions.)
 - `data-state.jsx` — hooks temps réel : `useCharState` (+ setters inventaire
-  `setInvItem`/`removeInvItem` + équipement `setEquipment`), `useAllCharStates`, `useSharedInventory` (inventaire
-  commun), `useAuthIdentity` (identité + `/users/{uid}`, auto-inscription),
-  `useAllUsers`, `setUserAssignment`, `seedIfEmpty(role)` (réservé staff).
-  Constante `CAMPAIGN = 'campaign/runeterra'`.
+  `setInvItem`/`removeInvItem` + équipement `setEquipment` + monnaie `setCoin`), `useAllCharStates`,
+  `useSharedInventory` (inventaire commun), `useSharedCoins` (monnaie commune), `useAuthIdentity`
+  (identité + `/users/{uid}`, auto-inscription), `useAllUsers`, `setUserAssignment`,
+  `seedIfEmpty(role)` (réservé staff). Orchestrateurs de transfert RTDB `moveItem` (via
+  `planItemTransfer`) / `moveCoins`. Constantes `CAMPAIGN = 'campaign/runeterra'`,
+  `SHARED_INV`, `SHARED_COINS`.
 - `components.jsx` — UI partagée : `Avatar`, `ResourceBar`, `BuffBadge`, toasts
   (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), `LoginScreen`,
   `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`, `AttackModal`,
   `InvItemRow` + `InventoryPanel` (inventaire éditable réutilisable). L'éditeur
   `InvItemRow` permet de **téléverser une image** (`downscaleImageToDataURL`, max 128px,
   webp/png) stockée en **data URL** dans `item.img` — pas besoin d'un chemin `ATH/` ni
-  d'accès au code (le champ chemin reste dispo en fallback).
+  d'accès au code (le champ chemin reste dispo en fallback). `InvItemRow` gère aussi
+  **Catégorie + Emplacement** (`type`, affiché si `cat==='Équipement'`) et le prop `startEdit`
+  (ouverture directe en mode édition, pour les modals). Grille dark-fantasy partagée
+  `InventoryGrid` (Équipement + coffre commun) + popovers `ItemActionMenu` / `AmountStepper` ;
+  constantes `INV_*`/`inv*` (styles/format/filtres/pièces).
 - `pages-sheet.jsx` — fiche joueur (3 colonnes, 3 variantes visuelles a/b/c).
   Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel, **inventaire perso
   temps réel** (migration unique via marqueur `invInit`).
@@ -65,22 +73,30 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `item.img`), fallback `c.inv`. Édition d'un joueur = bouton **⛶ plein écran** → `SheetBody`
   (inventaire éditable, upload d'image inclus).
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
-- `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé).
+- `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé) :
+  rendu en **grille partagée** (`InventoryGrid`). Clic item → `ItemActionMenu` (Prendre / Éditer /
+  Supprimer) ; clic pièce → retrait. **Transferts commun → perso** via `moveItem`/`moveCoins` :
+  joueur = sa propre fiche, **MJ/admin = choix du destinataire** (picker sur `CHARACTERS`).
+  Pile qty>1 → `AmountStepper` (montant), qty=1 → direct.
 - `pages-equip.jsx` — page **Équipement** (`EquipPage`/`EquipBody`) : paperdoll dark-fantasy
   recréé du design Claude. 3 colonnes (slots+stats / portrait `ATH/Perso/` imposant / inventaire
-  live), drag & drop inventaire ↔ slots + double-clic, tooltip, HUD bas (niveau/PV/mana/nom),
-  monnaie (`char.coins` + images `ATH/Items/piece-*`). **Équipement persisté temps réel**
-  (`state/equipment` = `{slotKey: itemId}`, via `setEquipment`). Bonus d'items lus via `item.mods`
-  (vide pour l'instant → s'allumera en vert quand renseigné). `EQUIP_SLOTS` = les 15 slots,
-  `equipTypeForItem` infère le type (**dague→accessory** (choix MJ), autre arme→weapon,
-  autre Équipement→accessory). **Consommables** : clic → menu « Utiliser » (`parseConsumableEffect`
-  lit « Rend X + Y% HP/Mana » dans le `sub`) → décrémente la qty, **supprime l'item à 0**, et
-  applique l'effet en temps réel (PV via `applyHealMods`, mana brut). Items à qty 0 masqués.
+  live via `InventoryGrid`), drag & drop inventaire ↔ slots + double-clic, tooltip, HUD bas
+  (niveau/PV/mana/nom), **monnaie vivante** (`state.coins`, repli `char.coins` ; migration `coinsInit`).
+  **Équipement persisté temps réel** (`state/equipment` = `{slotKey: itemId}`, via `setEquipment`).
+  Bonus d'items lus via `item.mods` (vide pour l'instant → s'allumera en vert quand renseigné).
+  `EQUIP_SLOTS` = les 15 slots, `equipTypeForItem` lit `item.type` en priorité (sinon infère :
+  **dague→accessory** (choix MJ), autre arme→weapon, autre Équipement→accessory). Clic item →
+  `ItemActionMenu` : Équiper / Utiliser (consommable) / **Envoyer au commun** (`moveItem` → `sharedInventory`,
+  pile qty>1 = `AmountStepper`) / Éditer (`InvItemRow` en modal) / Supprimer ; clic pièce → dépôt au
+  commun (`moveCoins`). **Consommables** : « Utiliser » (`parseConsumableEffect` lit « Rend X + Y% HP/Mana »
+  dans le `sub`) → décrémente la qty, **supprime l'item à 0**, applique l'effet temps réel (PV via
+  `applyHealMods`, mana brut). Items à qty 0 masqués.
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
   joueur = sa fiche seule, staff = tout ; `sharedInventory` = R/W pour tout participant
-  inscrit, écriture au niveau `$itemId`.
+  inscrit, écriture au niveau `$itemId` ; `sharedCoins` = R/W tout participant inscrit,
+  `.validate` par dénomination (nombre ≥ 0).
 - `test/auth.test.js` — tests unitaires des helpers d'auth (`node --test`).
 - `test/game-logic.test.js` — tests unitaires (`node --test`).
 - `test/smoke.mjs` — test de démarrage Playwright (charge l'app réelle, teste le
@@ -97,12 +113,17 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     hpCur, manaCur, shield (valeurs ABSOLUES), fatigue (0-5), eau (0-5)
     buffs:     { [buffId]: true }
     modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, sapience }
-    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, mods } }   ← perso, éditable
+    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods } }   ← perso, éditable
     invInit:   true   ← marqueur de migration (amorçage unique de l'inventaire)
     equipment: { [slotKey]: itemId }   ← paperdoll (page Équipement), temps réel ; slotKey ∈ EQUIP_SLOTS
+    coins:     { plat, or, arg, cuiv }   ← monnaie perso (entiers ≥ 0), via setCoin / moveCoins
+    coinsInit: true   ← marqueur de migration (amorçage unique des pièces)
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
-    { id, cat, name, sub, qty, ic, img, mods }
+    { id, cat, name, sub, qty, ic, img, type, mods }
+/campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
 ```
+`type` = emplacement d'équipement (`EQUIP_TYPES` : helmet/chest/ring/weapon/accessory/…) ;
+vide = non équipable. Renseigné dans l'éditeur d'item quand `cat === 'Équipement'`.
 `charId` ∈ {rathael, urskaar, smith, **lunick** (affiché « Elias Crowe »), jett}.
 Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDefaultState`).
 `mods` = bonus de stats d'item (vide pour l'instant ; **hook futur** vers `computeEffective`).
@@ -133,13 +154,18 @@ Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDe
 - **Niveau 2** pour tous (les 12 pts de stats = 11 du niveau + 1 point bonus de création) ;
   page Progression affiche le bonus en gold.
 - **Système de mode de combat (offensif/équilibré/défensif) RETIRÉ** : attaques = dégâts pleins.
-- **Inventaire** : perso (par fiche) + commun (coffre partagé). Items `{id,cat,name,sub,qty,ic,img,mods}`,
-  images dans `ATH/`. Bonus `mods` non encore branchés.
+- **Inventaire** : perso (par fiche) + commun (coffre partagé). Items `{id,cat,name,sub,qty,ic,img,type,mods}`,
+  images dans `ATH/`. Bonus `mods` non encore branchés. **`type`** = emplacement explicite (saisi à
+  l'édition si `cat==='Équipement'`), sinon `equipTypeForItem` infère.
+- **Monnaie vivante** : `state.coins` par fiche + `sharedCoins` commun ({plat,or,arg,cuiv}, entiers).
+  Le MJ ajuste librement. **Transferts** perso ↔ commun pour items (`moveItem`/`planItemTransfer`,
+  fusion auto sur name+type+cat) et pièces (`moveCoins`). Destinataire : joueur = sa fiche, MJ = choix.
+- **Kéminite** = `Butin` (item de Rathäel ; corrigé dans `data.jsx`, défaut `type:''`).
 - **Rendu perso = image `.webp`** (`ATH/Perso/`), **pas de 3D** (modèle Meshy trop lourd, abandonné).
 
 ## Comment tester (dev)
 ```bash
-node --test test/game-logic.test.js          # logique pure (11 tests)
+node --test test/game-logic.test.js          # logique pure (20 tests)
 node --test test/auth.test.js                 # helpers d'auth (6 tests)
 python -m http.server 5050 --bind 127.0.0.1  # servir le site (autre terminal)
 SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées + compte attribué)
@@ -147,7 +173,13 @@ SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées
 Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
-## État actuel (2026-06-16)
+## État actuel (2026-06-17)
+- **Inventaire — transferts / types / pièces vivantes** (branche `feat/inv-transferts`, subagent-driven) :
+  champ `type` + `EQUIP_TYPES`, `planItemTransfer` (logique pure testée), `useSharedCoins`/`setCoin`,
+  orchestrateurs `moveItem`/`moveCoins`, grille partagée `InventoryGrid` + `ItemActionMenu`/`AmountStepper`,
+  câblage des pages Équipement & Inventaire commun (transferts perso↔commun, pièces, choix destinataire MJ).
+  20 tests purs verts, syntaxe OK. ⚠️ **Au merge : republier `database.rules.json`** (ajout `sharedCoins`).
+
 - v1 + **v2 (auth comptes + rôles) déployées** : GitHub Pages actif, comptes créés,
   règles strictes publiées, anonyme désactivé, persos attribués. ✅
 - **Mergé sur `main`** depuis : retrait du mode de combat ; Lunick → **Elias Crowe** +
@@ -163,11 +195,10 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 
 ## Chantiers en cours / backlog
 - **Équipement (paperdoll) : front + back faits** (`pages-equip.jsx`, page « Équipement » dans
-  la nav, visible joueur+staff ; persistance temps réel `state/equipment`). Reste à faire :
-  **brancher les `item.mods`** sur les stats effectives (le rendu lit déjà `mods` → bonus en vert,
-  mais `mods` est vide dans les données) et **formaliser un champ `type`** sur les items (helmet/
-  ring/chest…) — actuellement inféré par `equipTypeForItem` (arme→weapon, autre Équipement→accessory),
-  donc seules armes & accessoires sont équipables tant que les armures réelles n'existent pas.
+  la nav, visible joueur+staff ; persistance temps réel `state/equipment`). Champ `type` désormais
+  **formalisé** (`EQUIP_TYPES`, saisi à l'édition). Reste à faire : **brancher les `item.mods`** sur
+  les stats effectives (le rendu lit déjà `mods` → bonus en vert, mais `mods` est vide dans les données)
+  et créer les **armures réelles** (jusque-là, seuls armes & accessoires ont un `type` câblé).
 - **Compétences** (gros chantier, design validé, voir specs) : kits dans `info-mj/`.
   COMPLETS : Smith, Urskaar, Elias. **Manque : Rathael comp 4 ; Jett comp 3+4.**
   Approche hybride : outil calcule dégâts/charges/CD/états, narratif = rappel.
