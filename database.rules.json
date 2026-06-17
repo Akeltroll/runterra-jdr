@@ -22,6 +22,10 @@
             ".validate": "newData.hasChildren(['id', 'name', 'cat'])"
           }
         },
+        "sharedCoins": {
+          ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()"
+        },
         "characters": {
           "$charId": {
             ".read":  "auth != null && root.child('users').child(auth.uid).child('charId').val() === $charId",
