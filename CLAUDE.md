@@ -46,7 +46,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS`, `RUNE`, `JOURNAL`.
   `mkChar` y attache les `modifiers` par défaut. (`ATTACK_MODES` **retiré** — voir Décisions.)
 - `data-state.jsx` — hooks temps réel : `useCharState` (+ setters inventaire
-  `setInvItem`/`removeInvItem`), `useAllCharStates`, `useSharedInventory` (inventaire
+  `setInvItem`/`removeInvItem` + équipement `setEquipment`), `useAllCharStates`, `useSharedInventory` (inventaire
   commun), `useAuthIdentity` (identité + `/users/{uid}`, auto-inscription),
   `useAllUsers`, `setUserAssignment`, `seedIfEmpty(role)` (réservé staff).
   Constante `CAMPAIGN = 'campaign/runeterra'`.
@@ -60,6 +60,13 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `pages-mj.jsx` — tableau de bord MJ temps réel (`mjLive(c, st)` fusionne règles+état).
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
 - `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé).
+- `pages-equip.jsx` — page **Équipement** (`EquipPage`/`EquipBody`) : paperdoll dark-fantasy
+  recréé du design Claude. 3 colonnes (slots+stats / portrait `ATH/Perso/` imposant / inventaire
+  live), drag & drop inventaire ↔ slots + double-clic, tooltip, HUD bas (niveau/PV/mana/nom),
+  monnaie (`char.coins` + images `ATH/Items/piece-*`). **Équipement persisté temps réel**
+  (`state/equipment` = `{slotKey: itemId}`, via `setEquipment`). Bonus d'items lus via `item.mods`
+  (vide pour l'instant → s'allumera en vert quand renseigné). `EQUIP_SLOTS` = les 15 slots,
+  `equipTypeForItem` infère le type (arme→weapon, autre Équipement→accessory).
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
@@ -83,6 +90,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, sapience }
     inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, mods } }   ← perso, éditable
     invInit:   true   ← marqueur de migration (amorçage unique de l'inventaire)
+    equipment: { [slotKey]: itemId }   ← paperdoll (page Équipement), temps réel ; slotKey ∈ EQUIP_SLOTS
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
     { id, cat, name, sub, qty, ic, img, mods }
 ```
@@ -139,10 +147,18 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   17 tests verts. Items réels + images `ATH/` câblés depuis le nouvel Excel.
   ⚠️ **Au merge de `feat/inventaire`** : **republier `database.rules.json`** (sinon
   l'inventaire commun est inaccessible aux joueurs).
+- **Page Équipement (paperdoll)** : front + persistance temps réel (`pages-equip.jsx`,
+  `state/equipment`) sur la branche `feat/inventaire`, recréé fidèlement du design Claude,
+  branché sur les vraies données (portrait, stats, inventaire live, monnaie). Aucune règle
+  RTDB à changer (déjà couvert par `characters/$charId`). Reste : brancher `item.mods` sur les stats.
 
 ## Chantiers en cours / backlog
-- **Prochaine brique : équipement (slots paperdoll)** + rendu perso (image `ATH/Perso/`).
-  En attente des **visuels** de l'utilisateur. Le `mods` des items s'y branchera (→ `computeEffective`).
+- **Équipement (paperdoll) : front + back faits** (`pages-equip.jsx`, page « Équipement » dans
+  la nav, visible joueur+staff ; persistance temps réel `state/equipment`). Reste à faire :
+  **brancher les `item.mods`** sur les stats effectives (le rendu lit déjà `mods` → bonus en vert,
+  mais `mods` est vide dans les données) et **formaliser un champ `type`** sur les items (helmet/
+  ring/chest…) — actuellement inféré par `equipTypeForItem` (arme→weapon, autre Équipement→accessory),
+  donc seules armes & accessoires sont équipables tant que les armures réelles n'existent pas.
 - **Compétences** (gros chantier, design validé, voir specs) : kits dans `info-mj/`.
   COMPLETS : Smith, Urskaar, Elias. **Manque : Rathael comp 4 ; Jett comp 3+4.**
   Approche hybride : outil calcule dégâts/charges/CD/états, narratif = rappel.

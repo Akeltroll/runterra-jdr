@@ -4,6 +4,10 @@
    Transférable tel quel en HTML/CSS/JS vanilla.
    ============================================================ */
 
+/* Auras de la page Équipement (paperdoll) */
+@keyframes auraPulse  { 0%,100% { opacity:.4; } 50% { opacity:.85; } }
+@keyframes groundGlow { 0%,100% { opacity:.5; } 50% { opacity:.9;  } }
+
 :root {
   /* ---- COULEURS : FONDS ---- */
   --bg-abyss:      #07070C;   /* fond le plus profond (page) */
