@@ -26,7 +26,10 @@ function useCharState(charId) {
   const setMod   = useCallback((stat, v) => window.RTDB.updatePath(`${charPath(charId)}/modifiers`, { [stat]: v || null }), [charId]);
   const setInvItem    = useCallback((id, item) => window.RTDB.updatePath(`${charPath(charId)}/inventory`, { [id]: item }), [charId]);
   const removeInvItem = useCallback((id)       => window.RTDB.updatePath(`${charPath(charId)}/inventory`, { [id]: null }), [charId]);
-  return { state, setField, setBuff, setMod, setInvItem, removeInvItem };
+  // Équipement (paperdoll) : map { [slotKey]: itemId }. Le patch permet une mise à
+  // jour atomique multi-slots (déséquiper l'ancien slot d'un item en l'équipant ailleurs).
+  const setEquipment  = useCallback((patch)    => window.RTDB.updatePath(`${charPath(charId)}/equipment`, patch), [charId]);
+  return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment };
 }
 
 /* Snapshot live de tous les persos (vue MJ). */

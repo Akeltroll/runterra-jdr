@@ -6,7 +6,7 @@
 <title>Chroniques de Runeterra — Fiches JDR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=EB+Garamond:wght@400;500;600&family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="runeterra.css" />
 <style>
   #app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -98,6 +98,7 @@
 <script type="text/babel" src="pages-ds.jsx"></script>
 <script type="text/babel" src="pages-admin.jsx"></script>
 <script type="text/babel" src="pages-inventory.jsx"></script>
+<script type="text/babel" src="pages-equip.jsx"></script>
 
 <!-- Shell -->
 <script type="text/babel">
@@ -109,6 +110,7 @@ const PAGES = [
   { id:'prog',    label:'Progression',  render:() => <ProgressionPage /> },
   { id:'ds',      label:'Design System',render:() => <DesignSystemPage /> },
   { id:'inv',     label:'Inventaire commun', render:() => <CommonInventoryPage /> },
+  { id:'equip',   label:'Équipement',   render:(auth) => <EquipPage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
   { id:'admin',   label:'Admin',        render:() => <AdminPage /> },
 ];
 let setRoute; // remonté par App pour la navigation depuis les pages
