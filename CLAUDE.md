@@ -174,11 +174,14 @@ Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
 ## État actuel (2026-06-17)
-- **Inventaire — transferts / types / pièces vivantes** (branche `feat/inv-transferts`, subagent-driven) :
-  champ `type` + `EQUIP_TYPES`, `planItemTransfer` (logique pure testée), `useSharedCoins`/`setCoin`,
-  orchestrateurs `moveItem`/`moveCoins`, grille partagée `InventoryGrid` + `ItemActionMenu`/`AmountStepper`,
-  câblage des pages Équipement & Inventaire commun (transferts perso↔commun, pièces, choix destinataire MJ).
-  20 tests purs verts, syntaxe OK. ⚠️ **Au merge : republier `database.rules.json`** (ajout `sharedCoins`).
+- **Inventaire — transferts / types / pièces vivantes** : **mergé sur `main` et déployé** (subagent-driven).
+  Champ `type` + `EQUIP_TYPES`, `planItemTransfer` (logique pure testée), `useSharedCoins`/`setCoin`,
+  orchestrateurs `moveItem`/`moveCoins` (crédit-avant-débit), grille partagée `InventoryGrid` +
+  `ItemActionMenu`/`AmountStepper`, pages Équipement & Inventaire commun câblées (transferts perso↔commun,
+  pièces, choix destinataire MJ). Coffre commun en **master-détail** (grille gauche + panneau détail droite) ;
+  **édition réservée au staff** (joueurs : Prendre seulement). Nav : Équipement avant Inventaire commun.
+  26 tests verts (game-logic+auth), syntaxe OK. ⚠️ **RESTE À FAIRE EN CONSOLE FIREBASE : republier
+  `database.rules.json`** (ajout `sharedCoins`) — sinon les pièces communes sont bloquées en écriture.
 
 - v1 + **v2 (auth comptes + rôles) déployées** : GitHub Pages actif, comptes créés,
   règles strictes publiées, anonyme désactivé, persos attribués. ✅
