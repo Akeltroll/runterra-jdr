@@ -41,22 +41,7 @@ const EQUIP_PORTRAITS = {
   jett:'ATH/Perso/Jett.webp',
 };
 
-/* Monnaie : clés de char.coins -> image + couleur de valeur (valeur croissante). */
-const EQUIP_COINS = [
-  { key:'cuiv', label:'Fer',     img:'ATH/Items/piece-fer.webp',     col:'#b0b0b0' },
-  { key:'arg',  label:'Bronze',  img:'ATH/Items/piece-bronze.webp',  col:'#cd9a6a' },
-  { key:'or',   label:'Or',      img:'ATH/Items/piece-or.webp',      col:'#eccf8f' },
-  { key:'plat', label:'Mythril', img:'ATH/Items/piece-mythril.webp', col:'#b8d4e8' },
-];
-
-/* Style de case par catégorie (pas de système de rareté dans les données). */
-const EQUIP_CAT_STYLE = {
-  'Équipement':   { border:'rgba(200,155,60,0.55)',  glow:'rgba(200,155,60,0.30)'  },
-  'Consommables': { border:'rgba(43,111,176,0.55)',  glow:'rgba(43,111,176,0.30)'  },
-  'Butin':        { border:'rgba(139,224,255,0.42)', glow:'rgba(139,224,255,0.16)' },
-};
-const EQUIP_CAT_FALLBACK = { border:'rgba(160,128,72,0.45)', glow:'rgba(160,128,72,0.22)' };
-const equipCatStyle = (it) => (it && EQUIP_CAT_STYLE[it.cat]) || EQUIP_CAT_FALLBACK;
+/* (EQUIP_COINS, EQUIP_CAT_STYLE, EQUIP_CAT_FALLBACK, equipCatStyle supprimés — fournis par components.jsx sous INV_COINS / invCatStyle) */
 
 /* Type d'item -> slot compatible. `item.type` explicite prioritaire (futur back).
    À défaut on infère : dague -> accessory (choix MJ) ; autre arme (/Armes/) -> weapon ;
@@ -85,26 +70,22 @@ function parseConsumableEffect(it) {
   return null;
 }
 
-const equipFmt = (n) => Number(n || 0).toLocaleString('fr-FR');
-
-/* Filtres d'inventaire alignés sur les catégories réelles du projet. */
-const EQUIP_FILTERS = [
-  { key:'all',          label:'Tout' },
-  { key:'Équipement',   label:'Équip.' },
-  { key:'Consommables', label:'Conso.' },
-  { key:'Butin',        label:'Butin' },
-];
+/* (equipFmt, EQUIP_FILTERS supprimés — fournis par components.jsx sous invFmt / INV_FILTERS) */
 
 /* ---- Corps de la page pour un perso donné ---- */
 function EquipBody({ char }) {
-  const { state, setEquipment, setField, setInvItem, removeInvItem } = useCharState(char.id);
+  const { state, setEquipment, setField, setInvItem, removeInvItem, setCoin } = useCharState(char.id);
+  const { items: sharedItems, setItem: setSharedItem } = useSharedInventory();
+  const { coins: sharedCoins, setCoin: setSharedCoin } = useSharedCoins();
   const toast = useToast();
   const [filter, setFilter] = useState('all');
   const [draggingId, setDraggingId] = useState(null);
   const [hoverSlot, setHoverSlot] = useState(null);
   const [hoverValid, setHoverValid] = useState(false);
   const [tip, setTip] = useState(null);            // { item, x, y } — survol (info)
-  const [useMenu, setUseMenu] = useState(null);    // { item, x, y } — clic sur un consommable
+  const [menu, setMenu] = useState(null);          // { item, x, y, actions } — menu d'actions
+  const [stepper, setStepper] = useState(null);    // { kind:'item'|'coin', ... } — saisie quantité
+  const [editing, setEditing] = useState(null);    // item en cours d'édition (modal)
 
   // Migration unique de l'inventaire (marqueur invInit), idempotente — identique
   // à la fiche, au cas où le joueur ouvre Équipement avant sa fiche.
@@ -114,6 +95,15 @@ function EquipBody({ char }) {
         ? state.inventory
         : buildDefaultState(char).inventory;
       window.RTDB.updatePath(charPath(char.id), { inventory: inv, invInit: true });
+    }
+  }, [state, char.id]);
+
+  // Migration unique des pièces (marqueur coinsInit).
+  useEffect(() => {
+    if (state && state.coinsInit === undefined) {
+      const coins = (state.coins && Object.keys(state.coins).length)
+        ? state.coins : buildDefaultState(char).coins;
+      window.RTDB.updatePath(charPath(char.id), { coins, coinsInit: true });
     }
   }, [state, char.id]);
 
@@ -163,7 +153,7 @@ function EquipBody({ char }) {
   });
   const sval = (k, base, pct) => {
     const tot = (base || 0) + (bonuses[k] || 0);
-    return pct ? tot.toFixed(1) + '%' : equipFmt(tot);
+    return pct ? tot.toFixed(1) + '%' : invFmt(tot);
   };
   const scol = (k) => (bonuses[k] ? '#9fd07a' : '#e9dcc4');
 
@@ -185,15 +175,14 @@ function EquipBody({ char }) {
   const survie = [
     { k:'PV max',     v:sval('hp', eff.hp),       col:scol('hp')   },
     { k:'Mana max',   v:sval('mana', eff.mana),   col:scol('mana') },
-    { k:'Bouclier',   v:equipFmt(char.shieldMax), col:'#e9dcc4' },
+    { k:'Bouclier',   v:invFmt(char.shieldMax), col:'#e9dcc4' },
     { k:'Vol de vie', v:sval('vol', 0, true),     col:scol('vol')  },
     { k:'Omnivamp',   v:sval('omni', 0, true),    col:scol('omni') },
   ];
 
-  /* --- Consommables : menu « Utiliser » au clic --- */
-  const openUseMenu = (e, item) => { e.stopPropagation(); setTip(null); setUseMenu({ item, x:e.clientX, y:e.clientY }); };
+  /* --- Consommables : utilisation au clic (appelée par openItemMenu) --- */
   const consumeItem = (item) => {
-    const cur = itemsById[item.id]; if (!cur || (cur.qty || 0) < 1) { setUseMenu(null); return; }
+    const cur = itemsById[item.id]; if (!cur || (cur.qty || 0) < 1) { setMenu(null); return; }
     // Effet (potions) appliqué en live sur l'état temps réel.
     const fx = parseConsumableEffect(cur);
     if (fx && fx.kind === 'hp') {
@@ -212,14 +201,39 @@ function EquipBody({ char }) {
     // Décrément quantité ; suppression de l'inventaire quand on atteint 0.
     const q = (cur.qty || 1) - 1;
     if (q <= 0) removeInvItem(cur.id); else setInvItem(cur.id, { ...cur, qty: q });
-    setUseMenu(null);
+    setMenu(null);
   };
 
-  /* --- Inventaire filtré (non équipé, quantité > 0) --- */
+  /* --- Monnaie live + actions items/pièces --- */
+  const coins = state.coins || char.coins || { plat:0, or:0, arg:0, cuiv:0 };
+
+  const sendToCommon = (item, n) => {
+    moveItem(`${charPath(char.id)}/inventory`, SHARED_INV, itemsById, sharedItems || {}, item.id, n);
+  };
+  const openItemMenu = (item, e) => {
+    e.stopPropagation(); setTip(null);
+    const actions = [];
+    if (equipTypeForItem(item)) actions.push({ label:'Équiper', onClick:() => autoEquip(item.id) });
+    if (item.cat === 'Consommables' && parseConsumableEffect(item)) actions.push({ label:'Utiliser', onClick:() => consumeItem(item) });
+    actions.push({ label:'Envoyer au commun', onClick:() => {
+      if ((item.qty || 1) > 1) setStepper({ kind:'item', dir:'toCommon', item, x:e.clientX, y:e.clientY });
+      else sendToCommon(item, 1);
+    }});
+    actions.push({ label:'Éditer', onClick:() => setEditing(item) });
+    actions.push({ label:'Supprimer', danger:true, onClick:() => removeInvItem(item.id) });
+    setMenu({ item, x:e.clientX, y:e.clientY, actions });
+  };
+  const openCoinMenu = (key, e) => {
+    const max = coins[key] || 0;
+    if (max <= 0) return;
+    setStepper({ kind:'coin', dir:'toCommon', coinKey:key, max, x:e.clientX, y:e.clientY });
+  };
+  const addItem = () => { const it = makeItem({ cat:'Butin', name:'Nouvel objet' }); setInvItem(it.id, it); setEditing(it); };
+
+  /* --- Inventaire (non équipé, quantité > 0) --- */
   const inInventory = allItems.filter(it => !equippedIds.has(it.id) && (it.qty == null || it.qty > 0));
-  const filtered = inInventory.filter(it => filter === 'all' || it.cat === filter);
-  const N = Math.max(49, Math.ceil(filtered.length / 7) * 7);
-  const cells = Array.from({ length:N }, (_, i) => filtered[i] || null);
+  const inventoryForGrid = {};
+  for (const it of allItems) if (!equippedIds.has(it.id)) inventoryForGrid[it.id] = it;
 
   const hp = state.hpCur || 0, hpMax = eff.hp || 1;
   const mana = state.manaCur || 0, manaMax = eff.mana || 1;
@@ -274,7 +288,7 @@ function EquipBody({ char }) {
               {Object.keys(EQUIP_SLOTS).map(key => {
                 const def = EQUIP_SLOTS[key];
                 const item = itemsById[equipment[key]] || null;
-                const cs = equipCatStyle(item);
+                const cs = invCatStyle(item);
                 const hov = hoverSlot === key;
                 return (
                   <div key={key}
@@ -348,80 +362,11 @@ function EquipBody({ char }) {
           </div>
         </div>
 
-        {/* ---- DROITE : INVENTAIRE ---- */}
-        <div style={{ flex:'0 0 390px', position:'relative', display:'flex', flexDirection:'column',
-          border:'1px solid rgba(160,128,72,0.3)', borderRadius:4, background:panelBg,
-          boxShadow:'inset 0 0 55px rgba(0,0,0,0.5)', padding:'12px 12px 0', minHeight:0, zIndex:2 }}>
-          <Corners />
-          <div style={{ textAlign:'center', fontFamily:"'Cinzel',serif", fontSize:14, fontWeight:600,
-            letterSpacing:3, color:'#c2a05a', marginBottom:10, flex:'0 0 auto' }}>INVENTAIRE</div>
-
-          {/* filtres */}
-          <div style={{ display:'flex', gap:4, marginBottom:10, flex:'0 0 auto' }}>
-            {EQUIP_FILTERS.map(ft => {
-              const on = filter === ft.key;
-              return (
-                <div key={ft.key} onClick={() => setFilter(ft.key)}
-                  style={{ flex:1, textAlign:'center', fontFamily:'Cinzel,serif', fontSize:10, letterSpacing:0.4,
-                    padding:'7px 2px', cursor:'pointer', textTransform:'uppercase', borderRadius:3,
-                    border:'1px solid ' + (on ? 'rgba(160,128,72,0.5)' : 'rgba(160,128,72,0.16)'),
-                    color:on ? '#eccf8f' : 'rgba(190,170,135,0.5)',
-                    background:on ? 'linear-gradient(180deg,#2a1f16,#1a130e)' : 'transparent' }}>{ft.label}</div>
-              );
-            })}
-          </div>
-
-          {/* grille (déposer ici = déséquiper) */}
-          <div onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text') || draggingId; if (id && slotOfItem(id)) unequip(id); setHoverSlot(null); setDraggingId(null); }}
-            style={{ flex:'1 1 auto', overflowY:'auto', overflowX:'hidden', minHeight:0 }}>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:5, paddingBottom:8 }}>
-              {cells.map((item, i) => {
-                const cs = equipCatStyle(item);
-                return (
-                  <div key={i} style={{ position:'relative', aspectRatio:'1', borderRadius:3,
-                    background:item ? 'rgba(12,8,7,0.7)' : 'radial-gradient(circle at 50% 30%,#1b1510,#0e0a08)',
-                    border:'1px solid ' + (item ? cs.border : 'rgba(160,128,72,0.16)'),
-                    boxShadow:item ? 'inset 0 0 14px ' + cs.glow : 'none',
-                    display:'flex', alignItems:'center', justifyContent:'center', overflow:'visible' }}>
-                    {item && (
-                      <div draggable="true"
-                        onDragStart={(e) => { e.dataTransfer.setData('text', item.id); setDraggingId(item.id); }}
-                        onDoubleClick={() => autoEquip(item.id)}
-                        onClick={item.cat === 'Consommables' ? (e) => openUseMenu(e, item) : undefined}
-                        onMouseEnter={(e) => showTip(e, item)} onMouseMove={moveTip} onMouseLeave={hideTip}
-                        style={{ ...itemThumbStyle(item, '3px'), cursor:item.cat === 'Consommables' ? 'pointer' : 'grab' }}>
-                        {!item.img && (item.ic || '◆')}
-                      </div>
-                    )}
-                    {item && item.qty > 1 && (
-                      <span style={{ position:'absolute', right:3, bottom:1, fontFamily:"'EB Garamond',serif",
-                        fontSize:13, fontWeight:600, color:'#f0e6d2', textShadow:'0 1px 3px #000,0 0 5px #000',
-                        pointerEvents:'none', zIndex:1 }}>{equipFmt(item.qty)}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* monnaie */}
-          <div style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 4px 6px',
-            borderTop:'1px solid rgba(160,128,72,0.16)', flex:'0 0 auto' }}>
-            {EQUIP_COINS.map(c => (
-              <div key={c.key} style={{ display:'flex', alignItems:'center', gap:4 }}>
-                <div style={{ width:30, height:30, flex:'0 0 30px',
-                  background:`url(${c.img}) center/contain no-repeat` }} />
-                <span style={{ fontFamily:"'EB Garamond',serif", fontSize:13, color:c.col, minWidth:32 }}>
-                  {equipFmt((char.coins && char.coins[c.key]) || 0)}
-                </span>
-              </div>
-            ))}
-            <div style={{ flex:1 }} />
-            <span style={{ fontFamily:"'Cinzel',serif", fontSize:11, color:'#c2a05a', letterSpacing:0.5 }}>
-              {inInventory.length} / 120
-            </span>
-          </div>
+        {/* ---- DROITE : INVENTAIRE (grille partagée) ---- */}
+        <div style={{ flex:'0 0 390px', minHeight:0, zIndex:2 }}>
+          <InventoryGrid items={inventoryForGrid} coins={coins} filter={filter} setFilter={setFilter}
+            onItemClick={openItemMenu} onCoinClick={openCoinMenu} onAdd={addItem}
+            onDropItem={(id) => { if (slotOfItem(id)) unequip(id); }} capacity={120} />
         </div>
       </div>
 
@@ -437,11 +382,11 @@ function EquipBody({ char }) {
         <div style={{ display:'flex', flexDirection:'column', gap:6, width:260 }}>
           <div style={{ position:'relative', height:18, border:'1px solid rgba(160,128,72,0.28)', borderRadius:3, background:'#160a09', overflow:'hidden' }}>
             <div style={{ height:'100%', width:hpPct + '%', background:'linear-gradient(90deg,#6b1216,#b3242a)', transition:'width .3s' }} />
-            <span style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'EB Garamond',serif", fontSize:11, color:'#f0e6d2', textShadow:'0 1px 2px #000' }}>{equipFmt(Math.round(hp))} / {equipFmt(hpMax)}</span>
+            <span style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'EB Garamond',serif", fontSize:11, color:'#f0e6d2', textShadow:'0 1px 2px #000' }}>{invFmt(Math.round(hp))} / {invFmt(hpMax)}</span>
           </div>
           <div style={{ position:'relative', height:18, border:'1px solid rgba(160,128,72,0.28)', borderRadius:3, background:'#0b1118', overflow:'hidden' }}>
             <div style={{ height:'100%', width:manaPct + '%', background:'linear-gradient(90deg,#1a3a6b,#3672c4)', transition:'width .3s' }} />
-            <span style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'EB Garamond',serif", fontSize:11, color:'#f0e6d2', textShadow:'0 1px 2px #000' }}>{equipFmt(Math.round(mana))} / {equipFmt(manaMax)}</span>
+            <span style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'EB Garamond',serif", fontSize:11, color:'#f0e6d2', textShadow:'0 1px 2px #000' }}>{invFmt(Math.round(mana))} / {invFmt(manaMax)}</span>
           </div>
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:2, marginLeft:8 }}>
@@ -453,7 +398,7 @@ function EquipBody({ char }) {
       {/* ===== TOOLTIP ===== */}
       {tip && (() => {
         const it = tip.item;
-        const cs = equipCatStyle(it);
+        const cs = invCatStyle(it);
         const modRows = Object.keys(it.mods || {}).map(k => ({ k:(STAT_LABEL[k] || k), v:(it.mods[k] > 0 ? '+' : '') + it.mods[k] }));
         return (
           <div style={{ position:'fixed', left:Math.min(tip.x + 16, window.innerWidth - 255) + 'px',
@@ -477,39 +422,28 @@ function EquipBody({ char }) {
         );
       })()}
 
-      {/* ===== MENU « UTILISER » (clic sur un consommable) ===== */}
-      {useMenu && (() => {
-        const it = itemsById[useMenu.item.id] || useMenu.item;
-        const usable = (it.qty || 0) >= 1;
-        const fx = parseConsumableEffect(it);
-        return (
-          <React.Fragment>
-            <div onClick={() => setUseMenu(null)} style={{ position:'fixed', inset:0, zIndex:9998 }} />
-            <div style={{ position:'fixed', left:Math.min(useMenu.x + 14, window.innerWidth - 230) + 'px',
-              top:Math.min(useMenu.y + 14, window.innerHeight - 150) + 'px', zIndex:9999, width:216, padding:'13px 15px',
-              background:'linear-gradient(180deg,rgba(22,16,13,0.98),rgba(12,9,7,0.99))', border:'1px solid rgba(200,155,60,0.5)',
-              borderRadius:4, boxShadow:'0 10px 32px rgba(0,0,0,0.85)', fontFamily:"'EB Garamond',serif" }}>
-              <div style={{ fontFamily:"'Cinzel',serif", fontSize:14, fontWeight:600, color:'#e9dcc4' }}>{it.name}</div>
-              <div style={{ fontSize:12.5, color:'#9a8b76', fontStyle:'italic', marginTop:2 }}>
-                {it.sub || 'Consommable'}{it.qty > 1 ? ' · ×' + equipFmt(it.qty) : ''}
-              </div>
-              {fx && (
-                <div style={{ fontSize:12.5, color:'#9fd07a', marginTop:6 }}>
-                  Rend {fx.flat} + {fx.pct}% {fx.kind === 'mana' ? 'Mana' : 'PV'}
-                </div>
-              )}
-              <button onClick={() => consumeItem(it)} disabled={!usable}
-                style={{ marginTop:11, width:'100%', padding:'8px', cursor:usable ? 'pointer' : 'not-allowed',
-                  fontFamily:"'Cinzel',serif", fontSize:12, letterSpacing:1, textTransform:'uppercase', borderRadius:3,
-                  border:'1px solid ' + (usable ? '#c2a05a' : 'rgba(160,128,72,0.3)'),
-                  color:usable ? '#1a130e' : 'rgba(216,200,168,0.4)',
-                  background:usable ? 'linear-gradient(180deg,#e4c56b,#c2a05a)' : 'transparent' }}>
-                Utiliser
-              </button>
-            </div>
-          </React.Fragment>
-        );
-      })()}
+      {/* ===== POPOVERS : menu d'actions / stepper de quantité / éditeur d'item ===== */}
+      {menu && <ItemActionMenu item={menu.item} x={menu.x} y={menu.y} actions={menu.actions} onClose={() => setMenu(null)} />}
+      {stepper && stepper.kind === 'item' && (
+        <AmountStepper max={stepper.item.qty} x={stepper.x} y={stepper.y}
+          label={`Envoyer combien de « ${stepper.item.name} » au commun ?`} confirmLabel="Envoyer"
+          onConfirm={(n) => sendToCommon(stepper.item, n)} onClose={() => setStepper(null)} />
+      )}
+      {stepper && stepper.kind === 'coin' && (
+        <AmountStepper max={stepper.max} x={stepper.x} y={stepper.y}
+          label="Déposer combien au commun ?" confirmLabel="Déposer"
+          onConfirm={(n) => moveCoins(`${charPath(char.id)}/coins`, SHARED_COINS, coins, sharedCoins || {}, stepper.coinKey, n)}
+          onClose={() => setStepper(null)} />
+      )}
+      {editing && (
+        <div className="modal-scrim" onClick={() => setEditing(null)} style={{ display:'flex', alignItems:'center', justifyContent:'center', zIndex:210 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width:'min(420px,92vw)', background:'var(--bg-deep)', border:'1px solid var(--line-gold)', borderRadius:12, padding:16 }}>
+            <InvItemRow item={editing} editable={true} startEdit={true}
+              onSave={(it) => { setInvItem(it.id, it); setEditing(null); }}
+              onRemove={(id) => { removeInvItem(id); setEditing(null); }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
