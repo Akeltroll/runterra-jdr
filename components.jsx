@@ -544,8 +544,8 @@ function ItemActionMenu({ item, x, y, actions, onClose }) {
 }
 
 /* --- Ligne d'item : affichage + édition inline (inventaire perso & commun) --- */
-function InvItemRow({ item, editable, onSave, onRemove }) {
-  const [edit, setEdit] = useState(false);
+function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
+  const [edit, setEdit] = useState(!!startEdit);
   const [d, setD] = useState(item);
   const [busy, setBusy] = useState(false);
   useEffect(() => setD(item), [item]);
@@ -565,11 +565,19 @@ function InvItemRow({ item, editable, onSave, onRemove }) {
         <input style={fld} value={d.name} placeholder="Nom" onChange={e => setD({ ...d, name: e.target.value })} />
         <input style={fld} value={d.sub} placeholder="Description" onChange={e => setD({ ...d, sub: e.target.value })} />
         <div className="row gap-2">
-          <select style={{ ...fld, width:'auto' }} value={d.cat} onChange={e => setD({ ...d, cat: e.target.value })}>
+          <select style={{ ...fld, width:'auto' }} value={d.cat}
+            onChange={e => setD({ ...d, cat: e.target.value, type: e.target.value === 'Équipement' ? d.type : '' })}>
             {['Équipement','Consommables','Butin'].map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <input style={{ ...fld, width:64 }} type="number" min="1" value={d.qty} onChange={e => setD({ ...d, qty: parseInt(e.target.value) || 1 })} />
+          <input style={{ ...fld, width:64 }} type="number" min="1" value={d.qty}
+            onChange={e => setD({ ...d, qty: parseInt(e.target.value) || 1 })} />
         </div>
+        {d.cat === 'Équipement' && (
+          <select style={fld} value={d.type || ''} onChange={e => setD({ ...d, type: e.target.value })}>
+            <option value="">— Emplacement —</option>
+            {EQUIP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        )}
         {/* Image : téléversement + aperçu (pas besoin de connaître l'arborescence) */}
         <div className="row gap-2" style={{ alignItems:'center' }}>
           <span style={{ width:40, height:40, flex:'none', borderRadius:6, display:'grid', placeItems:'center', fontSize:18, background:'var(--bg-panel-2)', border:'1px solid var(--line)', overflow:'hidden' }}>
@@ -586,7 +594,7 @@ function InvItemRow({ item, editable, onSave, onRemove }) {
           : <input style={fld} value={d.img || ''} placeholder="ou chemin/URL (ex. ATH/Items/xxx.webp)" onChange={e => setD({ ...d, img: e.target.value })} />}
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => { setD(item); setEdit(false); }}>Annuler</button>
-          <button className="btn btn-sm btn-gold" onClick={() => { onSave(d); setEdit(false); }}>Enregistrer</button>
+          <button className="btn btn-sm btn-gold" onClick={() => { onSave({ ...d, type: d.cat === 'Équipement' ? (d.type || '') : '' }); setEdit(false); }}>Enregistrer</button>
         </div>
       </div>
     );
