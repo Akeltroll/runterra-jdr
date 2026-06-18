@@ -15,6 +15,32 @@ function useMediaQuery(query) {
   return match;
 }
 
+/* Lecture plein écran d'une planche, avec navigation et fermeture clavier. */
+function RecapLightbox({ pages, index, onClose }) {
+  const [i, setI] = useState(index);
+  useEffect(() => setI(index), [index]);
+  useEffect(() => {
+    const fn = (e) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowRight') setI(v => Math.min(pages.length - 1, v + 1));
+      else if (e.key === 'ArrowLeft')  setI(v => Math.max(0, v - 1));
+    };
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+  }, [pages.length, onClose]);
+  return (
+    <div className="recap-lb" onClick={onClose}>
+      <button className="lb-close" onClick={onClose}>✕</button>
+      <button className="lb-btn lb-prev" disabled={i === 0}
+        onClick={(e) => { e.stopPropagation(); setI(v => Math.max(0, v - 1)); }}>◀</button>
+      <img src={pages[i]} alt={'Page ' + (i + 1)} onClick={(e) => e.stopPropagation()} />
+      <button className="lb-btn lb-next" disabled={i >= pages.length - 1}
+        onClick={(e) => { e.stopPropagation(); setI(v => Math.min(pages.length - 1, v + 1)); }}>▶</button>
+      <div className="lb-count">{i + 1} / {pages.length}</div>
+    </div>
+  );
+}
+
 /* Livre feuilletable. Une "vue" = ce qui est montré d'un coup :
    - large écran : une double-page [gauche, droite] (via paginate)
    - mobile      : une seule page [page]
@@ -131,6 +157,7 @@ function RecapBook({ pages, onZoom }) {
 function RecapPage() {
   const recaps = window.RECAPS || [];
   const [sel, setSel] = useState(0);
+  const [zoom, setZoom] = useState(null);   // index de page en plein écran, ou null
   if (!recaps.length) {
     return <div style={{ padding:40 }} className="dim">Aucun récap pour l'instant.</div>;
   }
@@ -164,9 +191,12 @@ function RecapPage() {
       ) : null}
 
       {/* BD — livre feuilletable */}
-      <RecapBook pages={s.pages || []} />
+      <RecapBook pages={s.pages || []} onZoom={(idx) => setZoom(idx)} />
+      {zoom != null && (
+        <RecapLightbox pages={s.pages || []} index={zoom} onClose={() => setZoom(null)} />
+      )}
     </div>
   );
 }
 
-Object.assign(window, { useMediaQuery, RecapBook, RecapPage });
+Object.assign(window, { useMediaQuery, RecapBook, RecapLightbox, RecapPage });
