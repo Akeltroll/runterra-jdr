@@ -39,11 +39,17 @@ test('canSeePage filtre selon le rôle', () => {
   assert.equal(A.canSeePage('mj', 'mj'), true);
   assert.equal(A.canSeePage('admin', 'mj'), false);
   assert.equal(A.canSeePage('admin', 'admin'), true);
-  assert.deepEqual(A.pagesForRole('joueur'), ['sheet', 'equip', 'inv']);
+  assert.deepEqual(A.pagesForRole('joueur'), ['sheet', 'equip', 'inv', 'recap']);
 });
 
 test("la page inv (inventaire commun) est visible par tous les roles", () => {
   assert.equal(A.canSeePage('inv', 'joueur'), true);
   assert.equal(A.canSeePage('inv', 'mj'), true);
   assert.equal(A.canSeePage('inv', 'admin'), true);
+});
+
+test("la page recap est visible par tous les roles", () => {
+  assert.equal(A.canSeePage('recap', 'joueur'), true);
+  assert.equal(A.canSeePage('recap', 'mj'), true);
+  assert.equal(A.canSeePage('recap', 'admin'), true);
 });

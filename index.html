@@ -87,6 +87,7 @@
 
 <!-- Données & composants -->
 <script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="recaps.js"></script>
 <script type="text/babel" src="data-state.jsx"></script>
 <script type="text/babel" src="components.jsx"></script>
 <!-- Pages -->
@@ -99,6 +100,7 @@
 <script type="text/babel" src="pages-admin.jsx"></script>
 <script type="text/babel" src="pages-inventory.jsx"></script>
 <script type="text/babel" src="pages-equip.jsx"></script>
+<script type="text/babel" src="pages-recap.jsx"></script>
 
 <!-- Shell -->
 <script type="text/babel">
@@ -111,6 +113,7 @@ const PAGES = [
   { id:'ds',      label:'Design System',render:() => <DesignSystemPage /> },
   { id:'equip',   label:'Équipement',   render:(auth) => <EquipPage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
   { id:'inv',     label:'Inventaire commun', render:() => <CommonInventoryPage /> },
+  { id:'recap',   label:'Récap',        render:() => <RecapPage /> },
   { id:'admin',   label:'Admin',        render:() => <AdminPage /> },
 ];
 let setRoute; // remonté par App pour la navigation depuis les pages
