@@ -88,6 +88,7 @@ function EquipBody({ char }) {
   const [menu, setMenu] = useState(null);          // { item, x, y, actions } — menu d'actions
   const [stepper, setStepper] = useState(null);    // { kind:'item'|'coin', ... } — saisie quantité
   const [editing, setEditing] = useState(null);    // item en cours d'édition (modal)
+  const [catalog, setCatalog] = useState(false);   // ouverture du catalogue d'ajout
 
   // Migration unique de l'inventaire (marqueur invInit), idempotente — identique
   // à la fiche, au cas où le joueur ouvre Équipement avant sa fiche.
@@ -368,7 +369,7 @@ function EquipBody({ char }) {
         {/* ---- DROITE : INVENTAIRE (grille partagée) ---- */}
         <div style={{ flex:'0 0 390px', minHeight:0, zIndex:2 }}>
           <InventoryGrid items={inventoryForGrid} coins={coins} filter={filter} setFilter={setFilter}
-            onItemClick={openItemMenu} onCoinClick={openCoinMenu} onAdd={staff ? addItem : undefined}
+            onItemClick={openItemMenu} onCoinClick={openCoinMenu} onAdd={staff ? () => setCatalog(true) : undefined}
             onDropItem={(id) => { if (slotOfItem(id)) unequip(id); }} capacity={120} />
         </div>
       </div>
@@ -446,6 +447,17 @@ function EquipBody({ char }) {
               onRemove={(id) => { removeInvItem(id); setEditing(null); }} />
           </div>
         </div>
+      )}
+      {catalog && (
+        <ItemCatalogPicker
+          onPick={(entry, n) => {
+            const { patch } = planItemAdd(inventoryForGrid, entry, n);
+            Object.entries(patch).forEach(([id, it]) => setInvItem(id, it));
+            setCatalog(false);
+            toast(`<b>${char.name}</b> — ${entry.name} ×${n} ajouté`, 'gold');
+          }}
+          onCustom={() => { setCatalog(false); addItem(); }}
+          onClose={() => setCatalog(false)} />
       )}
     </div>
   );
