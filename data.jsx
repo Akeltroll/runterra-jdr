@@ -254,7 +254,7 @@ const RUNES = [
         { id:'domi_mob_3', tier:'fondamentale', name:'Déplacement éclair', desc:'+30 AD ou AP et +5 % Crit par MS bonus', kind:'reminder' },
       ]},
       { key:'sad', name:'Sadisme', nodes:[
-        { id:'domi_sad_1', tier:'mineure', name:'+15 AD ou AP et 10 létalité', desc:'AD ou AP calculé ; létalité en rappel', mods:{ adp:15 } },
+        { id:'domi_sad_1', tier:'mineure', name:'+15 AD ou AP et 10 létalité', desc:'AD ou AP calculé ; létalité en rappel', mods:{ adp:15 }, note:'+10 létalité' },
         { id:'domi_sad_2', tier:'avancee', name:'Écorchage', desc:"+30 létalité sur la cible (toute l'équipe si cible à 100 % HP)", kind:'reminder' },
         { id:'domi_sad_3', tier:'fondamentale', name:'Torture enivrante', desc:'Dégâts +50 % si cible ≤ 50 % HP, et 10 % Omni', kind:'reminder' },
       ]},
@@ -283,7 +283,7 @@ const RUNES = [
     paths:[
       { key:'dur', name:'Durabilité', nodes:[
         { id:'vol_dur_1', tier:'mineure', name:'+10 AR et 10 RM', desc:'Bonus passif permanent', mods:{ armure:10, resmag:10 } },
-        { id:'vol_dur_2', tier:'avancee', name:'Peau épineuse', desc:'+30 AR et 30 RM, renvoie 10 % des dégâts subis (renvoi en rappel)', mods:{ armure:30, resmag:30 } },
+        { id:'vol_dur_2', tier:'avancee', name:'Peau épineuse', desc:'+30 AR et 30 RM, renvoie 10 % des dégâts subis (renvoi en rappel)', mods:{ armure:30, resmag:30 }, note:'Renvoie 10 % des dégâts subis' },
         { id:'vol_dur_3', tier:'fondamentale', name:'Immortalité éphémère', desc:'Bouclier = 50 % des HP max pour 2 tours (CD 5)', kind:'reminder' },
       ]},
       { key:'cc', name:'CC', nodes:[

@@ -48,12 +48,13 @@ function RuneFamilyPanel({ family, nodeState, choices, onClick, onChoice }) {
 }
 
 function RuneReminders({ selectedIds }) {
-  const items = selectedIds.map(id => RUNE_INDEX[id]).filter(n => n && n.kind === 'reminder');
+  // Nœuds dont un effet n'est pas calculé : runes 'reminder' OU bonus calculé + sous-effet (`note`).
+  const items = selectedIds.map(id => RUNE_INDEX[id]).filter(n => n && (n.kind === 'reminder' || n.note));
   if (!items.length) return null;
   return (
     <div className="rune-reminders">
       <div className="overline" style={{ marginBottom:8 }}>Rappels — effets à appliquer manuellement</div>
-      <ul>{items.map(n => <li key={n.id}><b>{n.name}</b> — {n.desc}</li>)}</ul>
+      <ul>{items.map(n => <li key={n.id}><b>{n.name}</b> — {n.kind === 'reminder' ? n.desc : n.note}</li>)}</ul>
     </div>
   );
 }
