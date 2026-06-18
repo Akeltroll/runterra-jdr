@@ -187,6 +187,14 @@
     { value:'accessory', label:'Accessoire' },
   ];
 
+  /* --- Récap : regroupe une liste de pages en doubles-pages [[p1,p2],[p3,p4],…] --- */
+  function paginate(pages) {
+    pages = pages || [];
+    var out = [];
+    for (var i = 0; i < pages.length; i += 2) out.push(pages.slice(i, i + 2));
+    return out;
+  }
+
   /* --- État de départ d'un perso (conversion ratios -> valeurs absolues) --- */
   function buildDefaultState(char) {
     const arr = char.buffs || [];
@@ -222,5 +230,6 @@
     applyHealMods, buildDefaultState, makeItem, newItemId,
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd,
+    paginate,
   };
 });

@@ -244,6 +244,20 @@ test('planItemAdd — enveloppe fillStacks et renvoie { patch }', () => {
   assert.equal(Object.values(r.patch)[0].qty, 2);
 });
 
+/* --- Récap : pagination en doubles-pages --- */
+test('paginate regroupe les pages en doubles-pages', () => {
+  assert.deepEqual(L.paginate([]), []);
+  assert.deepEqual(L.paginate(['a']), [['a']]);
+  assert.deepEqual(L.paginate(['a','b']), [['a','b']]);
+  assert.deepEqual(L.paginate(['a','b','c']), [['a','b'],['c']]);
+  assert.deepEqual(L.paginate(['a','b','c','d']), [['a','b'],['c','d']]);
+});
+
+test('paginate tolère null/undefined', () => {
+  assert.deepEqual(L.paginate(null), []);
+  assert.deepEqual(L.paginate(undefined), []);
+});
+
 test('planItemTransfer — crédit qui dépasse 99 déborde côté destination', () => {
   const src = { a: L.makeItem({ id:'a', name:'Potion', cat:'Consommables', qty:10 }) };
   const dst = { z: L.makeItem({ id:'z', name:'Potion', cat:'Consommables', qty:95 }) };
