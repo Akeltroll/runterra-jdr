@@ -121,7 +121,7 @@ const CHARACTERS = [
       { cat:'Équipement', name:'Épée + Bouclier', sub:'1H', qty:1, ic:'🛡', img:'ATH/Armes/epee-bouclier.webp' },
       { cat:'Consommables', name:'Potion soin mineur', sub:'Rend 15 + 15% HP', qty:0, ic:'🧪', img:'ATH/Items/potion-soin-mineur.webp' },
       { cat:'Consommables', name:'Potion mana mineur', sub:'Rend 10 + 10% Mana', qty:1, ic:'🔵', img:'ATH/Items/potion-mana-mineur.webp' },
-      { cat:'Butin', name:'Kéminite', sub:'Sert à appeler Taliyah', qty:1, ic:'🔮', img:'ATH/Items/keminite.webp', type:'' },
+      { cat:'Consommables', name:'Kéminite', sub:'Sert à appeler Taliyah', qty:1, ic:'🔮', img:'ATH/Items/keminite.webp', type:'' },
     ],
     coins:{ plat:0, or:10, arg:10, cuiv:10 },
   }),
@@ -135,7 +135,7 @@ const CHARACTERS = [
       { cat:'Équipement', name:'Gantelet renforcé', sub:'1H', qty:1, ic:'🥊', img:'ATH/Armes/gantelet.webp' },
       { cat:'Consommables', name:'Potion soin mineur', sub:'Rend 15 + 15% HP', qty:1, ic:'🧪', img:'ATH/Items/potion-soin-mineur.webp' },
       { cat:'Consommables', name:'Potion mana mineur', sub:'Rend 10 + 10% Mana', qty:1, ic:'🔵', img:'ATH/Items/potion-mana-mineur.webp' },
-      { cat:'Butin', name:'Kéminite', sub:'Appel Taliyah', qty:1, ic:'🔮', img:'ATH/Items/keminite.webp' },
+      { cat:'Consommables', name:'Kéminite', sub:'Appel Taliyah', qty:1, ic:'🔮', img:'ATH/Items/keminite.webp' },
     ],
     coins:{ plat:0, or:10, arg:10, cuiv:10 },
   }),
@@ -247,7 +247,50 @@ const RUNE = {
   ],
 };
 
+/* --- Catalogue d'items pré-enregistrés (ajout rapide par le staff) ---
+   Entrées sans id/qty (générés à l'ajout). Paliers de potions = proposition
+   ajustable. Pièces de bourse exclues (système coins séparé). */
+const ITEM_CATALOG = [
+  // Consommables — potions de soin
+  { cat:'Consommables', name:'Potion soin mineur',        sub:'Rend 15 + 15% HP',  ic:'🧪', img:'ATH/Items/potion-soin-mineur.webp',        type:'' },
+  { cat:'Consommables', name:'Potion soin intermédiaire', sub:'Rend 30 + 20% HP',  ic:'🧪', img:'ATH/Items/potion-soin-intermediaire.webp', type:'' },
+  { cat:'Consommables', name:'Potion soin avancé',        sub:'Rend 50 + 25% HP',  ic:'🧪', img:'ATH/Items/potion-soin-avance.webp',        type:'' },
+  { cat:'Consommables', name:'Potion soin ultime',        sub:'Rend 100 + 30% HP', ic:'🧪', img:'ATH/Items/potion-soin-ultime.webp',        type:'' },
+  // Consommables — potions de mana
+  { cat:'Consommables', name:'Potion mana mineur',        sub:'Rend 10 + 10% Mana', ic:'🔵', img:'ATH/Items/potion-mana-mineur.webp',        type:'' },
+  { cat:'Consommables', name:'Potion mana intermédiaire', sub:'Rend 25 + 15% Mana', ic:'🔵', img:'ATH/Items/potion-mana-intermediaire.webp', type:'' },
+  { cat:'Consommables', name:'Potion mana avancé',        sub:'Rend 40 + 20% Mana', ic:'🔵', img:'ATH/Items/potion-mana-avance.webp',        type:'' },
+  { cat:'Consommables', name:'Potion mana ultime',        sub:'Rend 75 + 25% Mana', ic:'🔵', img:'ATH/Items/potion-mana-ultime.webp',        type:'' },
+  // Consommables — divers
+  { cat:'Consommables', name:'Potion néfaste inconnue',   sub:'Effet inconnu — à vos risques', ic:'☠', img:'ATH/Items/potion-nefaste-inconnu.webp', type:'' },
+  { cat:'Consommables', name:'Kéminite',                  sub:'Sert à appeler Taliyah', ic:'🔮', img:'ATH/Items/keminite.webp',               type:'' },
+  { cat:'Consommables', name:'Cristal explosif',          sub:'Explose à l\'impact',    ic:'💥', img:'ATH/Items/cristal-explosif.webp',        type:'' },
+  { cat:'Consommables', name:'Cristal très explosif',     sub:'Explosion majeure',      ic:'💥', img:'ATH/Items/cristal-tres-explosif.webp',   type:'' },
+  // Butin
+  { cat:'Butin', name:'Relique lunaire',        sub:'Connexion astrale (lune)',   ic:'🌙', img:'ATH/Items/relique-lunaire.webp',     type:'' },
+  { cat:'Butin', name:'Relique solaire',        sub:'Connexion astrale (soleil)', ic:'☀', img:'ATH/Items/relique-solaire.webp',     type:'' },
+  { cat:'Butin', name:'Pierre de transmutation', sub:'Transmute la matière',      ic:'🪨', img:'ATH/Items/pierre-transmutation.webp', type:'' },
+  { cat:'Butin', name:'Butin de monstre',       sub:'Dépouille à revendre',       ic:'🦴', img:'ATH/Items/loot-mob.webp',           type:'' },
+  { cat:'Butin', name:'Carte',                  sub:'Indique un lieu',            ic:'🗺', img:'ATH/Items/carte.webp',              type:'' },
+  { cat:'Butin', name:'Boussole',               sub:'Indique le nord',            ic:'🧭', img:'ATH/Items/boussole.webp',           type:'' },
+  { cat:'Butin', name:'Parchemin',              sub:'Texte ancien',               ic:'📜', img:'ATH/Items/parchemin.webp',          type:'' },
+  { cat:'Butin', name:'Gourde',                 sub:'Contient de l\'eau',         ic:'🧴', img:'ATH/Items/gourde.webp',             type:'' },
+  { cat:'Butin', name:'Boîte à outils',         sub:'Outils de réparation',       ic:'🧰', img:'ATH/Items/boite-a-outils.webp',     type:'' },
+  { cat:'Butin', name:'Livre : L\'Histoire de Runeterra', sub:'Lecture',          ic:'📖', img:'ATH/Items/livre-histoire.webp',     type:'' },
+  { cat:'Butin', name:'Tricorne',               sub:'Couvre-chef de pirate',      ic:'🎩', img:'ATH/Items/tricorne.webp',           type:'' },
+  // Équipement — armes (dague => accessory ; autres => weapon)
+  { cat:'Équipement', name:'Claymore',         sub:'2H · +10 AD (fin de traversée)', ic:'⚔', img:'ATH/Armes/claymore.webp',      type:'weapon' },
+  { cat:'Équipement', name:'Épée + Bouclier',  sub:'1H',                              ic:'🛡', img:'ATH/Armes/epee-bouclier.webp', type:'weapon' },
+  { cat:'Équipement', name:'Épée courte',      sub:'1H',                              ic:'⚔', img:'ATH/Armes/epee-courte.webp',   type:'weapon' },
+  { cat:'Équipement', name:'Épée non identifiée', sub:'Non identifiée',               ic:'⚔', img:'ATH/Armes/epee-ni.webp',       type:'weapon' },
+  { cat:'Équipement', name:'Arbalète légère',  sub:'Portée',                          ic:'🎯', img:'ATH/Armes/arbalete.webp',      type:'weapon' },
+  { cat:'Équipement', name:'Arc hextech',      sub:'Portée · Physique',               ic:'🏹', img:'ATH/Armes/arc-hextech.webp',   type:'weapon' },
+  { cat:'Équipement', name:'Gantelet renforcé', sub:'1H',                             ic:'🥊', img:'ATH/Armes/gantelet.webp',      type:'weapon' },
+  { cat:'Équipement', name:'Hachette',         sub:'Arme secondaire · brisage',       ic:'🪓', img:'ATH/Armes/hachette.webp',      type:'weapon' },
+  { cat:'Équipement', name:'Dague',            sub:'1H',                              ic:'🗡', img:'ATH/Armes/dague.webp',         type:'accessory' },
+];
+
 Object.assign(window, {
   computeStats, computeAttack, CHARACTERS, BUFFS, WEAPONS,
-  LEVELS, ATTRIBUTES, JOURNAL, RUNE,
+  LEVELS, ATTRIBUTES, JOURNAL, RUNE, ITEM_CATALOG,
 });
