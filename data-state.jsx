@@ -31,7 +31,14 @@ function useCharState(charId) {
   const setEquipment  = useCallback((patch)    => window.RTDB.updatePath(`${charPath(charId)}/equipment`, patch), [charId]);
   const setCoin       = useCallback((key, value) =>
     window.RTDB.updatePath(`${charPath(charId)}/coins`, { [key]: Math.max(0, value | 0) }), [charId]);
-  return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment, setCoin };
+  const setRuneSelected = useCallback((nodeId, on) =>
+    window.RTDB.updatePath(`${charPath(charId)}/runes/selected`, { [nodeId]: on ? true : null }), [charId]);
+  const setRuneChoice = useCallback((nodeId, choice) =>
+    window.RTDB.updatePath(`${charPath(charId)}/runes/choices`, { [nodeId]: choice || null }), [charId]);
+  const resetRunes = useCallback(() =>
+    window.RTDB.setPath(`${charPath(charId)}/runes`, null), [charId]);
+  return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment, setCoin,
+    setRuneSelected, setRuneChoice, resetRunes };
 }
 
 /* Snapshot live de tous les persos (vue MJ). */
