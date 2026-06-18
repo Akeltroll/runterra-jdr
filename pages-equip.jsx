@@ -149,7 +149,10 @@ function EquipBody({ char }) {
   /* --- Stats effectives réelles : item.mods équipés folés dans computeEffective
      (même étage que les modificateurs → amplifiés par les buffs, comme partout). --- */
   const activeBuffs = Object.keys(state.buffs || {});
-  const bonuses = sumItemMods(equipment, itemsById);   // sert à colorer en vert les stats boostées
+  const runesSt  = state.runes || {};
+  const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
+    runesSt.choices || {}, buildRuneIndex(RUNES));
+  const bonuses = mergeMods(sumItemMods(equipment, itemsById), runeMods);  // items + runes -> vert
   const eff = computeEffective(char.stats, state.modifiers, activeBuffs, bonuses);
   const sval = (k, base, pct) => (pct ? (base || 0).toFixed(1) + '%' : invFmt(base || 0));
   const scol = (k) => (bonuses[k] ? '#9fd07a' : '#e9dcc4');

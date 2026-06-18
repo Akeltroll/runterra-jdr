@@ -295,7 +295,10 @@ function SheetBody({ char, variant }) {
   const setShield = (v) => setField('shield',  typeof v === 'function' ? v(shield) : v);
   const activeBuffs = Object.keys(state.buffs || {});
   const itemMods = sumItemMods(state.equipment, state.inventory);
-  const eff = computeEffective(char.stats, state.modifiers, activeBuffs, itemMods);
+  const runesSt  = state.runes || {};
+  const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
+    runesSt.choices || {}, buildRuneIndex(RUNES));
+  const eff = computeEffective(char.stats, state.modifiers, activeBuffs, mergeMods(itemMods, runeMods));
   return (
     <div style={{ padding:'20px 24px' }}>
       <div style={{ display:'grid', gridTemplateColumns:'minmax(300px,1fr) minmax(300px,1fr) minmax(320px,1.05fr)', gap:20, alignItems:'start' }} className="sheet-grid">
