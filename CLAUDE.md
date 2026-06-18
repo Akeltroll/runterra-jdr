@@ -90,7 +90,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   live via `InventoryGrid`), drag & drop inventaire ↔ slots + double-clic, tooltip, HUD bas
   (niveau/PV/mana/nom), **monnaie vivante** (`state.coins`, repli `char.coins` ; migration `coinsInit`).
   **Équipement persisté temps réel** (`state/equipment` = `{slotKey: itemId}`, via `setEquipment`).
-  Bonus d'items lus via `item.mods` (vide pour l'instant → s'allumera en vert quand renseigné).
+  Bonus d'items via `item.mods` **branchés sur `computeEffective`** (`sumItemMods` somme les
+  items équipés → 4e param, même étage que les modificateurs ; cases « Bonus de stats » dans
+  l'éditeur d'item) ; stat boostée affichée en vert.
   `EQUIP_SLOTS` = les 15 slots, `equipTypeForItem` lit `item.type` en priorité (sinon infère :
   **dague→accessory** (choix MJ), autre arme→weapon, autre Équipement→accessory). Clic item →
   `ItemActionMenu` : Équiper / Utiliser (consommable) / **Envoyer au commun** (`moveItem` → `sharedInventory`,
@@ -213,14 +215,18 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 - **Page Équipement (paperdoll)** : front + persistance temps réel (`pages-equip.jsx`,
   `state/equipment`) sur la branche `feat/inventaire`, recréé fidèlement du design Claude,
   branché sur les vraies données (portrait, stats, inventaire live, monnaie). Aucune règle
-  RTDB à changer (déjà couvert par `characters/$charId`). Reste : brancher `item.mods` sur les stats.
+  RTDB à changer (déjà couvert par `characters/$charId`). `item.mods` **branchés** (voir ci-dessous).
+- **`item.mods` → stats effectives : FAIT et déployé** (commit `ed0cd2d`). `sumItemMods(equipment,
+  itemsById)` (logique pure testée) + 4e param `itemMods` de `computeEffective` (même étage que les
+  modificateurs, amplifié par les buffs, union des clés pour exposer vol/omni). Branché sur les 3
+  calculs de stats (fiche, MJ `mjLive`, Équipement). Éditeur `InvItemRow` : section « Bonus de stats »
+  (`MOD_STATS`, 11 stats) visible si `cat==='Équipement'`. 39 tests verts.
 
 ## Chantiers en cours / backlog
-- **Équipement (paperdoll) : front + back faits** (`pages-equip.jsx`, page « Équipement » dans
-  la nav, visible joueur+staff ; persistance temps réel `state/equipment`). Champ `type` désormais
-  **formalisé** (`EQUIP_TYPES`, saisi à l'édition). Reste à faire : **brancher les `item.mods`** sur
-  les stats effectives (le rendu lit déjà `mods` → bonus en vert, mais `mods` est vide dans les données)
-  et créer les **armures réelles** (jusque-là, seuls armes & accessoires ont un `type` câblé).
+- **Inventaire + Équipement : clos côté code** (perso + commun, transferts, catalogue, plafond 99,
+  monnaie vivante, paperdoll, `item.mods` branchés). Reste uniquement de la **saisie de contenu** :
+  créer les **armures réelles** avec leur `type` + leurs `mods` (jusqu'ici seuls armes & accessoires
+  ont un `type` câblé) — pas de dev, juste remplir `ITEM_CATALOG` / l'éditeur.
 - **Compétences** (gros chantier, design validé, voir specs) : kits dans `info-mj/`.
   COMPLETS : Smith, Urskaar, Elias. **Manque : Rathael comp 4 ; Jett comp 3+4.**
   Approche hybride : outil calcule dégâts/charges/CD/états, narratif = rappel.
