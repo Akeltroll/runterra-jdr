@@ -121,6 +121,43 @@
     return { srcPatch: srcPatch, dstPatch: dstPatch };
   }
 
+  /* --- Plafond de pile + ajout depuis un catalogue (logique pure) --- */
+  var STACK_MAX = 99;
+
+  function fillStacks(items, entry, qty) {
+    items = items || {};
+    var patch = {};
+    var remaining = qty | 0;
+    if (remaining <= 0) return patch;
+    // 1) remplir les piles existantes de même genre, sous le plafond
+    for (var k in items) {
+      if (remaining <= 0) break;
+      var it = items[k];
+      if (!_sameKind(it, entry)) continue;
+      var cur = it.qty || 0;
+      if (cur >= STACK_MAX) continue;
+      var space = STACK_MAX - cur;
+      var add = Math.min(space, remaining);
+      patch[k] = Object.assign({}, it, { qty: cur + add });
+      remaining -= add;
+    }
+    // 2) créer de nouvelles piles (≤ STACK_MAX) pour le surplus
+    while (remaining > 0) {
+      var take = Math.min(STACK_MAX, remaining);
+      var fresh = makeItem({
+        cat: entry.cat, name: entry.name, sub: entry.sub, qty: take,
+        ic: entry.ic, img: entry.img, type: entry.type, mods: entry.mods,
+      });
+      patch[fresh.id] = fresh;
+      remaining -= take;
+    }
+    return patch;
+  }
+
+  function planItemAdd(items, entry, qty) {
+    return { patch: fillStacks(items, entry, qty) };
+  }
+
   /* --- Liste des types d'emplacements d'équipement --- */
   var EQUIP_TYPES = [
     { value:'helmet',    label:'Casque' },
@@ -172,5 +209,6 @@
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective,
     applyHealMods, buildDefaultState, makeItem, newItemId,
     EQUIP_TYPES, planItemTransfer,
+    STACK_MAX, fillStacks, planItemAdd,
   };
 });

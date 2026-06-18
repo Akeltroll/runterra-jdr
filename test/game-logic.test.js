@@ -161,3 +161,50 @@ test('planItemTransfer — item absent => patches vides', () => {
   const r = L.planItemTransfer({}, {}, 'nope', 1);
   assert.deepEqual(r, { srcPatch:{}, dstPatch:{} });
 });
+
+test('fillStacks — inventaire vide crée une pile', () => {
+  const patch = L.fillStacks({}, { name:'Potion', cat:'Consommables', type:'' }, 3);
+  const piles = Object.values(patch);
+  assert.equal(piles.length, 1);
+  assert.equal(piles[0].qty, 3);
+  assert.equal(piles[0].name, 'Potion');
+});
+
+test('fillStacks — fusionne dans une pile partielle de même genre', () => {
+  const items = { z: L.makeItem({ id:'z', name:'Potion', cat:'Consommables', qty:5 }) };
+  const patch = L.fillStacks(items, { name:'Potion', cat:'Consommables', type:'' }, 4);
+  assert.equal(patch.z.qty, 9);
+  assert.equal(Object.keys(patch).length, 1);
+});
+
+test('fillStacks — déborde au-delà de STACK_MAX (95 + 10 => 99 + 6)', () => {
+  const items = { z: L.makeItem({ id:'z', name:'Potion', cat:'Consommables', qty:95 }) };
+  const patch = L.fillStacks(items, { name:'Potion', cat:'Consommables', type:'' }, 10);
+  assert.equal(patch.z.qty, 99);
+  const others = Object.entries(patch).filter(([k]) => k !== 'z').map(([, v]) => v);
+  assert.equal(others.length, 1);
+  assert.equal(others[0].qty, 6);
+});
+
+test('fillStacks — 100 dans un inventaire vide => 99 + 1', () => {
+  const patch = L.fillStacks({}, { name:'Potion', cat:'Consommables', type:'' }, 100);
+  const qtys = Object.values(patch).map(p => p.qty).sort((a, b) => b - a);
+  assert.deepEqual(qtys, [99, 1]);
+});
+
+test('fillStacks — ne fusionne pas des items de genre différent', () => {
+  const items = { z: L.makeItem({ id:'z', name:'Potion', cat:'Consommables', qty:5 }) };
+  const patch = L.fillStacks(items, { name:'Épée', cat:'Équipement', type:'weapon' }, 1);
+  assert.equal(patch.z, undefined);
+  assert.equal(Object.values(patch)[0].name, 'Épée');
+});
+
+test('fillStacks — STACK_MAX vaut 99', () => {
+  assert.equal(L.STACK_MAX, 99);
+});
+
+test('planItemAdd — enveloppe fillStacks et renvoie { patch }', () => {
+  const r = L.planItemAdd({}, { name:'Potion', cat:'Consommables', type:'' }, 2);
+  assert.ok(r.patch);
+  assert.equal(Object.values(r.patch)[0].qty, 2);
+});
