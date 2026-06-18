@@ -187,6 +187,87 @@
     { value:'accessory', label:'Accessoire' },
   ];
 
+  /* --- Runes : coûts par palier + index + validation + somme des bonus plats --- */
+  var RUNE_COST = { mineure:1, avancee:2, fondamentale:2 };
+
+  function buildRuneIndex(families) {
+    families = families || [];
+    var idx = {};
+    for (var f = 0; f < families.length; f++) {
+      var fam = families[f]; var paths = fam.paths || [];
+      for (var p = 0; p < paths.length; p++) {
+        var nodes = paths[p].nodes || [];
+        for (var n = 0; n < nodes.length; n++) {
+          var node = nodes[n];
+          idx[node.id] = Object.assign({}, node, {
+            cost: RUNE_COST[node.tier] || 0,
+            familyKey: fam.key, pathKey: paths[p].key,
+            prevId: n > 0 ? nodes[n - 1].id : null,
+            nextId: n < nodes.length - 1 ? nodes[n + 1].id : null,
+          });
+        }
+      }
+    }
+    return idx;
+  }
+
+  function runeBudget(level) { return level || 0; }
+
+  function runeSpent(selectedIds, index) {
+    selectedIds = selectedIds || []; index = index || {};
+    var s = 0;
+    for (var i = 0; i < selectedIds.length; i++) {
+      var e = index[selectedIds[i]];
+      if (e) s += e.cost || 0;
+    }
+    return s;
+  }
+
+  function canSelectRune(nodeId, selectedIds, index, budget) {
+    index = index || {}; selectedIds = selectedIds || [];
+    var node = index[nodeId];
+    if (!node) return { ok:false, reason:'Rune inconnue' };
+    if (selectedIds.indexOf(nodeId) !== -1) return { ok:false, reason:'Déjà sélectionnée' };
+    if (node.prevId && selectedIds.indexOf(node.prevId) === -1)
+      return { ok:false, reason:'Prérequis manquant' };
+    if (runeSpent(selectedIds, index) + (node.cost || 0) > (budget || 0))
+      return { ok:false, reason:'Points insuffisants' };
+    return { ok:true };
+  }
+
+  function canDeselectRune(nodeId, selectedIds, index) {
+    index = index || {}; selectedIds = selectedIds || [];
+    var node = index[nodeId];
+    if (!node) return { ok:false, reason:'Rune inconnue' };
+    if (node.nextId && selectedIds.indexOf(node.nextId) !== -1)
+      return { ok:false, reason:"Prérequis d'une rune supérieure" };
+    return { ok:true };
+  }
+
+  function sumRuneMods(selectedIds, choices, index) {
+    selectedIds = selectedIds || []; choices = choices || {}; index = index || {};
+    var out = {};
+    for (var i = 0; i < selectedIds.length; i++) {
+      var e = index[selectedIds[i]];
+      if (!e || !e.mods) continue;
+      for (var k in e.mods) {
+        var v = Number(e.mods[k]) || 0; if (!v) continue;
+        var stat = k;
+        if (k === 'adp') stat = (choices[e.id] === 'ap') ? 'ap' : 'ad';
+        out[stat] = (out[stat] || 0) + v;
+      }
+    }
+    return out;
+  }
+
+  function mergeMods(a, b) {
+    var out = {}; var k;
+    a = a || {}; b = b || {};
+    for (k in a) out[k] = (out[k] || 0) + (Number(a[k]) || 0);
+    for (k in b) out[k] = (out[k] || 0) + (Number(b[k]) || 0);
+    return out;
+  }
+
   /* --- Récap : regroupe une liste de pages en doubles-pages [[p1,p2],[p3,p4],…] --- */
   function paginate(pages) {
     pages = pages || [];
@@ -231,5 +312,7 @@
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd,
     paginate,
+    RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
+    canSelectRune, canDeselectRune, sumRuneMods, mergeMods,
   };
 });

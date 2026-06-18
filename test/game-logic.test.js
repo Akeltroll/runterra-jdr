@@ -268,3 +268,59 @@ test('planItemTransfer — crédit qui dépasse 99 déborde côté destination',
   assert.equal(extra.length, 1);
   assert.equal(extra[0].qty, 6);                  // surplus dans une nouvelle pile
 });
+
+/* --- Runes : logique pure --- */
+const RFAM = [{
+  key:'f', name:'F', color:'#fff', theme:'t', capstone:'c', paths:[
+    { key:'p', name:'P', nodes:[
+      { id:'a', tier:'mineure',      name:'A', desc:'+50 HP', mods:{ hp:50 } },
+      { id:'b', tier:'avancee',      name:'B', desc:'reminder', kind:'reminder' },
+      { id:'c', tier:'fondamentale', name:'C', desc:'+30 AD/AP', mods:{ adp:30 } },
+    ]},
+  ],
+}];
+const RIDX = L.buildRuneIndex(RFAM);
+
+test('buildRuneIndex calcule coût, prev et next', () => {
+  assert.equal(RIDX.a.cost, 1);
+  assert.equal(RIDX.b.cost, 2);
+  assert.equal(RIDX.a.prevId, null);
+  assert.equal(RIDX.a.nextId, 'b');
+  assert.equal(RIDX.c.prevId, 'b');
+  assert.equal(RIDX.c.nextId, null);
+  assert.equal(RIDX.a.familyKey, 'f');
+});
+
+test('runeBudget = niveau', () => {
+  assert.equal(L.runeBudget(2), 2);
+  assert.equal(L.runeBudget(undefined), 0);
+});
+
+test('runeSpent additionne les coûts', () => {
+  assert.equal(L.runeSpent(['a','c'], RIDX), 3);
+  assert.equal(L.runeSpent([], RIDX), 0);
+});
+
+test('canSelectRune respecte prérequis et budget', () => {
+  assert.equal(L.canSelectRune('a', [], RIDX, 2).ok, true);
+  assert.equal(L.canSelectRune('b', [], RIDX, 5).ok, false);          // prérequis a manquant
+  assert.equal(L.canSelectRune('c', ['a','b'], RIDX, 4).ok, false);   // 3+2 > 4
+  assert.equal(L.canSelectRune('c', ['a','b'], RIDX, 5).ok, true);
+  assert.equal(L.canSelectRune('a', ['a'], RIDX, 5).ok, false);       // déjà pris
+});
+
+test('canDeselectRune protège un prérequis utilisé', () => {
+  assert.equal(L.canDeselectRune('a', ['a','b'], RIDX).ok, false);    // b dépend de a
+  assert.equal(L.canDeselectRune('b', ['a','b'], RIDX).ok, true);
+  assert.equal(L.canDeselectRune('a', ['a'], RIDX).ok, true);
+});
+
+test('sumRuneMods ne somme que les plats et résout adp', () => {
+  assert.deepEqual(L.sumRuneMods(['a','c'], { c:'ap' }, RIDX), { hp:50, ap:30 });
+  assert.deepEqual(L.sumRuneMods(['a','c'], {}, RIDX), { hp:50, ad:30 });   // défaut ad
+  assert.deepEqual(L.sumRuneMods(['b'], {}, RIDX), {});                      // reminder ignoré
+});
+
+test('mergeMods additionne deux objets de mods', () => {
+  assert.deepEqual(L.mergeMods({ hp:50, ad:10 }, { ad:20, ap:5 }), { hp:50, ad:30, ap:5 });
+});
