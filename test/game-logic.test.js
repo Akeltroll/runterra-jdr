@@ -44,6 +44,41 @@ test('aiguisage double le crit', () => {
   assert.equal(eff.crit, 40);
 });
 
+/* --- Bonus d'items équipés (item.mods) --- */
+test('sumItemMods somme les mods des seuls items équipés', () => {
+  const itemsById = {
+    a: L.makeItem({ id:'a', mods:{ ad:10, armure:5 } }),
+    b: L.makeItem({ id:'b', mods:{ ad:5 } }),
+    c: L.makeItem({ id:'c', mods:{ ap:99 } }),   // non équipé
+  };
+  const equipment = { weapon:'a', chest:'b', ring:null };
+  assert.deepEqual(L.sumItemMods(equipment, itemsById), { ad:15, armure:5 });
+});
+
+test('sumItemMods tolère slots vides, ids manquants et mods absents', () => {
+  const itemsById = { a: L.makeItem({ id:'a' }) };   // mods = {}
+  assert.deepEqual(L.sumItemMods({ weapon:'a', x:'ghost', y:null }, itemsById), {});
+  assert.deepEqual(L.sumItemMods(null, null), {});
+});
+
+test('computeEffective ajoute itemMods au même étage que les modificateurs (amplifié par buffs)', () => {
+  const base = { hp:495, mana:265, ad:100, ap:50, armure:40, resmag:30, crit:20, dcrit:160, sapience:8 };
+  const eff = L.computeEffective(base, { ad:10 }, ['bravoure'], { ad:20 });
+  assert.equal(eff.ad, 195); // (100 + 10 + 20) * 1.5
+  assert.equal(eff.hp, 495); // hp non touché par les buffs
+});
+
+test('computeEffective expose une stat présente uniquement dans itemMods', () => {
+  const base = { hp:1, mana:1, ad:1, ap:1, armure:1, resmag:1, crit:1, dcrit:1, sapience:1 };
+  const eff = L.computeEffective(base, {}, [], { vol:5 });
+  assert.equal(eff.vol, 5);
+});
+
+test('computeEffective reste rétrocompatible sans 4e argument', () => {
+  const base = { hp:1, mana:1, ad:100, ap:1, armure:1, resmag:1, crit:1, dcrit:1, sapience:1 };
+  assert.equal(L.computeEffective(base, { ad:10 }, []).ad, 110);
+});
+
 /* --- Task 3 : soins modifiés + seed --- */
 test('applyHealMods applique miracule/hemorragie', () => {
   assert.equal(L.applyHealMods(100, []), 100);

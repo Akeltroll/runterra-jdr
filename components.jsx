@@ -55,7 +55,7 @@ function StatChip({ k, value, suffix='', magic=false }) {
   );
 }
 const STAT_LABEL = {
-  ad:'Dégâts (AD)', ap:'Puissance (AP)', armure:'Armure', resmag:'Rés. Magique',
+  ad:'Dégâts (AD)', ap:'Puissance (AP)', hp:'PV max', mana:'Mana max', armure:'Armure', resmag:'Rés. Magique',
   crit:'% Critique', dcrit:'% Dégâts Crit', sapience:'Sapience', vol:'% Vol de vie', omni:'% Omnivamp',
 };
 
@@ -544,12 +544,34 @@ function ItemActionMenu({ item, x, y, actions, onClose }) {
 }
 
 /* --- Ligne d'item : affichage + édition inline (inventaire perso & commun) --- */
+/* Stats que l'on peut accorder en bonus à un item d'équipement (item.mods).
+   `pct` = affiché/saisi en points de % (crit, vol, omni…). */
+const MOD_STATS = [
+  { k:'ad',       label:'AD' },
+  { k:'ap',       label:'AP' },
+  { k:'hp',       label:'PV' },
+  { k:'mana',     label:'Mana' },
+  { k:'armure',   label:'Armure' },
+  { k:'resmag',   label:'Rés. Mag' },
+  { k:'crit',     label:'% Crit',   pct:true },
+  { k:'dcrit',    label:'% D.Crit', pct:true },
+  { k:'sapience', label:'Sapience' },
+  { k:'vol',      label:'Vol vie %', pct:true },
+  { k:'omni',     label:'Omnivamp %', pct:true },
+];
+
 function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
   const [edit, setEdit] = useState(!!startEdit);
   const [d, setD] = useState(item);
   const [busy, setBusy] = useState(false);
   useEffect(() => setD(item), [item]);
   const fld = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontSize:12, width:'100%', boxSizing:'border-box' };
+  const setMod = (k, raw) => {
+    const v = parseFloat(raw);
+    const mods = { ...(d.mods || {}) };
+    if (!v) delete mods[k]; else mods[k] = v;
+    setD({ ...d, mods });
+  };
   const onPickImage = async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';                          // permet de re-choisir le même fichier
@@ -578,6 +600,21 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
             {EQUIP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         )}
+        {d.cat === 'Équipement' && (
+          <div className="col gap-1">
+            <span className="overline">Bonus de stats (une fois équipé)</span>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:6 }}>
+              {MOD_STATS.map(s => (
+                <label key={s.k} className="row gap-2" style={{ alignItems:'center', fontSize:11, color:'var(--ink-soft)' }}>
+                  <span style={{ flex:1, minWidth:0 }}>{s.label}</span>
+                  <input style={{ ...fld, width:62, padding:'3px 6px' }} type="number" step={s.pct ? '0.5' : '1'}
+                    value={(d.mods && d.mods[s.k] != null) ? d.mods[s.k] : ''}
+                    placeholder="0" onChange={e => setMod(s.k, e.target.value)} />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Image : téléversement + aperçu (pas besoin de connaître l'arborescence) */}
         <div className="row gap-2" style={{ alignItems:'center' }}>
           <span style={{ width:40, height:40, flex:'none', borderRadius:6, display:'grid', placeItems:'center', fontSize:18, background:'var(--bg-panel-2)', border:'1px solid var(--line)', overflow:'hidden' }}>
@@ -594,7 +631,7 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
           : <input style={fld} value={d.img || ''} placeholder="ou chemin/URL (ex. ATH/Items/xxx.webp)" onChange={e => setD({ ...d, img: e.target.value })} />}
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => { setD(item); setEdit(false); }}>Annuler</button>
-          <button className="btn btn-sm btn-gold" onClick={() => { onSave({ ...d, type: d.cat === 'Équipement' ? (d.type || '') : '' }); setEdit(false); }}>Enregistrer</button>
+          <button className="btn btn-sm btn-gold" onClick={() => { const isEq = d.cat === 'Équipement'; onSave({ ...d, type: isEq ? (d.type || '') : '', mods: isEq ? (d.mods || {}) : {} }); setEdit(false); }}>Enregistrer</button>
         </div>
       </div>
     );

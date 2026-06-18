@@ -294,7 +294,8 @@ function SheetBody({ char, variant }) {
   const setMana   = (v) => setField('manaCur', typeof v === 'function' ? v(mana) : v);
   const setShield = (v) => setField('shield',  typeof v === 'function' ? v(shield) : v);
   const activeBuffs = Object.keys(state.buffs || {});
-  const eff = computeEffective(char.stats, state.modifiers, activeBuffs);
+  const itemMods = sumItemMods(state.equipment, state.inventory);
+  const eff = computeEffective(char.stats, state.modifiers, activeBuffs, itemMods);
   return (
     <div style={{ padding:'20px 24px' }}>
       <div style={{ display:'grid', gridTemplateColumns:'minmax(300px,1fr) minmax(300px,1fr) minmax(320px,1.05fr)', gap:20, alignItems:'start' }} className="sheet-grid">

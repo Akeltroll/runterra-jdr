@@ -41,11 +41,13 @@
   /* --- Stats effectives = (base + modificateur) puis buffs additifs ---
      HP/Mana ne sont pas affectés par les buffs (cohérent avec l'Excel).
      Aiguisage = cas spécial (% Crit doublé). */
-  function computeEffective(base, modifiers, activeBuffs) {
+  function computeEffective(base, modifiers, activeBuffs, itemMods) {
     modifiers = modifiers || {};
     activeBuffs = activeBuffs || [];
+    itemMods = itemMods || {};
     const withMod = {};
-    for (const k of Object.keys(base)) withMod[k] = base[k] + (modifiers[k] || 0);
+    const keys = new Set([...Object.keys(base), ...Object.keys(modifiers), ...Object.keys(itemMods)]);
+    for (const k of keys) withMod[k] = (base[k] || 0) + (modifiers[k] || 0) + (itemMods[k] || 0);
     const pct = {};
     for (const id of activeBuffs) {
       const map = BUFF_STAT_MAP[id];
@@ -59,6 +61,24 @@
     }
     if (activeBuffs.indexOf('aiguisage') !== -1) eff.crit = (withMod.crit || 0) * 2;
     return eff;
+  }
+
+  /* --- Bonus de stats des items équipés : somme des item.mods --- */
+  function sumItemMods(equipment, itemsById) {
+    equipment = equipment || {};
+    itemsById = itemsById || {};
+    const out = {};
+    for (const slot of Object.keys(equipment)) {
+      const id = equipment[slot];
+      if (!id) continue;
+      const it = itemsById[id];
+      if (!it || !it.mods) continue;
+      for (const k of Object.keys(it.mods)) {
+        const v = Number(it.mods[k]) || 0;
+        if (v) out[k] = (out[k] || 0) + v;
+      }
+    }
+    return out;
   }
 
   /* --- Soins/boucliers reçus : Miraculé +50%, Hémorragie -50% (additif) --- */
@@ -198,7 +218,7 @@
 
   return {
     clamp, clampGauge,
-    DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective,
+    DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,
     applyHealMods, buildDefaultState, makeItem, newItemId,
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd,

@@ -6,7 +6,8 @@
 /* Fusionne la définition du perso (règles) avec son état live (Firebase). */
 function mjLive(c, st) {
   const buffs = st ? Object.keys(st.buffs || {}) : (c.buffs || []);
-  const eff = computeEffective(c.stats, st ? st.modifiers : c.modifiers, buffs);
+  const itemMods = st ? sumItemMods(st.equipment, st.inventory) : {};
+  const eff = computeEffective(c.stats, st ? st.modifiers : c.modifiers, buffs, itemMods);
   const hp = st ? st.hpCur : Math.round(c.hpCur * c.stats.hp);
   const mana = st ? st.manaCur : Math.round(c.manaCur * c.stats.mana);
   const shield = st ? st.shield : c.shieldCur;

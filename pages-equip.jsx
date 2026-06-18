@@ -146,18 +146,12 @@ function EquipBody({ char }) {
   const moveTip = (e) => setTip(t => t ? { ...t, x:e.clientX, y:e.clientY } : t);
   const hideTip = () => setTip(null);
 
-  /* --- Stats effectives réelles + bonus d'items équipés (item.mods) --- */
+  /* --- Stats effectives réelles : item.mods équipés folés dans computeEffective
+     (même étage que les modificateurs → amplifiés par les buffs, comme partout). --- */
   const activeBuffs = Object.keys(state.buffs || {});
-  const eff = computeEffective(char.stats, state.modifiers, activeBuffs);
-  const bonuses = {};
-  equippedItems.forEach(it => {
-    const m = it.mods || {};
-    for (const k of Object.keys(m)) { const v = Number(m[k]) || 0; if (v) bonuses[k] = (bonuses[k] || 0) + v; }
-  });
-  const sval = (k, base, pct) => {
-    const tot = (base || 0) + (bonuses[k] || 0);
-    return pct ? tot.toFixed(1) + '%' : invFmt(tot);
-  };
+  const bonuses = sumItemMods(equipment, itemsById);   // sert à colorer en vert les stats boostées
+  const eff = computeEffective(char.stats, state.modifiers, activeBuffs, bonuses);
+  const sval = (k, base, pct) => (pct ? (base || 0).toFixed(1) + '%' : invFmt(base || 0));
   const scol = (k) => (bonuses[k] ? '#9fd07a' : '#e9dcc4');
 
   const attributs = [
@@ -179,8 +173,8 @@ function EquipBody({ char }) {
     { k:'PV max',     v:sval('hp', eff.hp),       col:scol('hp')   },
     { k:'Mana max',   v:sval('mana', eff.mana),   col:scol('mana') },
     { k:'Bouclier',   v:invFmt(char.shieldMax), col:'#e9dcc4' },
-    { k:'Vol de vie', v:sval('vol', 0, true),     col:scol('vol')  },
-    { k:'Omnivamp',   v:sval('omni', 0, true),    col:scol('omni') },
+    { k:'Vol de vie', v:sval('vol', eff.vol, true),  col:scol('vol')  },
+    { k:'Omnivamp',   v:sval('omni', eff.omni, true), col:scol('omni') },
   ];
 
   /* --- Consommables : utilisation au clic (appelée par openItemMenu) --- */
