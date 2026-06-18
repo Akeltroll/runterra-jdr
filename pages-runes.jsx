@@ -6,7 +6,7 @@
    ============================================================ */
 const RUNE_INDEX = buildRuneIndex(RUNES);
 
-function RuneNode({ node, state, choice, onClick, onChoice }) {
+function RuneNode({ node, state, choice, capstone, onClick, onChoice }) {
   const isAdp = node.mods && node.mods.adp != null;
   return (
     <div className={'rune-node ' + state} title={node.desc}
@@ -22,6 +22,12 @@ function RuneNode({ node, state, choice, onClick, onChoice }) {
           ))}
         </div>
       )}
+      {capstone && (
+        <div className="rune-capstone-sub">
+          <span className="cap-lbl">Bonus thématique</span>
+          <span className="cap-txt">{capstone}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -30,19 +36,19 @@ function RuneFamilyPanel({ family, nodeState, choices, onClick, onChoice }) {
   return (
     <div className="rune-family" style={{ '--fam': family.color }}>
       <h3 style={{ color: family.color }}>{family.name}</h3>
-      <div className="theme">Thématique : {family.theme}</div>
       <div className="rune-paths">
         {family.paths.map(p => (
           <div className="rune-path" key={p.key}>
             <div className="pname">{p.name}</div>
             {p.nodes.map(n => (
-              <RuneNode key={n.id} node={n} state={nodeState(n.id)}
-                choice={choices[n.id]} onClick={onClick} onChoice={onChoice} />
+              <RuneNode key={n.id} node={n} state={nodeState(n.id)} choice={choices[n.id]}
+                capstone={n.tier === 'fondamentale' ? p.capstone : null}
+                onClick={onClick} onChoice={onChoice} />
             ))}
           </div>
         ))}
       </div>
-      <div className="rune-capstone">{family.capstone}</div>
+      <div className="rune-theme-cond">Condition de thématique : {family.theme}</div>
     </div>
   );
 }
@@ -59,15 +65,16 @@ function RuneReminders({ selectedIds }) {
   );
 }
 
-function RuneBody({ char }) {
-  const { state, setRuneSelected, setRuneChoice, resetRunes } = useCharState(char.id);
+function RuneBody({ char, staff }) {
+  const { state, setField, setRuneSelected, setRuneChoice, resetRunes } = useCharState(char.id);
   const toast = useToast();
   if (!state) return <div style={{ padding:40 }} className="dim">Chargement…</div>;
   const runes = state.runes || {};
   const selectedSet = runes.selected || {};
   const choices = runes.choices || {};
   const selectedIds = Object.keys(selectedSet).filter(id => selectedSet[id]);
-  const budget = runeBudget(char.level);
+  const bonus = state.runeBonus || 0;          // points additionnels accordés par le MJ (test / niveau)
+  const budget = runeBudget(char.level) + bonus;
   const spent = runeSpent(selectedIds, RUNE_INDEX);
 
   const nodeState = (id) => {
@@ -96,6 +103,15 @@ function RuneBody({ char }) {
           <span className="faint" style={{ fontSize:12 }}>Forgez votre légende</span>
         </div>
         <div className="row gap-3" style={{ alignItems:'center' }}>
+          {staff && (
+            <span className="row gap-1" style={{ alignItems:'center' }} title="Points bonus (MJ) — test / montée de niveau">
+              <button className="btn btn-sm btn-ghost" disabled={bonus <= 0}
+                onClick={() => setField('runeBonus', Math.max(0, bonus - 1))}>−</button>
+              <span className="faint mono" style={{ fontSize:11 }}>MJ +{bonus}</span>
+              <button className="btn btn-sm btn-ghost"
+                onClick={() => setField('runeBonus', bonus + 1)}>+</button>
+            </span>
+          )}
           <span className="rune-points">Points : {spent}/{budget}</span>
           <button className="btn btn-sm btn-ghost" disabled={!selectedIds.length}
             onClick={() => { if (selectedIds.length) resetRunes(); }}>Réinitialiser</button>
@@ -132,7 +148,7 @@ function RuneTreePage({ lockedCharId }) {
         </div>
       )}
       <div style={{ flex:'1 1 auto', minHeight:0, overflow:'auto' }}>
-        <RuneBody key={char.id} char={char} />
+        <RuneBody key={char.id} char={char} staff={!lockedCharId} />
       </div>
     </div>
   );
