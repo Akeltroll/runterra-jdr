@@ -15,27 +15,74 @@ function useMediaQuery(query) {
   return match;
 }
 
-/* Lecture plein écran d'une planche, avec navigation et fermeture clavier. */
+/* Lecture plein écran d'une planche : zoom (molette / boutons / double-clic) +
+   déplacement (drag quand zoomé), navigation et fermeture clavier. */
+const LB_ZOOM_MIN = 1, LB_ZOOM_MAX = 6, LB_ZOOM_STEP = 0.5;
+const clampZoom = (z) => Math.min(LB_ZOOM_MAX, Math.max(LB_ZOOM_MIN, z));
+
 function RecapLightbox({ pages, index, onClose }) {
   const [i, setI] = useState(index);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const drag = useRef(null);
+  const wrapRef = useRef(null);
+
   useEffect(() => setI(index), [index]);
+  // reset zoom/position à chaque changement de planche
+  useEffect(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, [i]);
+  // recentre quand on redescend à 100 %
+  useEffect(() => { if (zoom <= 1) setPan({ x: 0, y: 0 }); }, [zoom]);
+
+  const prevPage = () => setI(v => Math.max(0, v - 1));
+  const nextPage = () => setI(v => Math.min(pages.length - 1, v + 1));
+
+  // clavier
   useEffect(() => {
     const fn = (e) => {
       if (e.key === 'Escape') onClose();
-      else if (e.key === 'ArrowRight') setI(v => Math.min(pages.length - 1, v + 1));
-      else if (e.key === 'ArrowLeft')  setI(v => Math.max(0, v - 1));
+      else if (e.key === 'ArrowRight') nextPage();
+      else if (e.key === 'ArrowLeft')  prevPage();
+      else if (e.key === '+' || e.key === '=') setZoom(z => clampZoom(z + LB_ZOOM_STEP));
+      else if (e.key === '-') setZoom(z => clampZoom(z - LB_ZOOM_STEP));
     };
     window.addEventListener('keydown', fn);
     return () => window.removeEventListener('keydown', fn);
   }, [pages.length, onClose]);
+
+  // molette = zoom sur la BD (listener non-passif pour bloquer le zoom/scroll navigateur)
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const fn = (e) => { e.preventDefault(); setZoom(z => clampZoom(z - e.deltaY * 0.0018)); };
+    el.addEventListener('wheel', fn, { passive: false });
+    return () => el.removeEventListener('wheel', fn);
+  }, []);
+
+  const onDown = (e) => { if (zoom <= 1) return; e.preventDefault(); drag.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; };
+  const onMove = (e) => { if (!drag.current) return; setPan({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y }); };
+  const onUp = () => { drag.current = null; };
+
   return (
-    <div className="recap-lb" onClick={onClose}>
+    <div className="recap-lb" ref={wrapRef}
+      onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+      onClick={(e) => { if (e.target === e.currentTarget && zoom <= 1) onClose(); }}>
       <button className="lb-close" onClick={onClose}>✕</button>
       <button className="lb-btn lb-prev" disabled={i === 0}
-        onClick={(e) => { e.stopPropagation(); setI(v => Math.max(0, v - 1)); }}>◀</button>
-      <img src={pages[i]} alt={'Page ' + (i + 1)} onClick={(e) => e.stopPropagation()} />
+        onClick={(e) => { e.stopPropagation(); prevPage(); }}>◀</button>
+      <img src={pages[i]} alt={'Page ' + (i + 1)} draggable={false}
+        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                 cursor: zoom > 1 ? (drag.current ? 'grabbing' : 'grab') : 'zoom-in',
+                 transition: drag.current ? 'none' : 'transform .12s ease-out' }}
+        onMouseDown={onDown}
+        onDoubleClick={(e) => { e.stopPropagation(); setZoom(z => (z > 1 ? 1 : 2.5)); }}
+        onClick={(e) => e.stopPropagation()} />
       <button className="lb-btn lb-next" disabled={i >= pages.length - 1}
-        onClick={(e) => { e.stopPropagation(); setI(v => Math.min(pages.length - 1, v + 1)); }}>▶</button>
+        onClick={(e) => { e.stopPropagation(); nextPage(); }}>▶</button>
+      <div className="lb-zoom">
+        <button onClick={(e) => { e.stopPropagation(); setZoom(z => clampZoom(z - LB_ZOOM_STEP)); }}>−</button>
+        <span>{Math.round(zoom * 100)}%</span>
+        <button onClick={(e) => { e.stopPropagation(); setZoom(z => clampZoom(z + LB_ZOOM_STEP)); }}>+</button>
+      </div>
       <div className="lb-count">{i + 1} / {pages.length}</div>
     </div>
   );

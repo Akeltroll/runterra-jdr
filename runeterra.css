@@ -376,7 +376,7 @@ input, select { font-family: inherit; }
 /* ====== Récap — livre / flipbook ====== */
 .recap-book { --pw: min(46vw, 430px); display:flex; flex-direction:column; align-items:center; gap:14px; }
 .recap-book.is-narrow { --pw: min(92vw, 440px); }
-.recap-stage { position:relative; width:calc(var(--pw) * 2); height:calc(var(--pw) * 1.414);
+.recap-stage { position:relative; width:calc(var(--pw) * 2); height:calc(var(--pw) * 1.352);
   perspective:2200px; box-shadow:0 22px 60px rgba(0,0,0,.65); border-radius:6px; }
 .recap-book.is-narrow .recap-stage { width:var(--pw); }
 .recap-half { position:absolute; top:0; width:var(--pw); height:100%; background:#0a0908; overflow:hidden; }
@@ -395,18 +395,24 @@ input, select { font-family: inherit; }
 .recap-nav { display:flex; align-items:center; gap:16px; }
 .recap-nav .count { font-family:var(--font-mono); font-size:12px; color:var(--ink-faint); }
 
-/* ====== Récap — lightbox plein écran ====== */
-.recap-lb { position:fixed; inset:0; z-index:300; background:rgba(0,0,0,.92);
-  display:flex; align-items:center; justify-content:center; }
-.recap-lb img { max-width:95vw; max-height:92vh; object-fit:contain; border-radius:4px;
-  box-shadow:0 10px 60px rgba(0,0,0,.8); }
+/* ====== Récap — lightbox plein écran (zoom + déplacement) ====== */
+.recap-lb { position:fixed; inset:0; z-index:300; background:rgba(0,0,0,.94);
+  display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.recap-lb img { max-width:96vw; max-height:94vh; border-radius:4px; will-change:transform;
+  box-shadow:0 10px 60px rgba(0,0,0,.8); transform-origin:center center; }
 .recap-lb .lb-btn { position:absolute; top:50%; transform:translateY(-50%);
   background:rgba(20,16,10,.7); border:1px solid var(--line-gold); color:var(--ink);
-  width:46px; height:46px; border-radius:50%; font-size:20px; cursor:pointer; }
+  width:46px; height:46px; border-radius:50%; font-size:20px; cursor:pointer; z-index:2; }
 .recap-lb .lb-btn:disabled { opacity:.25; cursor:default; }
 .recap-lb .lb-prev { left:18px; }
 .recap-lb .lb-next { right:18px; }
 .recap-lb .lb-close { position:absolute; top:16px; right:18px; background:none; border:none;
-  color:var(--ink); font-size:26px; cursor:pointer; }
+  color:var(--ink); font-size:26px; cursor:pointer; z-index:2; }
 .recap-lb .lb-count { position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
-  font-family:var(--font-mono); font-size:12px; color:var(--ink-faint); }
+  font-family:var(--font-mono); font-size:12px; color:var(--ink-faint); z-index:2; }
+.recap-lb .lb-zoom { position:absolute; bottom:14px; right:18px; display:flex; align-items:center;
+  gap:8px; background:rgba(20,16,10,.7); border:1px solid var(--line-gold); border-radius:99px;
+  padding:5px 12px; z-index:2; }
+.recap-lb .lb-zoom button { background:none; border:none; color:var(--ink); font-size:18px;
+  cursor:pointer; line-height:1; width:20px; }
+.recap-lb .lb-zoom span { font-family:var(--font-mono); font-size:12px; color:var(--ink-faint); min-width:42px; text-align:center; }
