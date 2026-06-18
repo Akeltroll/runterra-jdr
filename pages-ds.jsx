@@ -110,26 +110,6 @@ function DesignSystemPage() {
         </div>
       </DSBlock>
 
-      <DSBlock title="Rune Domination" sub="3 voies — référence">
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }} className="rune-grid">
-          {RUNE.paths.map(p => (
-            <div key={p.name} className="panel" style={{ background:'var(--bg-inset)', padding:'14px' }}>
-              <div className="row gap-2" style={{ marginBottom:10 }}>
-                <span style={{ width:10, height:10, borderRadius:2, background:p.color }}></span>
-                <span style={{ fontFamily:'var(--font-display)', fontSize:15, color:'var(--gold-pale)' }}>{p.name}</span>
-              </div>
-              <div className="col gap-2">
-                {p.perks.map((pk, i) => (
-                  <div key={i} style={{ paddingLeft:10, borderLeft:'2px solid '+p.color }}>
-                    <div style={{ fontSize:12, color:'var(--ink)', fontWeight:600 }}>{pk.t}</div>
-                    <div className="faint" style={{ fontSize:11, lineHeight:1.35 }}>{pk.d}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </DSBlock>
     </div>
   );
 }

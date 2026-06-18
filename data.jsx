@@ -219,33 +219,104 @@ const JOURNAL = [
   { t:'16:42', arme:'Grimoire', type:'Magique',  crit:true,  dmg:357 },
 ];
 
-/* --- Rune Domination : 3 voies --- */
-const RUNE = {
-  name:'Domination',
-  paths:[
-    { name:'Burst', color:'var(--hp)',
-      perks:[
-        { t:'+10 % Crit', d:'Bonus passif permanent' },
-        { t:'Opportunité (passif)', d:'+30/40 DA, +1 IA et +10 % Crit par tour sans attaquer (infini)' },
-        { t:'Explosivité (actif)', d:"Double les dégâts d'une compétence (CD 5)" },
-        { t:'Domination', d:'+30 DA et 10 % Crit par kill (permanent, max 3)' },
-      ] },
-    { name:'Mobilité', color:'var(--mana-bright)',
-      perks:[
-        { t:'+1 MS et +1 IA', d:'Bonus passif permanent' },
-        { t:'Altération gravitationnelle (actif)', d:'+2 MS et 30 % esquive pour 2 tours (CD 3)' },
-        { t:'Déplacement éclair (passif)', d:'+20/40 DA et +3 % Crit par MS bonus' },
-        { t:'Domination', d:'+2 MS par kill (permanent, max 3)' },
-      ] },
-    { name:'Sadisme', color:'var(--gold)',
-      perks:[
-        { t:'+10/20 DA et 10 léthalité', d:'Bonus passif permanent' },
-        { t:'Écorchage (actif)', d:'+30 léthalité sur cible — toute l\u2019équipe si HP cible = 100 %' },
-        { t:'Torture enivrante (passif)', d:'Dégâts +50 % si HP cible ≤ 30 % et +10 % Omnivamp' },
-        { t:'Domination', d:'Effet augmenté de 30 % par kill (permanent, max 3)' },
-      ] },
-  ],
-};
+/* --- Runes : 5 familles (chiffrage Excel, DA->AD ou AP à la moyenne). --- */
+const RUNES = [
+  { key:'conquerant', name:'Conquérant', color:'#c89b3c', theme:'Être en combat depuis ≥ 2 tours',
+    capstone:'Agression → −2 CDR (sauf ultime) · Sustain → 40 % Omni · Tenacité → insensible aux CC',
+    paths:[
+      { key:'agr', name:'Agression', nodes:[
+        { id:'conq_agr_1', tier:'mineure', name:'+30 AD ou AP', desc:'Bonus passif permanent (orig. 20|40 DA)', mods:{ adp:30 } },
+        { id:'conq_agr_2', tier:'avancee', name:'Flux', desc:"+2 JA si l'attaque précédente touche", kind:'reminder' },
+        { id:'conq_agr_3', tier:'fondamentale', name:'Frénésie', desc:'+45 AD ou AP et 10 létalité par tour en combat (max 4)', kind:'reminder' },
+      ]},
+      { key:'sus', name:'Sustain', nodes:[
+        { id:'conq_sus_1', tier:'mineure', name:'+50 HP et 10 % Omni', desc:'Bonus passif permanent', mods:{ hp:50, omni:10 } },
+        { id:'conq_sus_2', tier:'avancee', name:'Réfuter la mort', desc:"Réduit les dégâts d'une attaque de moitié (CD 5)", kind:'reminder' },
+        { id:'conq_sus_3', tier:'fondamentale', name:'Soif de sang', desc:'+90 AD ou AP si soin au tour précédent', kind:'reminder' },
+      ]},
+      { key:'ten', name:'Tenacité', nodes:[
+        { id:'conq_ten_1', tier:'mineure', name:'−1 tour aux CC reçus', desc:'Bonus passif permanent', kind:'reminder' },
+        { id:'conq_ten_2', tier:'avancee', name:'Adrénaline', desc:'+60 AD ou AP si CC subi depuis au plus un tour', kind:'reminder' },
+        { id:'conq_ten_3', tier:'fondamentale', name:'Détermination', desc:'Devient enragé pour 2 tours (CD 5)', kind:'reminder' },
+      ]},
+    ]},
+  { key:'domination', name:'Domination', color:'#e0463f', theme:'Avoir éliminé une cible durant la rencontre',
+    capstone:'Burst → +50 Dcrit et 10 % Crit par kill (max 3) · Mobilité → +2 MS par kill (max 3) · Sadisme → effet +50 % par kill (max 3)',
+    paths:[
+      { key:'bur', name:'Burst', nodes:[
+        { id:'domi_bur_1', tier:'mineure', name:'+10 % Crit', desc:'Bonus passif permanent', mods:{ crit:10 } },
+        { id:'domi_bur_2', tier:'avancee', name:'Opportunité', desc:'+45 AD ou AP, +1 JA et +10 % Crit par tour sans attaquer (infini)', kind:'reminder' },
+        { id:'domi_bur_3', tier:'fondamentale', name:'Explosivité', desc:"Double les dégâts d'une compétence (CD 5)", kind:'reminder' },
+      ]},
+      { key:'mob', name:'Mobilité', nodes:[
+        { id:'domi_mob_1', tier:'mineure', name:'+1 MS et +1 JA', desc:'Bonus passif permanent', kind:'reminder' },
+        { id:'domi_mob_2', tier:'avancee', name:'Altération gravitationnelle', desc:'+2 MS et 50 % esquive pour 2 tours (CD 5)', kind:'reminder' },
+        { id:'domi_mob_3', tier:'fondamentale', name:'Déplacement éclair', desc:'+30 AD ou AP et +5 % Crit par MS bonus', kind:'reminder' },
+      ]},
+      { key:'sad', name:'Sadisme', nodes:[
+        { id:'domi_sad_1', tier:'mineure', name:'+15 AD ou AP et 10 létalité', desc:'AD ou AP calculé ; létalité en rappel', mods:{ adp:15 } },
+        { id:'domi_sad_2', tier:'avancee', name:'Écorchage', desc:"+30 létalité sur la cible (toute l'équipe si cible à 100 % HP)", kind:'reminder' },
+        { id:'domi_sad_3', tier:'fondamentale', name:'Torture enivrante', desc:'Dégâts +50 % si cible ≤ 50 % HP, et 10 % Omni', kind:'reminder' },
+      ]},
+    ]},
+  { key:'sorcellerie', name:'Sorcellerie', color:'#9d6bff', theme:'Avoir ≥ 50 % de son mana max',
+    capstone:"Manifestation → contrôle du golem · Harmonie → bonus de stats liés à l'élément · Maîtrise → −1 CDR",
+    paths:[
+      { key:'man', name:'Manifestation', nodes:[
+        { id:'sorc_man_1', tier:'mineure', name:'+100 Mana', desc:'Bonus passif permanent', mods:{ mana:100 } },
+        { id:'sorc_man_2', tier:'avancee', name:'Densité arcanique/cosmique', desc:'Applique un CC de 1 tour selon la compétence (+50 mana)', kind:'reminder' },
+        { id:'sorc_man_3', tier:'fondamentale', name:'Golem', desc:"Invoque un golem (HP/résistance/attaque selon l'élément, 1 fois)", kind:'reminder' },
+      ]},
+      { key:'har', name:'Harmonie élémentaire', nodes:[
+        { id:'sorc_har_1', tier:'mineure', name:'+40 AP', desc:'Bonus passif permanent', mods:{ ap:40 } },
+        { id:'sorc_har_2', tier:'avancee', name:'Compétence infuse', desc:"Change l'élément principal d'une compétence (CD 5)", kind:'reminder' },
+        { id:'sorc_har_3', tier:'fondamentale', name:'Spécialité élémentaire accrue', desc:"Maîtrise de l'élément principal augmentée d'un rang", kind:'reminder' },
+      ]},
+      { key:'mai', name:'Maîtrise magique', nodes:[
+        { id:'sorc_mai_1', tier:'mineure', name:'−1 CDR (sauf ultime)', desc:'Bonus passif permanent', kind:'reminder' },
+        { id:'sorc_mai_2', tier:'avancee', name:'Aery', desc:'Compétence offensive → +10 % dégâts ; défensive → alliés affectés +10 % PV max en bouclier', kind:'reminder' },
+        { id:'sorc_mai_3', tier:'fondamentale', name:'Approche versatile', desc:"Coût réduit de moitié si le sort précédent était d'un élément différent", kind:'reminder' },
+      ]},
+    ]},
+  { key:'volonte', name:'Volonté', color:'#7bd07a', theme:'Avoir ≤ 50 % de ses PV max',
+    capstone:'Durabilité → +25 % PV max · CC → +10 AR/RM et +50 HP par cible affectée · Sacrifice → coût en HP réduit de moitié',
+    paths:[
+      { key:'dur', name:'Durabilité', nodes:[
+        { id:'vol_dur_1', tier:'mineure', name:'+10 AR et 10 RM', desc:'Bonus passif permanent', mods:{ armure:10, resmag:10 } },
+        { id:'vol_dur_2', tier:'avancee', name:'Peau épineuse', desc:'+30 AR et 30 RM, renvoie 10 % des dégâts subis (renvoi en rappel)', mods:{ armure:30, resmag:30 } },
+        { id:'vol_dur_3', tier:'fondamentale', name:'Immortalité éphémère', desc:'Bouclier = 50 % des HP max pour 2 tours (CD 5)', kind:'reminder' },
+      ]},
+      { key:'cc', name:'CC', nodes:[
+        { id:'vol_cc_1', tier:'mineure', name:'+1 tour de CC', desc:'Bonus passif permanent', kind:'reminder' },
+        { id:'vol_cc_2', tier:'avancee', name:'Plaquage / Pression', desc:'Immobilise une cible pour 1 tour (CD 5)', kind:'reminder' },
+        { id:'vol_cc_3', tier:'fondamentale', name:'Neutralisation affaiblissante', desc:"Les CC que vous infligez réduisent l'AR et la RM de la cible de 25 %", kind:'reminder' },
+      ]},
+      { key:'sac', name:'Sacrifice', nodes:[
+        { id:'vol_sac_1', tier:'mineure', name:'+100 HP', desc:'Bonus passif permanent', mods:{ hp:100 } },
+        { id:'vol_sac_2', tier:'avancee', name:'Compétence à risque', desc:'Coûte 10 % des PV max par compétence, dégâts +20 %', kind:'reminder' },
+        { id:'vol_sac_3', tier:'fondamentale', name:'Masochisme', desc:'+10 AR, +10 RM et +15 AD ou AP par usage de « Compétence à risque »', kind:'reminder' },
+      ]},
+    ]},
+  { key:'inspiration', name:'Inspiration', color:'#8be0ff', theme:'Avoir soigné ou prévenu des dégâts sur un allié au tour précédent',
+    capstone:"Amélioration → buffs/debuffs appliquent de nouveaux effets améliorés (à confirmer) · Partage → un CC peut être réassigné · Présage → jet de dé sur n'importe quelle action",
+    paths:[
+      { key:'ame', name:'Amélioration / Maléfice', nodes:[
+        { id:'insp_ame_1', tier:'mineure', name:'+1 tour de buff/debuff', desc:'Bonus passif permanent', kind:'reminder' },
+        { id:'insp_ame_2', tier:'avancee', name:'Aléatoire maîtrisé', desc:'Au début du combat, vous accorde un buff aléatoire', kind:'reminder' },
+        { id:'insp_ame_3', tier:'fondamentale', name:'Influence augmentée', desc:'Buffs/maléfices augmentés de 25 %', kind:'reminder' },
+      ]},
+      { key:'par', name:'Partage', nodes:[
+        { id:'insp_par_1', tier:'mineure', name:'+50 HP et 50 Mana', desc:'Bonus passif permanent', mods:{ hp:50, mana:50 } },
+        { id:'insp_par_2', tier:'avancee', name:'Altruisme excessif', desc:'Une compétence ciblée peut transférer au choix 10 % de vos HP ou mana max (cible à confirmer)', kind:'reminder' },
+        { id:'insp_par_3', tier:'fondamentale', name:'Échange', desc:'Un buff ou debuff peut être réassigné à une nouvelle cible (CD 3)', kind:'reminder' },
+      ]},
+      { key:'pre', name:'Présage', nodes:[
+        { id:'insp_pre_1', tier:'mineure', name:'1 inspiration par séance', desc:'Bonus passif permanent', kind:'reminder' },
+        { id:'insp_pre_2', tier:'avancee', name:'Brèche stratégique', desc:'La stratégie ennemie du tour suivant est divulguée (CD 5)', kind:'reminder' },
+        { id:'insp_pre_3', tier:'fondamentale', name:'Retour temporel', desc:'Accordez un nouveau jet de dé à une de vos actions (CD 3)', kind:'reminder' },
+      ]},
+    ]},
+];
 
 /* --- Catalogue d'items pré-enregistrés (ajout rapide par le staff) ---
    Entrées sans id/qty (générés à l'ajout). Paliers de potions = proposition
@@ -292,5 +363,5 @@ const ITEM_CATALOG = [
 
 Object.assign(window, {
   computeStats, computeAttack, CHARACTERS, BUFFS, WEAPONS,
-  LEVELS, ATTRIBUTES, JOURNAL, RUNE, ITEM_CATALOG,
+  LEVELS, ATTRIBUTES, JOURNAL, RUNES, ITEM_CATALOG,
 });
