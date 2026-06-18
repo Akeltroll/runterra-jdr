@@ -108,6 +108,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   portrait via `--pw`, `paginate`), `RecapLightbox` (lecture plein écran zoomable). Visible des
   3 rôles, **lecture seule, zéro Firebase, zéro règle RTDB**. Ajouter une séance = déposer les
   `.webp` dans `recaps/seance-XX/` + une entrée `RECAPS`.
+- `pages-runes.jsx` — onglet **Runes** (`RuneTreePage`) : arbre des 5 familles (data `RUNES`),
+  sélection stricte (points = niveau, ordre Mineure→Avancée→Fondamentale), persistée `state/runes`
+  (`setRuneSelected`/`setRuneChoice`/`resetRunes`). Bonus plats via `sumRuneMods`+`mergeMods` →
+  `computeEffective` (fiche/MJ/équip) ; conditionnel/actif en panneau « Rappels ». Toggle AD/AP
+  (clé `adp`). Visible des 3 rôles, sélecteur de perso pour le staff. Logique pure dans `game-logic.js`.
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
@@ -135,6 +140,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     equipment: { [slotKey]: itemId }   ← paperdoll (page Équipement), temps réel ; slotKey ∈ EQUIP_SLOTS
     coins:     { plat, or, arg, cuiv }   ← monnaie perso (entiers ≥ 0), via setCoin / moveCoins
     coinsInit: true   ← marqueur de migration (amorçage unique des pièces)
+    runes:     { selected:{[nodeId]:true}, choices:{[nodeId]:'ad'|'ap'} }   ← arbre de runes (page Runes)
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
     { id, cat, name, sub, qty, ic, img, type, mods }
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
@@ -184,6 +190,11 @@ Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDe
   fusion auto sur name+type+cat) et pièces (`moveCoins`). Destinataire : joueur = sa fiche, MJ = choix.
 - **Kéminite** = `Consommable` (catalogue + inventaires par défaut Rathäel/Urskaar ; défaut `type:''`).
 - **Rendu perso = image `.webp`** (`ATH/Perso/`), **pas de 3D** (modèle Meshy trop lourd, abandonné).
+- **Arbre de runes** : contenu figé (`RUNES`, data.jsx, issu de l'Excel — DA convertie en « AD ou AP »
+  à la moyenne). Effets **hybrides** : bonus plats calculés (`sumRuneMods`→`computeEffective`),
+  conditionnel/actif en rappels. Points = niveau, ordre strict, respec libre. Source de règles :
+  `info-mj/Système de Runes.md`. **À confirmer MJ** : capstone vs thématique −2 CD ; 2 cellules
+  tronquées (Inspiration « Altruisme excessif » + 1er capstone).
 
 ## Comment tester (dev)
 ```bash
@@ -196,6 +207,12 @@ Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
 ## État actuel (2026-06-18)
+- **Arbre de runes (page Runes)** (branche `feat/arbre-runes`) : `RUNES` (5 familles, data.jsx) +
+  logique pure testée (`game-logic.js` : `buildRuneIndex`, `runeBudget`, `runeSpent`, `canSelectRune`,
+  `canDeselectRune`, `sumRuneMods`, `mergeMods`) + persistance `state/runes` + page interactive
+  (`pages-runes.jsx`, sélection stricte / points / respec / toggle AD/AP / rappels, sélecteur perso staff)
+  + intégration stats aux 3 sites. 50 tests verts, syntaxe OK. **Aucune règle RTDB.** Reste : vérif
+  visuelle + merge/déploiement. (Spec/plan : `docs/superpowers/{specs,plans}/2026-06-18-arbre-runes*`.)
 - **Onglet Récap (résumés de séance + BD flipbook)** (branche `feat/recap-seances`) : `recaps.js`
   (`RECAPS`), `pages-recap.jsx` (`RecapPage`/`RecapBook`/`RecapLightbox` + `useMediaQuery`),
   dossier `recaps/seance-XX/`, `paginate()` (logique pure testée). Livre double page + flip CSS 3D
