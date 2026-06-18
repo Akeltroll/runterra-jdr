@@ -103,6 +103,7 @@ function SecondaryStats({ stats, variant }) {
 function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventory, onSaveItem, onRemoveItem, canEdit }) {
   const toast = useToast();
   const active = new Set(activeBuffs);
+  const [catCat, setCatCat] = useState(null);   // catégorie pré-filtrée ; null = picker fermé
   const toggle = (b) => {
     const on = !active.has(b.id);
     setBuff(b.id, on);
@@ -144,13 +145,24 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
           <span className="mono faint" style={{ fontSize:11 }}>{inventory ? Object.keys(inventory).length : 0} objets</span>
         </div>
         <div className="col gap-4" style={{ padding:'14px 16px' }}>
-          <InventoryPanel items={inventory} editable={canEdit} onSave={(it) => onSaveItem(it.id, it)} onRemove={onRemoveItem} />
+          <InventoryPanel items={inventory} editable={canEdit} onSave={(it) => onSaveItem(it.id, it)}
+            onRemove={onRemoveItem} onAdd={canEdit ? (cat) => setCatCat(cat) : undefined} />
           <div>
             <div className="overline" style={{ marginBottom:7 }}>Bourse</div>
             <Coins coins={char.coins} />
           </div>
         </div>
       </div>
+      {catCat && (
+        <ItemCatalogPicker initialFilter={catCat}
+          onPick={(entry, n) => {
+            const { patch } = planItemAdd(inventory, entry, n);
+            Object.entries(patch).forEach(([id, it]) => onSaveItem(id, it));
+            setCatCat(null);
+          }}
+          onCustom={() => { const it = makeItem({ cat: catCat, name:'Nouvel objet' }); onSaveItem(it.id, it); setCatCat(null); }}
+          onClose={() => setCatCat(null)} />
+      )}
     </div>
   );
 }
