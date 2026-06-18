@@ -106,18 +106,10 @@
     var srcPatch = {};
     srcPatch[itemId] = (remain <= 0) ? null : Object.assign({}, src, { qty: remain });
 
-    var dstPatch = {};
-    var twinId = null, twin = null;
-    for (var k in dstItems) { if (_sameKind(dstItems[k], src)) { twinId = k; twin = dstItems[k]; break; } }
-    if (twin) {
-      dstPatch[twinId] = Object.assign({}, twin, { qty: (twin.qty || 0) + move });
-    } else {
-      var fresh = makeItem({
-        cat: src.cat, name: src.name, sub: src.sub, qty: move,
-        ic: src.ic, img: src.img, type: src.type, mods: src.mods,
-      });
-      dstPatch[fresh.id] = fresh;
-    }
+    var dstPatch = fillStacks(dstItems, {
+      cat: src.cat, name: src.name, sub: src.sub,
+      ic: src.ic, img: src.img, type: src.type, mods: src.mods,
+    }, move);
     return { srcPatch: srcPatch, dstPatch: dstPatch };
   }
 

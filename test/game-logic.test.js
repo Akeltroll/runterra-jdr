@@ -208,3 +208,14 @@ test('planItemAdd — enveloppe fillStacks et renvoie { patch }', () => {
   assert.ok(r.patch);
   assert.equal(Object.values(r.patch)[0].qty, 2);
 });
+
+test('planItemTransfer — crédit qui dépasse 99 déborde côté destination', () => {
+  const src = { a: L.makeItem({ id:'a', name:'Potion', cat:'Consommables', qty:10 }) };
+  const dst = { z: L.makeItem({ id:'z', name:'Potion', cat:'Consommables', qty:95 }) };
+  const { srcPatch, dstPatch } = L.planItemTransfer(src, dst, 'a', 10);
+  assert.equal(srcPatch.a, null);                 // 10 déplacés => source vidée
+  assert.equal(dstPatch.z.qty, 99);               // pile existante remplie au max
+  const extra = Object.entries(dstPatch).filter(([k]) => k !== 'z').map(([, v]) => v);
+  assert.equal(extra.length, 1);
+  assert.equal(extra[0].qty, 6);                  // surplus dans une nouvelle pile
+});
