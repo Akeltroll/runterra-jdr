@@ -75,6 +75,8 @@ function parseConsumableEffect(it) {
 /* ---- Corps de la page pour un perso donné ---- */
 function EquipBody({ char }) {
   const { state, setEquipment, setField, setInvItem, removeInvItem } = useCharState(char.id);
+  const { role } = useAuthIdentity();
+  const staff = isStaff(role);   // joueur : équiper/utiliser/transférer seulement ; édition réservée au MJ/admin
   const { items: sharedItems } = useSharedInventory();
   const { coins: sharedCoins } = useSharedCoins();
   const toast = useToast();
@@ -219,8 +221,10 @@ function EquipBody({ char }) {
       if ((item.qty || 1) > 1) setStepper({ kind:'item', dir:'toCommon', item, x:e.clientX, y:e.clientY });
       else sendToCommon(item, 1);
     }});
-    actions.push({ label:'Éditer', onClick:() => setEditing(item) });
-    actions.push({ label:'Supprimer', danger:true, onClick:() => removeInvItem(item.id) });
+    if (staff) {
+      actions.push({ label:'Éditer', onClick:() => setEditing(item) });
+      actions.push({ label:'Supprimer', danger:true, onClick:() => removeInvItem(item.id) });
+    }
     setMenu({ item, x:e.clientX, y:e.clientY, actions });
   };
   const openCoinMenu = (key, e) => {
@@ -364,7 +368,7 @@ function EquipBody({ char }) {
         {/* ---- DROITE : INVENTAIRE (grille partagée) ---- */}
         <div style={{ flex:'0 0 390px', minHeight:0, zIndex:2 }}>
           <InventoryGrid items={inventoryForGrid} coins={coins} filter={filter} setFilter={setFilter}
-            onItemClick={openItemMenu} onCoinClick={openCoinMenu} onAdd={addItem}
+            onItemClick={openItemMenu} onCoinClick={openCoinMenu} onAdd={staff ? addItem : undefined}
             onDropItem={(id) => { if (slotOfItem(id)) unequip(id); }} capacity={120} />
         </div>
       </div>
