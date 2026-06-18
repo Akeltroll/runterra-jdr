@@ -100,7 +100,7 @@ function SecondaryStats({ stats, variant }) {
 }
 
 /* ---- Colonne 3 : buffs + inventaire ---- */
-function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventory, onSaveItem, onRemoveItem }) {
+function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventory, onSaveItem, onRemoveItem, canEdit }) {
   const toast = useToast();
   const active = new Set(activeBuffs);
   const toggle = (b) => {
@@ -144,7 +144,7 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
           <span className="mono faint" style={{ fontSize:11 }}>{inventory ? Object.keys(inventory).length : 0} objets</span>
         </div>
         <div className="col gap-4" style={{ padding:'14px 16px' }}>
-          <InventoryPanel items={inventory} editable={true} onSave={(it) => onSaveItem(it.id, it)} onRemove={onRemoveItem} />
+          <InventoryPanel items={inventory} editable={canEdit} onSave={(it) => onSaveItem(it.id, it)} onRemove={onRemoveItem} />
           <div>
             <div className="overline" style={{ marginBottom:7 }}>Bourse</div>
             <Coins coins={char.coins} />
@@ -263,6 +263,8 @@ function HealPanel({ char, hp, setHp, mana, setMana, shield, setShield, activeBu
 /* ---- Corps de la fiche (3 colonnes) ---- */
 function SheetBody({ char, variant }) {
   const [modal, setModal] = useState(false);
+  const { role } = useAuthIdentity();
+  const canEdit = isStaff(role);   // joueur = inventaire en lecture seule ; MJ/admin = édition
   const { state, setField, setBuff, setMod, setInvItem, removeInvItem } = useCharState(char.id);
   useEffect(() => {
     // migration unique (marqueur invInit) : amorce l'inventaire si absent, une seule
@@ -303,7 +305,7 @@ function SheetBody({ char, variant }) {
           fatigue={state.fatigue} eau={state.eau} setField={setField} activeBuffs={activeBuffs} />
         {/* COLONNE 3 — BUFFS + MODIFICATEURS + INVENTAIRE */}
         <BuffInvColumn char={char} activeBuffs={activeBuffs} setBuff={setBuff} setMod={setMod} modifiers={state.modifiers}
-          inventory={state.inventory} onSaveItem={setInvItem} onRemoveItem={removeInvItem} />
+          inventory={state.inventory} onSaveItem={setInvItem} onRemoveItem={removeInvItem} canEdit={canEdit} />
       </div>
       {modal && <AttackModal char={char} onClose={() => setModal(false)} />}
     </div>
