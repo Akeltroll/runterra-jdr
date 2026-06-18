@@ -42,10 +42,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `updatePath`, `setPath`, `getSnapshot`).
 - `game-logic.js` — aussi : `makeItem`/`newItemId` (modèle d'item, avec `type`) ; `EQUIP_TYPES`
   (liste des emplacements) ; `planItemTransfer(srcItems,dstItems,itemId,n)` (logique pure de
-  transfert/fusion → `{srcPatch,dstPatch}`) ; `buildDefaultState` amorce `inventory` depuis `char.inv`
-  et `coins` depuis `char.coins`.
+  transfert/fusion → `{srcPatch,dstPatch}`, crédite la destination via `fillStacks`) ;
+  `STACK_MAX` (=99) + `fillStacks(items,entry,qty)` (remplit les piles existantes de même genre
+  jusqu'à 99 puis crée de nouvelles piles pour le surplus → patch `{itemId:item}`) +
+  `planItemAdd(items,entry,qty)` (`{patch}`, ajout depuis le catalogue) ;
+  `buildDefaultState` amorce `inventory` depuis `char.inv` et `coins` depuis `char.coins`.
 - `data.jsx` — règles immuables : formules `computeStats`, `CHARACTERS` (avec `inv`
-  par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS`, `RUNE`, `JOURNAL`.
+  par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS`, `RUNE`, `JOURNAL`,
+  `ITEM_CATALOG` (catalogue d'items pré-enregistrés pour l'ajout staff : `{cat,name,sub,ic,img,type}`).
   `mkChar` y attache les `modifiers` par défaut. (`ATTACK_MODES` **retiré** — voir Décisions.)
 - `data-state.jsx` — hooks temps réel : `useCharState` (+ setters inventaire
   `setInvItem`/`removeInvItem` + équipement `setEquipment` + monnaie `setCoin`), `useAllCharStates`,
@@ -62,8 +66,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   webp/png) stockée en **data URL** dans `item.img` — pas besoin d'un chemin `ATH/` ni
   d'accès au code (le champ chemin reste dispo en fallback). `InvItemRow` gère aussi
   **Catégorie + Emplacement** (`type`, affiché si `cat==='Équipement'`) et le prop `startEdit`
-  (ouverture directe en mode édition, pour les modals). Grille dark-fantasy partagée
-  `InventoryGrid` (Équipement + coffre commun) + popovers `ItemActionMenu` / `AmountStepper` ;
+  (ouverture directe en mode édition, pour les modals). `InventoryPanel` a un prop optionnel
+  `onAdd(cat)` : si fourni, « + Ajouter » délègue au parent (ouvre le picker) ; sinon ajout vierge.
+  Grille dark-fantasy partagée `InventoryGrid` (Équipement + coffre commun ; badge quantité en **OR**) +
+  popovers `ItemActionMenu` / `AmountStepper` ; **`ItemCatalogPicker`** (modal de sélection rapide
+  depuis `ITEM_CATALOG` → `AmountStepper` → `onPick(entry,qty)` ; bouton « Objet personnalisé » = filet) ;
   constantes `INV_*`/`inv*` (styles/format/filtres/pièces).
 - `pages-sheet.jsx` — fiche joueur (3 colonnes, 3 variantes visuelles a/b/c).
   Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel, **inventaire perso
@@ -156,11 +163,16 @@ Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDe
 - **Système de mode de combat (offensif/équilibré/défensif) RETIRÉ** : attaques = dégâts pleins.
 - **Inventaire** : perso (par fiche) + commun (coffre partagé). Items `{id,cat,name,sub,qty,ic,img,type,mods}`,
   images dans `ATH/`. Bonus `mods` non encore branchés. **`type`** = emplacement explicite (saisi à
-  l'édition si `cat==='Équipement'`), sinon `equipTypeForItem` infère.
+  l'édition si `cat==='Équipement'`), sinon `equipTypeForItem` infère. **Édition réservée au staff**
+  (joueurs : lecture seule + équiper/utiliser/transférer ; gate `isStaff` sur fiche & Équipement).
+- **Ajout d'items via catalogue** (`ITEM_CATALOG` + `ItemCatalogPicker`) : tous les « + Ajouter » staff
+  (fiche, Équipement, commun) ouvrent le picker → quantité (`AmountStepper`) → ajout.
+- **Plafond de pile = 99** (`STACK_MAX`) : une pile ne dépasse jamais 99, le surplus crée une nouvelle
+  case (`fillStacks`). Appliqué à l'ajout catalogue **et** aux transferts. Piles déjà > 99 non re-découpées.
 - **Monnaie vivante** : `state.coins` par fiche + `sharedCoins` commun ({plat,or,arg,cuiv}, entiers).
   Le MJ ajuste librement. **Transferts** perso ↔ commun pour items (`moveItem`/`planItemTransfer`,
   fusion auto sur name+type+cat) et pièces (`moveCoins`). Destinataire : joueur = sa fiche, MJ = choix.
-- **Kéminite** = `Butin` (item de Rathäel ; corrigé dans `data.jsx`, défaut `type:''`).
+- **Kéminite** = `Consommable` (catalogue + inventaires par défaut Rathäel/Urskaar ; défaut `type:''`).
 - **Rendu perso = image `.webp`** (`ATH/Perso/`), **pas de 3D** (modèle Meshy trop lourd, abandonné).
 
 ## Comment tester (dev)
@@ -173,7 +185,14 @@ SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées
 Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
-## État actuel (2026-06-17)
+## État actuel (2026-06-18)
+- **Catalogue d'items + plafond de pile** (branche `feat/catalogue-items`) : `ITEM_CATALOG` (data.jsx),
+  `ItemCatalogPicker` (modal), `STACK_MAX`/`fillStacks`/`planItemAdd` (logique pure testée),
+  `planItemTransfer` refactoré pour respecter le plafond 99. Picker branché sur les 3 « + Ajouter »
+  staff (fiche, Équipement, commun). Badge quantité en OR. Kéminite → Consommable. 34 tests verts
+  (game-logic+auth), syntaxe OK. **Aucune règle RTDB à republier.** Reste : merge + déploiement.
+- **Verrouillage joueur** : inventaire perso en lecture seule pour les joueurs (édition réservée
+  staff sur fiche & Équipement) — mergé/déployé sur `main`.
 - **Inventaire — transferts / types / pièces vivantes** : **mergé sur `main` et déployé** (subagent-driven).
   Champ `type` + `EQUIP_TYPES`, `planItemTransfer` (logique pure testée), `useSharedCoins`/`setCoin`,
   orchestrateurs `moveItem`/`moveCoins` (crédit-avant-débit), grille partagée `InventoryGrid` +
