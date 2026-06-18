@@ -459,7 +459,7 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
                 )}
                 {item && item.qty > 1 && (
                   <span style={{ position:'absolute', right:3, bottom:1, fontFamily:"'EB Garamond',serif",
-                    fontSize:13, fontWeight:600, color:'#f0e6d2', textShadow:'0 1px 3px #000,0 0 5px #000',
+                    fontSize:13, fontWeight:700, color:'#eccf8f', textShadow:'0 1px 3px #000,0 0 5px #000',
                     pointerEvents:'none', zIndex:1 }}>{invFmt(item.qty)}</span>
                 )}
               </div>
@@ -619,7 +619,7 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
 }
 
 /* --- Panneau d'inventaire réutilisable (perso = fiche ; commun = page dédiée) --- */
-function InventoryPanel({ items, editable, onSave, onRemove }) {
+function InventoryPanel({ items, editable, onSave, onRemove, onAdd }) {
   const cats = ['Équipement', 'Consommables', 'Butin'];
   const list = items ? Object.values(items) : [];
   const add = (cat) => { const it = makeItem({ cat, name: 'Nouvel objet' }); onSave(it); };
@@ -631,7 +631,7 @@ function InventoryPanel({ items, editable, onSave, onRemove }) {
           <div key={cat}>
             <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:7 }}>
               <span className="overline">{cat}</span>
-              {editable && <button className="btn btn-sm btn-ghost" onClick={() => add(cat)}>+ Ajouter</button>}
+              {editable && <button className="btn btn-sm btn-ghost" onClick={() => (onAdd ? onAdd(cat) : add(cat))}>+ Ajouter</button>}
             </div>
             {inCat.length === 0
               ? <div className="faint" style={{ fontSize:11 }}>—</div>
@@ -643,10 +643,66 @@ function InventoryPanel({ items, editable, onSave, onRemove }) {
   );
 }
 
+/* --- Catalogue d'items : modal de sélection rapide (staff) ---
+   Clic sur une entrée -> AmountStepper -> onPick(entry, qty).
+   Le scrim est sous le zIndex de l'AmountStepper (200) pour qu'il s'affiche par-dessus. */
+function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose }) {
+  const [filter, setFilter] = useState(initialFilter || 'all');
+  const [picked, setPicked] = useState(null);   // { entry, x, y }
+  const list = (window.ITEM_CATALOG || []).filter(e => filter === 'all' || e.cat === filter);
+  return (
+    <div className="modal-scrim" onClick={onClose}
+      style={{ display:'flex', alignItems:'center', justifyContent:'center', zIndex:190 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width:'min(560px,94vw)', maxHeight:'88vh',
+        display:'flex', flexDirection:'column', background:'var(--bg-deep)',
+        border:'1px solid var(--line-gold)', borderRadius:12, padding:16 }}>
+        <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+          <h3 style={{ margin:0 }}>Catalogue d'objets</h3>
+          <button className="btn btn-sm btn-ghost" onClick={onClose}>✕</button>
+        </div>
+        <div style={{ display:'flex', gap:4, marginBottom:12 }}>
+          {INV_FILTERS.map(ft => (
+            <button key={ft.key} className={'btn btn-sm ' + (filter === ft.key ? 'btn-gold' : 'btn-ghost')}
+              style={{ flex:1 }} onClick={() => setFilter(ft.key)}>{ft.label}</button>
+          ))}
+        </div>
+        <div style={{ flex:'1 1 auto', overflowY:'auto', minHeight:0, display:'grid',
+          gridTemplateColumns:'repeat(auto-fill,minmax(92px,1fr))', gap:8 }}>
+          {list.map((entry, i) => (
+            <div key={i} onClick={(e) => setPicked({ entry, x:e.clientX, y:e.clientY })}
+              title={entry.sub || entry.name}
+              style={{ cursor:'pointer', borderRadius:8, border:'1px solid var(--line)', padding:8,
+                display:'flex', flexDirection:'column', alignItems:'center', gap:6, textAlign:'center',
+                background:'var(--bg-inset)' }}>
+              <span style={{ width:44, height:44, display:'grid', placeItems:'center', fontSize:24, overflow:'hidden' }}>
+                {entry.img
+                  ? <img src={entry.img} alt="" style={{ width:'100%', height:'100%', objectFit:'contain' }} />
+                  : (entry.ic || '◆')}
+              </span>
+              <span style={{ fontSize:11, lineHeight:1.2, color:'var(--ink)' }}>{entry.name}</span>
+            </div>
+          ))}
+        </div>
+        <div className="row" style={{ justifyContent:'space-between', alignItems:'center',
+          marginTop:12, paddingTop:12, borderTop:'1px solid var(--line)' }}>
+          <button className="btn btn-sm btn-ghost" onClick={onCustom}>+ Objet personnalisé</button>
+          <span className="faint" style={{ fontSize:11 }}>{list.length} objets</span>
+        </div>
+      </div>
+      {picked && (
+        <AmountStepper max={999} x={picked.x} y={picked.y}
+          label={`Ajouter combien de « ${picked.entry.name} » ?`} confirmLabel="Ajouter"
+          onConfirm={(n) => { onPick(picked.entry, n); setPicked(null); }}
+          onClose={() => setPicked(null)} />
+      )}
+    </div>
+  );
+}
+
 Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
   ToastProvider, useToast, AnnoPin, AttackModal, STAT_GLYPH, STAT_LABEL,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
   InventoryGrid, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invThumbStyle,
-  AmountStepper, ItemActionMenu,
+  AmountStepper, ItemActionMenu, ItemCatalogPicker,
 });
