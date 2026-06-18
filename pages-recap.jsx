@@ -1,7 +1,133 @@
 /* ============================================================
    PAGE — RÉCAP DE SÉANCE
-   Sélecteur de séance + résumé texte + BD (livre, Task 3).
+   Sélecteur de séance + résumé texte + BD feuilletable.
    ============================================================ */
+
+/* Hook : true si la media query matche (recalculé au resize). */
+function useMediaQuery(query) {
+  const [match, setMatch] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const fn = () => setMatch(m.matches);
+    m.addEventListener('change', fn);
+    return () => m.removeEventListener('change', fn);
+  }, [query]);
+  return match;
+}
+
+/* Livre feuilletable. Une "vue" = ce qui est montré d'un coup :
+   - large écran : une double-page [gauche, droite] (via paginate)
+   - mobile      : une seule page [page]
+   Le flip fait tourner une feuille (CSS 3D) entre deux vues consécutives.
+   L'animation a 2 phases : 'start' (position initiale, sans transition) puis
+   'run' (position finale, avec transition) — basculées via requestAnimationFrame
+   pour que la transition CSS se déclenche dans les deux sens. */
+function RecapBook({ pages, onZoom }) {
+  const narrow = useMediaQuery('(max-width: 820px)');
+  const views = narrow ? (pages || []).map(p => [p]) : paginate(pages);
+  const [vi, setVi] = useState(0);
+  const [anim, setAnim] = useState(null);   // { dir:'next'|'prev', phase:'start'|'run' }
+  useEffect(() => { setVi(0); setAnim(null); }, [narrow, pages]);
+
+  const total = views.length;
+  const go = (dir) => {
+    if (anim) return;
+    const nv = vi + (dir === 'next' ? 1 : -1);
+    if (nv < 0 || nv >= total) return;
+    setAnim({ dir, phase: 'start' });
+  };
+
+  // start -> run (2 rAF pour garantir le reflow avant transition)
+  useEffect(() => {
+    if (anim && anim.phase === 'start') {
+      const id = requestAnimationFrame(() =>
+        requestAnimationFrame(() => setAnim(a => (a ? { ...a, phase: 'run' } : a))));
+      return () => cancelAnimationFrame(id);
+    }
+  }, [anim]);
+
+  // fin d'animation : commit de la nouvelle vue
+  useEffect(() => {
+    if (anim && anim.phase === 'run') {
+      const t = setTimeout(() => {
+        setVi(v => v + (anim.dir === 'next' ? 1 : -1));
+        setAnim(null);
+      }, 640);
+      return () => clearTimeout(t);
+    }
+  }, [anim]);
+
+  // navigation clavier
+  useEffect(() => {
+    const fn = (e) => {
+      if (e.key === 'ArrowRight') go('next');
+      else if (e.key === 'ArrowLeft') go('prev');
+    };
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+  });
+
+  if (!total) return <div className="faint">Aucune page.</div>;
+
+  const cur  = views[vi]     || [];
+  const next = views[vi + 1] || [];
+  const prev = views[vi - 1] || [];
+  const isNext = anim && anim.dir === 'next';
+  const isPrev = anim && anim.dir === 'prev';
+  const hideErr = (e) => { e.currentTarget.style.visibility = 'hidden'; };
+  const zoom = (src) => { if (onZoom && src) onZoom(pages.indexOf(src)); };
+
+  // Pages statiques (sous la feuille) + faces de la feuille, selon mode & direction.
+  let leftSrc, rightSrc, leafFront, leafBack;
+  if (narrow) {
+    rightSrc = undefined;
+    if (isNext)      { leftSrc = next[0];  leafFront = cur[0];  leafBack = next[0]; }
+    else if (isPrev) { leftSrc = prev[0];  leafFront = prev[0]; leafBack = cur[0]; }
+    else             { leftSrc = cur[0]; }
+  } else {
+    if (isNext)      { leftSrc = cur[0];  rightSrc = next[1]; leafFront = cur[1];  leafBack = next[0]; }
+    else if (isPrev) { leftSrc = prev[0]; rightSrc = prev[1]; leafFront = prev[1]; leafBack = cur[0]; }
+    else             { leftSrc = cur[0];  rightSrc = cur[1]; }
+  }
+
+  // Transform/transition de la feuille (inline = pas de conflit de classes).
+  let transform = 'rotateY(0deg)', transition = 'none';
+  if (isNext) {
+    transform  = anim.phase === 'run' ? 'rotateY(-180deg)' : 'rotateY(0deg)';
+    transition = anim.phase === 'run' ? 'transform 0.62s ease-in-out' : 'none';
+  } else if (isPrev) {
+    transform  = anim.phase === 'run' ? 'rotateY(0deg)' : 'rotateY(-180deg)';
+    transition = anim.phase === 'run' ? 'transform 0.62s ease-in-out' : 'none';
+  }
+
+  // Fonction (pas un composant) -> pas de remontage des <img> au changement de phase.
+  const renderHalf = (side, src, key) => src
+    ? <div key={key} className={'recap-half ' + side}>
+        <img src={src} alt="" onClick={() => zoom(src)} onError={hideErr} />
+      </div>
+    : <div key={key} className={'recap-half ' + side + ' empty'} />;
+
+  return (
+    <div className={'recap-book' + (narrow ? ' is-narrow' : '')}>
+      <div className="recap-stage">
+        {!narrow && renderHalf('left', leftSrc, 'L')}
+        {narrow ? renderHalf('left', leftSrc, 'L') : renderHalf('right', rightSrc, 'R')}
+        {anim && (
+          <div className="recap-leaf" style={{ transform, transition }}>
+            <div className="face front">{leafFront ? <img src={leafFront} alt="" onError={hideErr} /> : null}</div>
+            <div className="face back">{leafBack ? <img src={leafBack} alt="" onError={hideErr} /> : null}</div>
+          </div>
+        )}
+      </div>
+      <div className="recap-nav">
+        <button className="btn btn-sm btn-ghost" disabled={vi === 0} onClick={() => go('prev')}>◀</button>
+        <span className="count">{narrow ? `page ${vi + 1} / ${total}` : `vue ${vi + 1} / ${total}`}</span>
+        <button className="btn btn-sm btn-ghost" disabled={vi >= total - 1} onClick={() => go('next')}>▶</button>
+      </div>
+    </div>
+  );
+}
+
 function RecapPage() {
   const recaps = window.RECAPS || [];
   const [sel, setSel] = useState(0);
@@ -37,15 +163,10 @@ function RecapPage() {
         </div>
       ) : null}
 
-      {/* BD — version minimale : planches empilées (remplacée par <RecapBook> en Task 3) */}
-      <div className="col gap-4" style={{ alignItems:'center' }}>
-        {(s.pages || []).map((src, idx) => (
-          <img key={idx} src={src} alt={'Page ' + (idx + 1)}
-            style={{ maxWidth:'min(92vw,440px)', width:'100%', border:'1px solid var(--line-gold)', borderRadius:6 }} />
-        ))}
-      </div>
+      {/* BD — livre feuilletable */}
+      <RecapBook pages={s.pages || []} />
     </div>
   );
 }
 
-Object.assign(window, { RecapPage });
+Object.assign(window, { useMediaQuery, RecapBook, RecapPage });
