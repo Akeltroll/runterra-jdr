@@ -100,6 +100,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   commun (`moveCoins`). **Consommables** : « Utiliser » (`parseConsumableEffect` lit « Rend X + Y% HP/Mana »
   dans le `sub`) → décrémente la qty, **supprime l'item à 0**, applique l'effet temps réel (PV via
   `applyHealMods`, mana brut). Items à qty 0 masqués.
+- `recaps.js` — données des **récaps de séance** : `RECAPS = [{id,date,titre,resume,pages:[...]}]`
+  (la plus récente en premier ; images dans `recaps/seance-XX/`, commitées/statiques).
+- `pages-recap.jsx` — onglet **Récap** (`RecapPage`) : sélecteur de séance + résumé texte +
+  BD feuilletable. `useMediaQuery` (double page ≥820px, page simple en dessous), `RecapBook`
+  (livre, flip CSS 3D fait-main piloté en style inline 2 phases start→run via rAF, page A4
+  portrait via `--pw`, `paginate`), `RecapLightbox` (lecture plein écran zoomable). Visible des
+  3 rôles, **lecture seule, zéro Firebase, zéro règle RTDB**. Ajouter une séance = déposer les
+  `.webp` dans `recaps/seance-XX/` + une entrée `RECAPS`.
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
@@ -188,6 +196,14 @@ Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
 ## État actuel (2026-06-18)
+- **Onglet Récap (résumés de séance + BD flipbook)** (branche `feat/recap-seances`) : `recaps.js`
+  (`RECAPS`), `pages-recap.jsx` (`RecapPage`/`RecapBook`/`RecapLightbox` + `useMediaQuery`),
+  dossier `recaps/seance-XX/`, `paginate()` (logique pure testée). Livre double page + flip CSS 3D
+  fait-main + responsive + lightbox plein écran. Visible des 3 rôles, lecture seule, **zéro Firebase /
+  zéro règle RTDB**. 42 tests verts (game-logic 35 + auth 7), syntaxe OK. Reste :
+  vérif visuelle du flip + merge/déploiement. (Spec/plan : `docs/superpowers/{specs,plans}/2026-06-18-recap-seances*`.)
+- **`item.mods` → stats effectives** : fait/déployé (commit `ed0cd2d`) — `sumItemMods` + 4e param
+  `computeEffective` + éditeur « Bonus de stats ».
 - **Catalogue d'items + plafond de pile** (branche `feat/catalogue-items`) : `ITEM_CATALOG` (data.jsx),
   `ItemCatalogPicker` (modal), `STACK_MAX`/`fillStacks`/`planItemAdd` (logique pure testée),
   `planItemTransfer` refactoré pour respecter le plafond 99. Picker branché sur les 3 « + Ajouter »
