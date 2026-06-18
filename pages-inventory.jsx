@@ -88,6 +88,7 @@ function CommonInventoryPage() {
   const [stepper, setStepper] = useState(null);    // { kind, item|coinKey, dest, x, y, max }
   const [editing, setEditing] = useState(null);
   const [destPick, setDestPick] = useState(null);   // { x, y, onDest } pour le MJ
+  const [catalog, setCatalog] = useState(false);    // ouverture du catalogue d'ajout
 
   const charInv = (id) => (all && all[id] && all[id].state && all[id].state.inventory) || {};
   const charCoins = (id) => (all && all[id] && all[id].state && all[id].state.coins) || { plat:0, or:0, arg:0, cuiv:0 };
@@ -130,7 +131,7 @@ function CommonInventoryPage() {
           {items === null
             ? <div className="dim">Chargement…</div>
             : <InventoryGrid items={items} coins={sharedCoins} filter={filter} setFilter={setFilter}
-                onItemClick={(item) => setSelectedId(item.id)} onCoinClick={openCoinMenu} onAdd={staff ? addItem : undefined}
+                onItemClick={(item) => setSelectedId(item.id)} onCoinClick={openCoinMenu} onAdd={staff ? () => setCatalog(true) : undefined}
                 title="INVENTAIRE COMMUN" capacity={240} />}
         </div>
         <div style={{ flex:'1 1 auto', minHeight:0 }}>
@@ -163,6 +164,16 @@ function CommonInventoryPage() {
               onRemove={(id) => { removeItem(id); setEditing(null); setSelectedId(null); }} />
           </div>
         </div>
+      )}
+      {catalog && (
+        <ItemCatalogPicker
+          onPick={(entry, n) => {
+            const { patch } = planItemAdd(items || {}, entry, n);
+            Object.entries(patch).forEach(([id, it]) => setItem(id, it));
+            setCatalog(false);
+          }}
+          onCustom={() => { setCatalog(false); addItem(); }}
+          onClose={() => setCatalog(false)} />
       )}
     </div>
   );
