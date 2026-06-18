@@ -101,6 +101,7 @@
 <script type="text/babel" src="pages-inventory.jsx"></script>
 <script type="text/babel" src="pages-equip.jsx"></script>
 <script type="text/babel" src="pages-recap.jsx"></script>
+<script type="text/babel" src="pages-runes.jsx"></script>
 
 <!-- Shell -->
 <script type="text/babel">
@@ -114,6 +115,7 @@ const PAGES = [
   { id:'equip',   label:'Équipement',   render:(auth) => <EquipPage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
   { id:'inv',     label:'Inventaire commun', render:() => <CommonInventoryPage /> },
   { id:'recap',   label:'Récap',        render:() => <RecapPage /> },
+  { id:'runes',   label:'Runes',        render:(auth) => <RuneTreePage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
   { id:'admin',   label:'Admin',        render:() => <AdminPage /> },
 ];
 let setRoute; // remonté par App pour la navigation depuis les pages
