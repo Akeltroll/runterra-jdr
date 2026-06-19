@@ -34,7 +34,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `index.html` — point d'entrée (scripts + shell `App` : identité, gating auth, routing).
 - `game-logic.js` — **logique pure** (UMD : testable en Node + `window`). `clamp`,
   `clampGauge`, `DEFAULT_MODIFIERS`, `BUFF_STAT_MAP`, `computeEffective`,
-  `applyHealMods`, `buildDefaultState`.
+  `applyHealMods`, `buildDefaultState`. Combat (vue MJ) : `mitigateDamage`
+  (armure/resmag, AR-120, brut sans réduction) + `applyDamageToPools`
+  (bouclier puis HP, KO) — reproduit le moteur Excel.
 - `auth.js` — logique d'auth pure (UMD) : `usernameToEmail`, `ROLES`, `isStaff`,
   `isAdmin`, `isPending`, `pagesForRole`, `canSeePage`, `defaultRoute`.
 - `firebase-config.js` — init Firebase + auth Email/Password + helpers `window.RTDB`
@@ -78,7 +80,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `pages-mj.jsx` — tableau de bord MJ temps réel (`mjLive(c, st)` fusionne règles+état).
   Le mini-sac des cartes lit l'inventaire **live** (`st.inventory`, items qty>0, images
   `item.img`), fallback `c.inv`. Édition d'un joueur = bouton **⛶ plein écran** → `SheetBody`
-  (inventaire éditable, upload d'image inclus).
+  (inventaire éditable, upload d'image inclus). Grille **responsive** (plus de scroll
+  horizontal). **Section Ennemis** (locaux, `localStorage` `runeterra_mj_enemies` — zéro
+  Firebase) : `useMJEnemies`, `EnemyCard` (HP/mana, édition inline, « Subir » = dégâts
+  joueurs→ennemi), `EnemyAttackModal` (ennemi→joueur : `mitigateDamage`+`applyDamageToPools`,
+  écrit `hpCur`/`shield` du joueur ciblé en Firebase, KO à 0).
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
 - `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé) :
   rendu en **grille partagée** (`InventoryGrid`). Clic item → `ItemActionMenu` (Prendre / Éditer /
@@ -211,7 +217,16 @@ SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées
 Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
-## État actuel (2026-06-18)
+## État actuel (2026-06-19)
+- **Vue MJ — ennemis (v1)** (branche `feat/mj-ennemis`) : grille responsive (fin du scroll
+  horizontal) + suivi d'ennemis locaux (`localStorage`, zéro Firebase). Logique de combat pure
+  testée (`mitigateDamage`, `applyDamageToPools`, moteur Excel). Attaque ennemi→joueur écrit les
+  HP/bouclier du joueur ciblé en Firebase (type physique/magique/brut, bouclier d'abord, KO à 0) ;
+  « Subir » baisse les HP de l'ennemi. 59 tests verts. **Zéro règle RTDB.** v2 éventuelle : plateau
+  partagé (joueurs voient les ennemis et cliquent). Reste : vérif visuelle + merge/déploiement.
+  (Spec/plan : `docs/superpowers/{specs,plans}/2026-06-19-vue-mj-ennemis*`.)
+
+## État précédent (2026-06-18)
 - **Arbre de runes (page Runes)** : **mergé sur `main` et déployé.** `RUNES` (5 familles, data.jsx) +
   logique pure testée (`game-logic.js` : `buildRuneIndex`, `runeBudget`, `runeSpent`, `canSelectRune`,
   `canDeselectRune`, `sumRuneMods`, `mergeMods`) + persistance `state/runes` (+`runeBonus`) + page
