@@ -93,6 +93,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   écrit `hpCur`/`shield` du joueur ciblé en Firebase, KO à 0). Cartes : barre de bouclier
   **toujours affichée** (0/0 si vide) ; **pulsation du cadre** selon les PV (classe `mj-card-warn`
   orange < 50%, `mj-card-danger` rouge < 25% — keyframes CSS dans `runeterra.css`).
+  **Compteur de tour** dans l'en-tête (`useMJTurn`, local `localStorage` `runeterra_mj_turn` :
+  Fin de tour / précédent / réinitialiser) — fondation des futurs CD de compétences/runes.
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
 - `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé) :
   rendu en **grille partagée** (`InventoryGrid`). Clic item → `ItemActionMenu` (Prendre / Éditer /
