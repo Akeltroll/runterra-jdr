@@ -208,6 +208,57 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
   );
 }
 
+function EnemyAttackModal({ enemy, stOf, onClose }) {
+  const toast = useToast();
+  const [amount, setAmount] = useState(String(enemy.atk || 0));
+  const [type, setType] = useState('physique');
+  const [targetId, setTargetId] = useState(CHARACTERS[0] ? CHARACTERS[0].id : '');
+
+  const submit = () => {
+    const raw = Math.max(0, parseInt(amount, 10) || 0);
+    const c = CHARACTERS.find(x => x.id === targetId);
+    if (!c || raw <= 0) { onClose(); return; }
+    const L = mjLive(c, stOf(c.id));
+    const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag });
+    const res = applyDamageToPools({ hpCur: L.hp, shield: L.shield }, degats);
+    window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
+    toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
+      res.ko ? 'debuff' : 'gold');
+    onClose();
+  };
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="panel" onClick={e => e.stopPropagation()} style={{ width:'min(420px,100%)', padding:18, display:'flex', flexDirection:'column', gap:14 }}>
+        <h3 style={{ fontSize:17 }}>Attaque — {enemy.name}</h3>
+        <label className="col" style={{ gap:4 }}>
+          <span className="overline">Dégâts</span>
+          <input style={ENEMY_FLD} value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
+        </label>
+        <div className="col" style={{ gap:4 }}>
+          <span className="overline">Type</span>
+          <div className="row gap-2">
+            {['physique', 'magique', 'brut'].map(t => (
+              <button key={t} className={'btn btn-sm ' + (type === t ? 'btn-gold' : 'btn-ghost')}
+                onClick={() => setType(t)} style={{ flex:1, textTransform:'capitalize' }}>{t}</button>
+            ))}
+          </div>
+        </div>
+        <label className="col" style={{ gap:4 }}>
+          <span className="overline">Cible</span>
+          <select style={ENEMY_FLD} value={targetId} onChange={e => setTargetId(e.target.value)}>
+            {CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
+          <button className="btn btn-sm btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn btn-sm btn-gold" onClick={submit}>Infliger</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MJPage({ go }) {
   const all = useAllCharStates();
   const [selected, setSelected] = useState('rathael');
@@ -269,6 +320,7 @@ function MJPage({ go }) {
       </main>
 
       {full && <FullScreenSheet char={full} onClose={() => setFull(null)} />}
+      {attacker && <EnemyAttackModal enemy={attacker} stOf={stOf} onClose={() => setAttacker(null)} />}
     </div>
   );
 }
