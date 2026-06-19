@@ -82,6 +82,28 @@ function useMJEnemies() {
   return { enemies, addEnemy, updateEnemy, removeEnemy };
 }
 
+/* File d'attaques en attente : le joueur PROPOSE (au cast), le MJ résout (ajuste + applique).
+   Lecture tout inscrit, écriture tout inscrit (création) ; le staff applique/supprime. */
+const PENDING_HITS = `${CAMPAIGN}/combat/pendingHits`;
+function usePendingHits() {
+  const [map, setMap] = useState(null);
+  useEffect(() => window.RTDB.subscribePath(PENDING_HITS, (v) => setMap(v || {})), []);
+  const hits = map ? Object.values(map).sort((a, b) => (a.ts || 0) - (b.ts || 0)) : [];
+  const addHit = useCallback((hit) => {
+    const id = 'hit_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e4);
+    window.RTDB.updatePath(PENDING_HITS, { [id]: Object.assign({ id, ts: Date.now() }, hit) });
+  }, []);
+  const removeHit = useCallback((id) => window.RTDB.updatePath(PENDING_HITS, { [id]: null }), []);
+  return { hits, addHit, removeHit };
+}
+/* Applique des dégâts (déjà ajustés par le MJ) à un ennemi : réduction armure/resmag puis pool HP. */
+function applyHitToEnemy(enemy, finalDmg, type) {
+  const dmg = mitigateDamage(Math.max(0, finalDmg | 0), type, { armure: enemy.armure || 0, resmag: enemy.resmag || 0 });
+  const res = applyDamageToPools({ hpCur: enemy.hpCur || 0, shield: 0 }, dmg);
+  window.RTDB.updatePath(`${ENEMIES}/${enemy.id}`, { hpCur: res.hpCur });
+  return { applied: dmg, hpCur: res.hpCur };
+}
+
 /* Snapshot live de tous les persos (vue MJ). */
 function useAllCharStates() {
   const [all, setAll] = useState(null);
@@ -185,4 +207,5 @@ Object.assign(window, {
   seedIfEmpty, charPath, CAMPAIGN, SHARED_INV, SHARED_COINS, moveItem, moveCoins,
   useSharedTurn, COMBAT_TURN,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
+  usePendingHits, applyHitToEnemy, PENDING_HITS,
 });

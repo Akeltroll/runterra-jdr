@@ -37,6 +37,12 @@
           },
           "enemies": {
             ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')"
+          },
+          "pendingHits": {
+            "$hitId": {
+              ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+              ".validate": "newData.hasChildren(['attackerId', 'targetId', 'computedDmg'])"
+            }
           }
         },
         "characters": {
