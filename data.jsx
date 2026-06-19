@@ -128,7 +128,7 @@ const CHARACTERS = [
   mkChar({ id:'urskaar', name:'Urskaar', player:'Baptiste', title:'Le Poing de Fer', cls:'Pugiliste',
     F:6, H:1, M:5, C:0, level:2, color:'var(--gold)', initial:'U', img:'players/urskaar.jpg',
     weaponId:'gantelet', weaponIds:['gantelet','dague','epeeni'], lethality:0, fatigue:1, eau:2,
-    hpCur:312/685, manaCur:30/180, shieldCur:0, shieldMax:200,
+    hpCur:312/685, manaCur:30/180, shieldCur:0, shieldMax:0,
     rune:null,
     buffs:['bravoure'],
     inv:[
@@ -142,7 +142,7 @@ const CHARACTERS = [
   mkChar({ id:'smith', name:'Smith', player:'Erwan', title:'La Lame Silencieuse', cls:'Duelliste',
     F:3, H:6, M:1, C:2, level:2, color:'var(--buff)', initial:'S', img:'players/smith.jpg',
     weaponId:'dague', weaponIds:['dague','epeeni'], lethality:0, fatigue:0, eau:3,
-    hpCur:1.0, manaCur:1.0, shieldCur:0, shieldMax:200,
+    hpCur:1.0, manaCur:1.0, shieldCur:0, shieldMax:0,
     rune:null,
     buffs:['peaufer'],
     inv:[
@@ -161,7 +161,7 @@ const CHARACTERS = [
   mkChar({ id:'lunick', name:'Elias Crowe', player:'Fab', title:'Capitaine corsaire', cls:'Navigateur arcanique',
     F:5, H:4, M:3, C:0, level:2, color:'var(--mana)', initial:'E', img:'players/Elias.png',
     weaponId:'relique', weaponIds:['relique','arbalete','dague','hachette'], lethality:0, fatigue:0, eau:1,
-    hpCur:1.0, manaCur:150/180, shieldCur:0, shieldMax:200,
+    hpCur:1.0, manaCur:150/180, shieldCur:0, shieldMax:0,
     rune:null,
     buffs:['foi'],
     inv:[
