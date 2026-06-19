@@ -25,17 +25,7 @@ function useMJEnemies() {
   return { enemies, addEnemy, updateEnemy, removeEnemy };
 }
 
-/* --- Compteur de tour (local au MJ, localStorage — fondation des futurs CD) --- */
-const TURN_KEY = 'runeterra_mj_turn';
-function loadTurn() {
-  const n = parseInt(localStorage.getItem(TURN_KEY) || '1', 10);
-  return (Number.isFinite(n) && n >= 1) ? n : 1;
-}
-function useMJTurn() {
-  const [turn, setTurn] = useState(loadTurn);
-  const persist = (n) => { const v = Math.max(1, n | 0); setTurn(v); try { localStorage.setItem(TURN_KEY, String(v)); } catch (e) {} };
-  return { turn, nextTurn: () => persist(turn + 1), prevTurn: () => persist(turn - 1), resetTurn: () => persist(1) };
-}
+/* Compteur de tour : migré en `useSharedTurn` (Firebase, partagé) — voir data-state.jsx. */
 
 /* Fusionne la définition du perso (règles) avec son état live (Firebase). */
 function mjLive(c, st) {
@@ -91,11 +81,17 @@ function MJSidebarRow({ c, st, active, onClick }) {
   );
 }
 
-function MJCompactCard({ c, st, onFull }) {
+function MJCompactCard({ c, st, turn, onFull }) {
   const L = mjLive(c, st);
   // < 25% PV → pulsation rouge ; < 50% → orange ; sinon bordure normale.
   const hpCls = L.hpPct < 25 ? 'mj-card-danger' : L.hpPct < 50 ? 'mj-card-warn' : '';
   const stats = [['ad', L.eff.ad], ['ap', L.eff.ap], ['armure', L.eff.armure], ['resmag', L.eff.resmag]];
+  // Compétences : charges (compteur du passif) + cooldowns actifs (lecture pour le MJ).
+  const kit = SKILLS[c.id];
+  const counters = (st && st.counters) || {};
+  const cooldowns = (st && st.cooldowns) || {};
+  const ctr = kit && kit.passive && kit.passive.counter;
+  const onCd = (kit && !kit.pending ? kit.actives : []).filter(sk => !cooldownReady(cooldowns[sk.id], turn));
   // Inventaire live (objet Firebase → tableau, items à qty>0) ; fallback sur l'inv. par défaut tant qu'aucun état.
   const inv = (st && st.inventory)
     ? Object.values(st.inventory).filter(it => (it.qty || 0) > 0)
@@ -142,6 +138,20 @@ function MJCompactCard({ c, st, onFull }) {
           }) : <span className="faint" style={{ fontSize:11 }}>Aucun</span>}
         </div>
       </div>
+      {/* compétences : charges + cooldowns (lecture MJ) */}
+      {kit && !kit.pending && (ctr || onCd.length > 0) && (
+        <div style={{ padding:'10px 16px', borderBottom:'1px solid var(--line)' }}>
+          <div className="overline" style={{ marginBottom:6 }}>Compétences</div>
+          <div className="row gap-2 wrap" style={{ alignItems:'center' }}>
+            {ctr && <span className="mono" style={{ fontSize:11, color:'var(--gold-pale)' }}>{ctr.label} : {counters[ctr.key] || 0}</span>}
+            {onCd.map(sk => (
+              <span key={sk.id} className="mono faint" style={{ fontSize:11 }}>
+                {sk.name} : {cooldowns[sk.id] === 999999 ? '1×/combat ✓' : 'tour ' + cooldowns[sk.id]}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {/* inventaire miniature — live (st.inventory) avec images, fallback sur l'inv. par défaut */}
       <div style={{ padding:'12px 16px' }}>
         <div className="overline" style={{ marginBottom:6 }}>Sac · {inv.length} objets</div>
@@ -278,7 +288,7 @@ function MJPage({ go }) {
   const [selected, setSelected] = useState('rathael');
   const [full, setFull] = useState(null);
   const { enemies, addEnemy, updateEnemy, removeEnemy } = useMJEnemies();
-  const { turn, nextTurn, prevTurn, resetTurn } = useMJTurn();
+  const { turn, nextTurn, prevTurn, resetCombat } = useSharedTurn();
   const [attacker, setAttacker] = useState(null); // ennemi en cours d'attaque (Task 4)
   const stOf = (id) => (all && all[id] && all[id].state) || null;
   return (
@@ -315,14 +325,14 @@ function MJPage({ go }) {
               <span className="mono" style={{ fontSize:13, color:'var(--gold-pale)', whiteSpace:'nowrap' }}>⏱ Tour {turn}</span>
               <button className="btn btn-sm btn-ghost" onClick={prevTurn} title="Tour précédent" style={{ padding:'4px 8px' }}>◂</button>
               <button className="btn btn-sm btn-gold" onClick={nextTurn} style={{ whiteSpace:'nowrap' }}>Fin de tour ▸</button>
-              <button className="btn btn-sm btn-ghost" onClick={resetTurn} title="Réinitialiser le compteur" style={{ padding:'4px 8px' }}>↺</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => { if (confirm('Nouveau combat : remettre le tour à 1 et vider toutes les charges + cooldowns ?')) resetCombat(); }} title="Nouveau combat (reset charges + cooldowns)" style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>⟲ Combat</button>
             </div>
             <ExportImportPanel />
           </div>
         </div>
         <div style={{ flex:1, overflow:'auto', padding:24 }}>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:16, alignItems:'start', paddingBottom:8 }}>
-            {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} onFull={() => setFull(c)} />)}
+            {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} turn={turn} onFull={() => setFull(c)} />)}
           </div>
           <div style={{ marginTop:28 }}>
             <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
