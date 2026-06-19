@@ -460,8 +460,3 @@ input, select { font-family: inherit; }
 }
 .mj-card-warn   { animation: mjPulseWarn 1.5s ease-in-out infinite; }
 .mj-card-danger { animation: mjPulseDanger 0.9s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) {
-  .mj-card-warn, .mj-card-danger { animation: none; }
-  .mj-card-warn   { border-color: #E8943A; }
-  .mj-card-danger { border-color: #E0463F; }
-}
