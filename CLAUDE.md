@@ -93,8 +93,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   écrit `hpCur`/`shield` du joueur ciblé en Firebase, KO à 0). Cartes : barre de bouclier
   **toujours affichée** (0/0 si vide) ; **pulsation du cadre** selon les PV (classe `mj-card-warn`
   orange < 50%, `mj-card-danger` rouge < 25% — keyframes CSS dans `runeterra.css`).
-  **Compteur de tour** dans l'en-tête (`useMJTurn`, local `localStorage` `runeterra_mj_turn` :
-  Fin de tour / précédent / réinitialiser) — fondation des futurs CD de compétences/runes.
+  **Compteur de tour PARTAGÉ** dans l'en-tête (`useSharedTurn`, Firebase `combat/turn` :
+  Fin de tour / précédent / **⟲ Combat** = reset tour + toutes charges/cooldowns) — pilote les CD
+  des compétences. Sous chaque carte joueur : ligne **charges + cooldowns actifs** (lecture MJ).
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
 - `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé) :
   rendu en **grille partagée** (`InventoryGrid`). Clic item → `ItemActionMenu` (Prendre / Éditer /
@@ -133,12 +134,22 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   affiché dans la rune **fondamentale** (rectangle en 2 sous-sections). **Stepper points bonus MJ**
   (staff only, `setField('runeBonus')`) pour tester/gérer la montée de niveau. Visible des 3 rôles,
   sélecteur de perso pour le staff. Logique pure dans `game-logic.js`.
+- `pages-competences.jsx` — onglet **Compétences** (`CompetencesPage`) : cast au clic (mana − coût,
+  pose le cooldown, **affiche les dégâts** que le MJ saisit dans « Subir »). Carte **Passif** (stepper de
+  compteur + effet de stat en vert) + cartes **Actives** (mana, badge CD, dégâts live, « Lancer »). Données
+  `SKILLS` (data.jsx) → `dmg*` pures de `game-logic.js` (transcrites des scripts `.gs`, **le script prime**).
+  Compteurs/cooldowns en `state/counters`+`state/cooldowns` (cooldown = **`readyAt`** = n° de tour de dispo) ;
+  variables d'attaque (1er coup / furtif / cases / cibles) en état local de carte. **Persos câblés** :
+  Elias/Smith/Urskaar/Jett ; **Rathael = carte « refonte MJ en cours »** (en pause). Passif calculable
+  (Elias +AD/charge, plat) branché via `sumPassiveMods`→`computeEffective`. Visible des 3 rôles, sélecteur
+  de perso pour le staff. Logique pure + testée dans `game-logic.js`.
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
   joueur = sa fiche seule, staff = tout ; `sharedInventory` = R/W pour tout participant
   inscrit, écriture au niveau `$itemId` ; `sharedCoins` = R/W tout participant inscrit,
-  `.validate` par dénomination (nombre ≥ 0).
+  `.validate` par dénomination (nombre ≥ 0) ; `combat/turn` = lecture tout inscrit, **écriture staff**
+  (nombre ≥ 1) — tour partagé des compétences.
 - `test/auth.test.js` — tests unitaires des helpers d'auth (`node --test`).
 - `test/game-logic.test.js` — tests unitaires (`node --test`).
 - `test/smoke.mjs` — test de démarrage Playwright (charge l'app réelle, teste le
@@ -162,9 +173,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     coinsInit: true   ← marqueur de migration (amorçage unique des pièces)
     runes:     { selected:{[nodeId]:true}, choices:{[nodeId]:'ad'|'ap'} }   ← arbre de runes (page Runes)
     runeBonus: 0   ← points de rune bonus accordés par le MJ (test / montée de niveau) ; budget = level + runeBonus
+    counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
+    cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
     { id, cat, name, sub, qty, ic, img, type, mods }
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
+/campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
 ```
 `type` = emplacement d'équipement (`EQUIP_TYPES` : helmet/chest/ring/weapon/accessory/…) ;
 vide = non équipable. Renseigné dans l'éditeur d'item quand `cat === 'Équipement'`.
@@ -228,6 +242,15 @@ Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
 ## État actuel (2026-06-19)
+- **Compétences (actif/passif)** — branche `feat/competences`, **prête, à merger/déployer.** Onglet
+  Compétences (`pages-competences.jsx`) : cast = mana − coût + cooldown + affichage des dégâts (le MJ
+  saisit dans « Subir »). Persos câblés : **Elias, Smith, Urskaar, Jett** (formules transcrites des
+  scripts `.gs`, le script prime) ; **Rathael en pause** (refonte MJ : trop de compteurs ; passif
+  base/effective non tranché). Tour **partagé** (`useSharedTurn`, `combat/turn`) pilote les cooldowns
+  (modèle `readyAt`) ; « ⟲ Combat » reset tout. Passif Elias (+AD/charge) branché sur `computeEffective`.
+  69 tests verts (logique pure). ⚠️ **RESTE EN CONSOLE FIREBASE : republier `database.rules.json`**
+  (ajout `combat/turn`) sinon le tour partagé est bloqué en écriture. Reste : vérif visuelle + merge.
+  (Spec/plan : `docs/superpowers/{specs,plans}/2026-06-*-competences*`.)
 - **Vue MJ — ennemis (v1)** : **mergé sur `main` et déployé.** Grille responsive (fin du scroll
   horizontal) + suivi d'ennemis locaux (`localStorage`, zéro Firebase). Logique de combat pure
   testée (`mitigateDamage`, `applyDamageToPools`, moteur Excel). Attaque ennemi→joueur écrit les
@@ -298,9 +321,12 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   monnaie vivante, paperdoll, `item.mods` branchés). Reste uniquement de la **saisie de contenu** :
   créer les **armures réelles** avec leur `type` + leurs `mods` (jusqu'ici seuls armes & accessoires
   ont un `type` câblé) — pas de dev, juste remplir `ITEM_CATALOG` / l'éditeur.
-- **Compétences** (gros chantier, design validé, voir specs) : kits dans `info-mj/`.
-  COMPLETS : Smith, Urskaar, Elias. **Manque : Rathael comp 4 ; Jett comp 3+4.**
-  Approche hybride : outil calcule dégâts/charges/CD/états, narratif = rappel.
+- **Compétences** : **implémentées** (Elias/Smith/Urskaar/Jett) sur `feat/competences`, voir « État
+  actuel » — reste merge + republication RTDB. **À FAIRE plus tard** : (1) **Rathael** quand le MJ aura
+  livré son fix de design (trop de compteurs ; passif +5%/charge base vs effective) — son passif pct
+  nécessitera p.-ê. d'étendre `sumPassiveMods`/`computeEffective` au bucket % ; (2) comps manquantes
+  (Rathael C4, Jett C3/C4) à ajouter dans `SKILLS` + `game-logic.js` ; (3) Phase 2 : auto-application
+  des dégâts aux ennemis (aujourd'hui le MJ saisit le nombre dans « Subir »).
 - **Arbre de runes** : **FAIT et déployé** (voir « État actuel »). Les 5 familles sont chiffrées
   (`RUNES`, data.jsx) et interactives. Reste seulement la validation MJ (capstone vs thématique,
   2 cellules tronquées).
