@@ -305,6 +305,34 @@
     };
   }
 
+  /* --- Combat (vue MJ ennemis) : reproduit le moteur Excel (Codes App Script) --- */
+  // Mitigation par armure / résistance magique. type ∈ {'physique','magique','brut'}.
+  // La léthalité réduit l'AR/RM prise en compte, sans passer sous 0. brut = aucune réduction.
+  function mitigateDamage(raw, type, defense, lethalite) {
+    const dmg = Math.max(0, Number(raw) || 0);
+    const leth = Math.max(0, Number(lethalite) || 0);
+    let stat;
+    if (type === 'physique') stat = Number((defense && defense.armure) || 0);
+    else if (type === 'magique') stat = Number((defense && defense.resmag) || 0);
+    else return dmg; // brut (ou type inconnu) : pas de mitigation
+    const eff = Math.max(0, stat - leth);
+    const reduction = eff / (eff + 120);
+    return Math.ceil(dmg * (1 - reduction));
+  }
+
+  // Applique des dégâts DÉJÀ mitigés : bouclier d'abord, puis HP. KO si HP atteint 0.
+  function applyDamageToPools(pools, degats) {
+    const hpCur = Math.max(0, Number((pools && pools.hpCur) || 0));
+    let shield = Math.max(0, Number((pools && pools.shield) || 0));
+    let d = Math.max(0, Number(degats) || 0);
+    if (shield > 0) {
+      if (d <= shield) return { hpCur, shield: shield - d, ko: false };
+      d -= shield; shield = 0;
+    }
+    if (d >= hpCur) return { hpCur: 0, shield, ko: true };
+    return { hpCur: hpCur - d, shield, ko: false };
+  }
+
   return {
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,
@@ -314,5 +342,6 @@
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,
+    mitigateDamage, applyDamageToPools,
   };
 });

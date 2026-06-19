@@ -3,6 +3,28 @@
    Sidebar joueurs + grille de fiches compactes, temps réel.
    ============================================================ */
 
+/* --- Ennemis (local au MJ, localStorage — zéro Firebase) --- */
+// Style de champ (le projet n'a pas de classe CSS d'input ; cf. InvItemRow).
+const ENEMY_FLD = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontSize:12, width:'100%', boxSizing:'border-box' };
+const ENEMIES_KEY = 'runeterra_mj_enemies';
+let _enemySeq = 0;
+function newEnemyId() { return 'enemy_' + Date.now().toString(36) + '_' + (_enemySeq++); }
+function makeEnemy(name) {
+  return { id: newEnemyId(), name: name || 'Ennemi', hpCur: 100, hpMax: 100, manaCur: 0, manaMax: 0, atk: 10 };
+}
+function loadEnemies() {
+  try { const a = JSON.parse(localStorage.getItem(ENEMIES_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+function useMJEnemies() {
+  const [enemies, setEnemies] = useState(loadEnemies);
+  const persist = (next) => { setEnemies(next); try { localStorage.setItem(ENEMIES_KEY, JSON.stringify(next)); } catch (e) {} };
+  const addEnemy = (name) => persist([...enemies, makeEnemy(name)]);
+  const updateEnemy = (id, patch) => persist(enemies.map(e => e.id === id ? { ...e, ...patch } : e));
+  const removeEnemy = (id) => persist(enemies.filter(e => e.id !== id));
+  return { enemies, addEnemy, updateEnemy, removeEnemy };
+}
+
 /* Fusionne la définition du perso (règles) avec son état live (Firebase). */
 function mjLive(c, st) {
   const buffs = st ? Object.keys(st.buffs || {}) : (c.buffs || []);
@@ -65,7 +87,7 @@ function MJCompactCard({ c, st, onFull }) {
     ? Object.values(st.inventory).filter(it => (it.qty || 0) > 0)
     : (c.inv || []);
   return (
-    <div className="panel" style={{ width:300, flex:'none', display:'flex', flexDirection:'column',
+    <div className="panel" style={{ display:'flex', flexDirection:'column',
       borderColor: danger ? 'rgba(200,48,42,.45)' : 'var(--line)' }}>
       {/* en-tête */}
       <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--line)', display:'flex', gap:11, alignItems:'center' }}>
@@ -125,10 +147,124 @@ function MJCompactCard({ c, st, onFull }) {
   );
 }
 
+function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
+  const [edit, setEdit] = useState(false);
+  const [subir, setSubir] = useState('');
+  const danger = enemy.hpMax > 0 && (enemy.hpCur / enemy.hpMax) * 100 < 40;
+  const num = (v) => Math.max(0, parseInt(v, 10) || 0);
+  const applySubir = () => {
+    const n = num(subir);
+    if (n <= 0) return;
+    onUpdate(enemy.id, { hpCur: Math.max(0, enemy.hpCur - n) });
+    setSubir('');
+  };
+
+  if (edit) {
+    const field = (label, key, full) => (
+      <label className="col" style={{ gap:4, flex: full ? '1 1 100%' : '1 1 45%' }}>
+        <span className="overline">{label}</span>
+        <input style={ENEMY_FLD} defaultValue={enemy[key]}
+          onChange={e => onUpdate(enemy.id, { [key]: key === 'name' ? e.target.value : num(e.target.value) })} />
+      </label>
+    );
+    return (
+      <div className="panel" style={{ display:'flex', flexDirection:'column', gap:10, padding:14 }}>
+        <div className="row wrap gap-2">
+          {field('Nom', 'name', true)}
+          {field('HP actuels', 'hpCur')}
+          {field('HP max', 'hpMax')}
+          {field('Mana actuel', 'manaCur')}
+          {field('Mana max', 'manaMax')}
+          {field("Dégât d'attaque", 'atk')}
+        </div>
+        <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
+          <button className="btn btn-sm btn-ghost" onClick={() => onRemove(enemy.id)} style={{ marginRight:'auto', color:'var(--debuff-bright)' }}>Supprimer</button>
+          <button className="btn btn-sm btn-gold" onClick={() => setEdit(false)}>OK</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel" style={{ display:'flex', flexDirection:'column',
+      borderColor: danger ? 'rgba(200,48,42,.45)' : 'var(--line)' }}>
+      <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:8 }}>
+        <span style={{ fontFamily:'var(--font-display)', fontSize:15, color:'var(--gold-pale)', flex:1, minWidth:0 }}>{enemy.name}</span>
+        <button className="btn btn-sm btn-ghost" onClick={() => setEdit(true)} title="Éditer" style={{ padding:'4px 8px' }}>✎</button>
+      </div>
+      <div className="col gap-2" style={{ padding:'12px 14px' }}>
+        <ResourceBar kind="hp" cur={enemy.hpCur} max={enemy.hpMax} />
+        {enemy.manaMax > 0 && <ResourceBar kind="mana" cur={enemy.manaCur} max={enemy.manaMax} />}
+      </div>
+      <div className="row gap-2" style={{ padding:'0 14px 14px', alignItems:'center' }}>
+        <button className="btn btn-sm btn-gold" onClick={() => onAttack(enemy)} style={{ whiteSpace:'nowrap' }}>⚔ Attaque</button>
+        <input placeholder="Subir…" value={subir}
+          onChange={e => setSubir(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') applySubir(); }}
+          style={{ ...ENEMY_FLD, width:70 }} />
+        <button className="btn btn-sm btn-ghost" onClick={applySubir} title="Appliquer les dégâts subis">🛡</button>
+      </div>
+    </div>
+  );
+}
+
+function EnemyAttackModal({ enemy, stOf, onClose }) {
+  const toast = useToast();
+  const [amount, setAmount] = useState(String(enemy.atk || 0));
+  const [type, setType] = useState('physique');
+  const [targetId, setTargetId] = useState(CHARACTERS[0] ? CHARACTERS[0].id : '');
+
+  const submit = () => {
+    const raw = Math.max(0, parseInt(amount, 10) || 0);
+    const c = CHARACTERS.find(x => x.id === targetId);
+    if (!c || raw <= 0) { onClose(); return; }
+    const L = mjLive(c, stOf(c.id));
+    const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag });
+    const res = applyDamageToPools({ hpCur: L.hp, shield: L.shield }, degats);
+    window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
+    toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
+      res.ko ? 'debuff' : 'gold');
+    onClose();
+  };
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="panel" onClick={e => e.stopPropagation()} style={{ width:'min(420px,100%)', padding:18, display:'flex', flexDirection:'column', gap:14 }}>
+        <h3 style={{ fontSize:17 }}>Attaque — {enemy.name}</h3>
+        <label className="col" style={{ gap:4 }}>
+          <span className="overline">Dégâts</span>
+          <input style={ENEMY_FLD} value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
+        </label>
+        <div className="col" style={{ gap:4 }}>
+          <span className="overline">Type</span>
+          <div className="row gap-2">
+            {['physique', 'magique', 'brut'].map(t => (
+              <button key={t} className={'btn btn-sm ' + (type === t ? 'btn-gold' : 'btn-ghost')}
+                onClick={() => setType(t)} style={{ flex:1, textTransform:'capitalize' }}>{t}</button>
+            ))}
+          </div>
+        </div>
+        <label className="col" style={{ gap:4 }}>
+          <span className="overline">Cible</span>
+          <select style={ENEMY_FLD} value={targetId} onChange={e => setTargetId(e.target.value)}>
+            {CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
+          <button className="btn btn-sm btn-ghost" onClick={onClose}>Annuler</button>
+          <button className="btn btn-sm btn-gold" onClick={submit}>Infliger</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MJPage({ go }) {
   const all = useAllCharStates();
   const [selected, setSelected] = useState('rathael');
   const [full, setFull] = useState(null);
+  const { enemies, addEnemy, updateEnemy, removeEnemy } = useMJEnemies();
+  const [attacker, setAttacker] = useState(null); // ennemi en cours d'attaque (Task 4)
   const stOf = (id) => (all && all[id] && all[id].state) || null;
   return (
     <div style={{ display:'grid', gridTemplateColumns:'264px 1fr', height:'100%', minHeight:0 }}>
@@ -157,20 +293,34 @@ function MJPage({ go }) {
         <div className="row" style={{ justifyContent:'space-between', padding:'16px 24px', borderBottom:'1px solid var(--line)' }}>
           <div>
             <h2 style={{ fontSize:21 }}>Tableau de bord</h2>
-            <span className="faint" style={{ fontSize:12 }}>Vue d'ensemble temps réel — faites défiler horizontalement</span>
+            <span className="faint" style={{ fontSize:12 }}>Vue d'ensemble temps réel</span>
           </div>
           <div className="row gap-2">
             <ExportImportPanel />
           </div>
         </div>
         <div style={{ flex:1, overflow:'auto', padding:24 }}>
-          <div className="row gap-4" style={{ alignItems:'stretch', minWidth:'min-content', paddingBottom:8 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:16, alignItems:'start', paddingBottom:8 }}>
             {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} onFull={() => setFull(c)} />)}
+          </div>
+          <div style={{ marginTop:28 }}>
+            <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+              <h3 style={{ fontSize:16 }}>Ennemis <span className="mono faint" style={{ fontSize:12 }}>· {enemies.length}</span></h3>
+              <button className="btn btn-sm btn-gold" onClick={() => addEnemy()}>+ Ajouter un ennemi</button>
+            </div>
+            {enemies.length === 0
+              ? <div className="faint" style={{ fontSize:12 }}>Aucun ennemi. Ajoutez-en un pour suivre ses HP en combat.</div>
+              : <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:16, alignItems:'start' }}>
+                  {enemies.map(e => (
+                    <EnemyCard key={e.id} enemy={e} onUpdate={updateEnemy} onRemove={removeEnemy} onAttack={setAttacker} />
+                  ))}
+                </div>}
           </div>
         </div>
       </main>
 
       {full && <FullScreenSheet char={full} onClose={() => setFull(null)} />}
+      {attacker && <EnemyAttackModal enemy={attacker} stOf={stOf} onClose={() => setAttacker(null)} />}
     </div>
   );
 }
