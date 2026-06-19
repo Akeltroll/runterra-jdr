@@ -333,6 +333,108 @@
     return { hpCur: hpCur - d, shield, ko: false };
   }
 
+  /* ============================================================
+     COMPÉTENCES (actif/passif) — logique pure
+     Source des formules : info-mj/Codes App Script.md (le script prime).
+     ============================================================ */
+
+  /* Dégâts de base d'une arme selon son type (cf. computeBaseDamage_ du Sheet). */
+  function skillBaseDamage(wType, eff) {
+    const ad = Math.floor((eff && eff.ad) || 0);
+    const ap = Math.floor((eff && eff.ap) || 0);
+    if (wType === 'Magique') return ap;
+    if (wType === 'Hybride') return Math.floor((ad + ap) / 2);
+    return ad; // Physique par défaut
+  }
+
+  /* Cooldown stocké comme « n° de tour de disponibilité » (readyAt). */
+  function cooldownReady(readyAt, currentTurn) {
+    if (readyAt == null) return true;
+    return currentTurn >= readyAt;
+  }
+  function nextReadyAt(currentTurn, cd) {
+    return currentTurn + (cd | 0);
+  }
+
+  /* --- Elias (Fab.gs) : passif Instinct du Chasseur (AD plat par charge) --- */
+  function eliasPassiveAD(level) { return 10 + 5 * ((level || 1) - 1); }
+  function eliasMaxStacks(level) { return 5 + Math.floor(((level || 1) - 1) / 3); }
+  function dmgEliasC1(wType, eff, firstHit) {
+    let d = skillBaseDamage(wType, eff);
+    if (firstHit) d = Math.floor(d * 1.25);
+    return d;
+  }
+  function dmgEliasC2(eff) { return Math.floor(50 + (eff.ad || 0)); }
+  function dmgEliasC3(eff) { return Math.floor(100 + 1.5 * (eff.ad || 0)); }
+  function dmgEliasC4(eff, nbTargets) { return Math.floor(50 + 2.0 * (eff.ad || 0)); }
+  function skillHeal(total, pct) { return Math.floor((total || 0) * (pct || 0)); }
+
+  /* --- Smith (Erwan.gs) --- */
+  function dmgSmithPassif(eff) { return Math.floor(50 + 0.5 * (eff.ap || 0)); }
+  function dmgSmithC1(wType, eff, furtif) {
+    let d = skillBaseDamage(wType, eff);
+    if (furtif) d = Math.floor(d * 1.5);
+    return d;
+  }
+  function dmgSmithC3(eff) { return Math.floor(50 + (eff.ad || 0)); }
+  function smithBleedPct(eff) { return 5 + Math.floor((eff.ad || 0) / 100) * 5; }
+
+  /* --- Urskaar (Baptiste.gs + kit C3/C4) : Voie de l'ours --- */
+  function bearBonusPct(moved) {
+    if (moved < 5) return 0;
+    return 150 + Math.floor((moved - 5) / 3) * 25;
+  }
+  function bearTranches(moved) {
+    if (moved < 5) return 0;
+    return 1 + Math.floor((moved - 5) / 3);
+  }
+  function dmgUrskaarC1(eff, side, moved) {
+    const base = Math.floor(eff.ad || 0);
+    if (side === 'droite') {
+      const pct = Math.max(150, bearBonusPct(moved));
+      return Math.floor(base * (pct / 100));
+    }
+    return base;
+  }
+  function dmgUrskaarC2(eff, moved) {
+    const t = bearTranches(moved);
+    return Math.floor((eff.ad || 0) * (1.5 + 0.25 * t));
+  }
+  function urskaarC3Shield(eff, hpMax) {
+    return Math.floor((0.30 + 0.10 * ((eff.ap || 0) / 50)) * (hpMax || 0));
+  }
+  function dmgUrskaarC4(eff, moved) {
+    const t = bearTranches(moved);
+    return Math.floor((eff.ad || 0) * (1 + 0.25 * t));
+  }
+
+  /* --- Jett (Steph.gs) : Nano-hextech --- */
+  function jettEngins(eff, isCrit) {
+    const ad = eff.ad || 0;
+    let n = 1;
+    if (ad >= 50) n++;
+    if (ad >= 125) n++;
+    if (ad >= 225) n++;
+    if (ad >= 375) n++;
+    return isCrit ? n * 2 : n;
+  }
+  function dmgJettPoison(eff) { return Math.floor(25 + 0.5 * (eff.ap || 0)); }
+  function dmgJettForce(eff) { return Math.floor(25 + 0.5 * (eff.ad || 0)); }
+  function dmgJettC2(eff) { return Math.floor(50 + 0.5 * (eff.ad || 0)); }
+  function healJettC2(eff) { return Math.floor(50 + 1.0 * (eff.ap || 0)); }
+
+  /* Passif calculable → mods plats (mergés dans computeEffective). Elias seul
+     pour l'instant ; Rathael (pct) en pause ; Jett/Smith/Urskaar = pas de bonus net. */
+  function sumPassiveMods(charId, counters, level) {
+    counters = counters || {};
+    if (charId === 'lunick') { // Elias — Instinct du Chasseur
+      const stacks = Math.max(0, counters.chasseur | 0);
+      if (!stacks) return {};
+      return { ad: stacks * eliasPassiveAD(level) };
+    }
+    return {};
+  }
+
   return {
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,
@@ -343,5 +445,11 @@
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,
     mitigateDamage, applyDamageToPools,
+    skillBaseDamage, cooldownReady, nextReadyAt,
+    eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
+    dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
+    bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
+    jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
+    sumPassiveMods,
   };
 });
