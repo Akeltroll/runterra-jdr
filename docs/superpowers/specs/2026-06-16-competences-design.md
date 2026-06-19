@@ -1,10 +1,11 @@
 # Compétences & maîtrise d'armes — analyse Excel + design
 
-> **Statut : design figé, EN PAUSE (re-cadré 2026-06-19).** Les kits sont désormais
-> disponibles (`info-mj/`). La direction de design est validée par l'utilisateur (JB),
-> mais **JB est joueur + admin, PAS le MJ** : on attend les réponses du MJ sur 3 points
-> (voir « Questions en attente ») avant d'implémenter. Source des formules = les scripts
-> `.gs` de `info-mj/Codes App Script.md`.
+> **Statut : VALIDÉ — implémentation lancée (2026-06-19) pour Urskaar / Smith / Jett /
+> Elias.** Le MJ (Woolost) a répondu (voir « Réponses du MJ »). **Rathael reste EN PAUSE** :
+> le MJ trouve qu'il cumule trop de compteurs (charges Glaciation + tours) et n'a pas tranché
+> base vs effective sur le passif → il doit un **fix de design**. On câble Rathael « à venir »
+> dans l'UI mais on n'implémente pas ses comps. Source des formules = les scripts `.gs` de
+> `info-mj/Codes App Script.md` (le **script prime** sur le texte des kits).
 
 ## Analyse de l'Excel / du moteur App Script
 
@@ -71,9 +72,11 @@ staff. ⚠️ **Republier `database.rules.json`** (comme pour `sharedCoins`).
 
 ## Périmètre & contenu (niv 2)
 
-Framework complet + kits dispo : Rathael (passif + C1/C2/C3), Urskaar (C1→C4), Smith
-(C1→C4), Jett (passif + C1/C2), Elias (C1→C4). Comps manquantes (Rathael C4, Jett C3/C4) =
-ajout ultérieur, le modèle les encaisse. Ignorer la section « Lunick » du `.md` (perso mort).
+**Implémenté maintenant :** Urskaar (C1→C4), Smith (C1→C4), Jett (passif + C1/C2), Elias
+(C1→C4). **Rathael = EN PAUSE** (passif + comps non implémentés ; carte « à venir » dans
+l'UI) tant que le MJ n'a pas livré son fix de design (trop de compteurs ; passif base/effective).
+Comps manquantes (Jett C3/C4) = ajout ultérieur, le modèle les encaisse. Ignorer la section
+« Lunick » du `.md` (perso mort).
 
 ## Kits — détail des passifs (compteurs)
 
@@ -87,15 +90,17 @@ ajout ultérieur, le modèle les encaisse. Ignorer la section « Lunick » du `.
   (≥225)+(≥375)` CN, ×2 si crit (cf. `calculerEnginsHextech`). Récup CN = +10 mana/CN.
 - **Smith — Flétrissement de la rose** : marques sur ennemis (propagation, +dégâts aux marqués).
 
-## Questions EN ATTENTE du MJ (à relayer)
+## Réponses du MJ (Woolost, 2026-06-19)
 
-1. **Éclat de l'Âme (Rathael C3)** : formule exacte des « dégâts ∝ charges dépensées » ?
-   (proposition de repli : `dégâts_Frappe-Irritée_base × 0,5 × charges`.)
-2. **Passif Rathael +5%/charge AR/RM** : sur l'AR/RM **de base** ou **effective** (amplifiée
-   par les items d'armure) ?
-3. **« Nouveau combat »** : remet bien à zéro compteurs + cooldowns + tour pour tous ?
-4. **Divergences kit↔script** (le script fait foi) : confirmer notamment les valeurs Jett
-   (`25+0.5·AP` / `25+0.5·AD`).
+1. **Nouveau combat** : ✅ reset de **toutes les charges à zéro**.
+2. **Le script prime** sur le texte des kits : ✅ confirmé (Jett suit `25+0.5·AP` / `25+0.5·AD`).
+3. **Rathael — trop de compteurs** : le MJ trouve qu'il cumule charges Glaciation + tours et
+   veut peut-être simplifier → **fix de design à venir**, Rathael reste en pause.
+4. **Passif Rathael +5%/charge** : pas tranché ; « pour le moment seulement sur les **stats de
+   base** (avant items) », mais le MJ **doit un fix**. (Moot tant que Rathael est en pause.)
+5. **Comp 1 Frappe Irritée** : scaling `×(1 + 0,2·charges)` confirmé (Rathael, donc plus tard).
+6. **Comp 2 Mur de Givre** : remarque pertinente mais = question d'équilibrage, à régler après
+   (Rathael, donc plus tard).
 
 ## Pour reprendre (une fois le MJ a répondu)
 
