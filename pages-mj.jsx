@@ -267,6 +267,48 @@ function EnemyAttackModal({ enemy, stOf, onClose }) {
   );
 }
 
+/* Une attaque en attente : dégâts pré-remplis éditables (le MJ ajuste à son d20) + type + appliquer/rejeter. */
+function PendingHitRow({ hit, enemies, onApply, onReject }) {
+  const enemy = enemies.find(e => e.id === hit.targetId);
+  const [dmg, setDmg] = useState(String(hit.computedDmg || 0));
+  const [type, setType] = useState(hit.type || 'physique');
+  return (
+    <div className="panel" style={{ padding:'10px 14px', display:'flex', flexDirection:'column', gap:8 }}>
+      <div className="row" style={{ justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
+        <span style={{ fontSize:13 }}><b className="gold">{hit.attackerName}</b> · {hit.skillName} → <b>{enemy ? enemy.name : '— cible disparue —'}</b></span>
+        <span className="mono faint" style={{ fontSize:11 }}>calculé : {hit.computedDmg}</span>
+      </div>
+      <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>
+        <input style={{ ...ENEMY_FLD, width:80 }} value={dmg} onChange={e => setDmg(e.target.value)} title="Dégâts (ajuste au d20)" />
+        <div className="row gap-1">
+          {['physique','magique','brut'].map(t => (
+            <button key={t} className={'btn btn-sm ' + (type===t ? 'btn-gold' : 'btn-ghost')} onClick={() => setType(t)} style={{ textTransform:'capitalize' }}>{t}</button>
+          ))}
+        </div>
+        <button className="btn btn-sm btn-gold" disabled={!enemy} onClick={() => onApply(hit, enemy, Math.max(0, parseInt(dmg,10)||0), type)} style={{ marginLeft:'auto' }}>Appliquer</button>
+        <button className="btn btn-sm btn-ghost" onClick={() => onReject(hit.id)}>Rejeter</button>
+      </div>
+    </div>
+  );
+}
+function PendingHitsPanel({ enemies }) {
+  const { hits, removeHit } = usePendingHits();
+  if (!hits.length) return null;
+  const apply = (hit, enemy, finalDmg, type) => {
+    const r = applyHitToEnemy(enemy, finalDmg, type);
+    toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
+    removeHit(hit.id);
+  };
+  return (
+    <div style={{ marginBottom:24 }}>
+      <h3 style={{ fontSize:16, marginBottom:12 }}>Attaques en attente <span className="mono faint" style={{ fontSize:12 }}>· {hits.length}</span></h3>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:12 }}>
+        {hits.map(h => <PendingHitRow key={h.id} hit={h} enemies={enemies} onApply={apply} onReject={removeHit} />)}
+      </div>
+    </div>
+  );
+}
+
 function MJPage({ go }) {
   const all = useAllCharStates();
   const [selected, setSelected] = useState('rathael');
@@ -317,6 +359,9 @@ function MJPage({ go }) {
         <div style={{ flex:1, overflow:'auto', padding:24 }}>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:16, alignItems:'start', paddingBottom:8 }}>
             {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} turn={turn} onFull={() => setFull(c)} />)}
+          </div>
+          <div style={{ marginTop:28 }}>
+            <PendingHitsPanel enemies={enemies} />
           </div>
           <div style={{ marginTop:28 }}>
             <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
