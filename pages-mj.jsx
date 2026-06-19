@@ -65,7 +65,7 @@ function MJCompactCard({ c, st, onFull }) {
     ? Object.values(st.inventory).filter(it => (it.qty || 0) > 0)
     : (c.inv || []);
   return (
-    <div className="panel" style={{ width:300, flex:'none', display:'flex', flexDirection:'column',
+    <div className="panel" style={{ display:'flex', flexDirection:'column',
       borderColor: danger ? 'rgba(200,48,42,.45)' : 'var(--line)' }}>
       {/* en-tête */}
       <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--line)', display:'flex', gap:11, alignItems:'center' }}>
@@ -157,14 +157,14 @@ function MJPage({ go }) {
         <div className="row" style={{ justifyContent:'space-between', padding:'16px 24px', borderBottom:'1px solid var(--line)' }}>
           <div>
             <h2 style={{ fontSize:21 }}>Tableau de bord</h2>
-            <span className="faint" style={{ fontSize:12 }}>Vue d'ensemble temps réel — faites défiler horizontalement</span>
+            <span className="faint" style={{ fontSize:12 }}>Vue d'ensemble temps réel</span>
           </div>
           <div className="row gap-2">
             <ExportImportPanel />
           </div>
         </div>
         <div style={{ flex:1, overflow:'auto', padding:24 }}>
-          <div className="row gap-4" style={{ alignItems:'stretch', minWidth:'min-content', paddingBottom:8 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:16, alignItems:'start', paddingBottom:8 }}>
             {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} onFull={() => setFull(c)} />)}
           </div>
         </div>
