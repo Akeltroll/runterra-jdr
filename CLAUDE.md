@@ -32,6 +32,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 
 ## Carte des fichiers
 - `index.html` — point d'entrée (scripts + shell `App` : identité, gating auth, routing).
+  Barre de nav avec champ `group` sur `PAGES` : `main` (barre), `more` (menu déroulant
+  « ⋯ Plus » : Journal + Progression, staff), `footer` (lien discret bas de page :
+  Design System, staff). Récap placé en avant-dernier (Admin reste dernier).
 - `game-logic.js` — **logique pure** (UMD : testable en Node + `window`). `clamp`,
   `clampGauge`, `DEFAULT_MODIFIERS`, `BUFF_STAT_MAP`, `computeEffective`,
   `applyHealMods`, `buildDefaultState`. Combat (vue MJ) : `mitigateDamage`
@@ -76,7 +79,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   constantes `INV_*`/`inv*` (styles/format/filtres/pièces).
 - `pages-sheet.jsx` — fiche joueur (3 colonnes, 3 variantes visuelles a/b/c).
   Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel, **inventaire perso
-  temps réel** (migration unique via marqueur `invInit`).
+  temps réel** (migration unique via marqueur `invInit`). **Arme affichée = celle équipée**
+  (slot `armePrincipale` de `state.equipment`, reliée à `WEAPONS` par nom ; repli `char.weaponId`).
+  Bourse **live** (`state.coins`, ordre cuivre→argent→or→platine). **HealPanel plafonne sur les
+  stats EFFECTIVES** (`eff.hp`/`eff.mana`, incluent runes/items/mods) — pas les stats de base.
 - `pages-mj.jsx` — tableau de bord MJ temps réel (`mjLive(c, st)` fusionne règles+état).
   Le mini-sac des cartes lit l'inventaire **live** (`st.inventory`, items qty>0, images
   `item.img`), fallback `c.inv`. Édition d'un joueur = bouton **⛶ plein écran** → `SheetBody`
@@ -84,7 +90,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   horizontal). **Section Ennemis** (locaux, `localStorage` `runeterra_mj_enemies` — zéro
   Firebase) : `useMJEnemies`, `EnemyCard` (HP/mana, édition inline, « Subir » = dégâts
   joueurs→ennemi), `EnemyAttackModal` (ennemi→joueur : `mitigateDamage`+`applyDamageToPools`,
-  écrit `hpCur`/`shield` du joueur ciblé en Firebase, KO à 0).
+  écrit `hpCur`/`shield` du joueur ciblé en Firebase, KO à 0). Cartes : barre de bouclier
+  **toujours affichée** (0/0 si vide) ; **pulsation du cadre** selon les PV (classe `mj-card-warn`
+  orange < 50%, `mj-card-danger` rouge < 25% — keyframes CSS dans `runeterra.css`).
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
 - `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé) :
   rendu en **grille partagée** (`InventoryGrid`). Clic item → `ItemActionMenu` (Prendre / Éditer /
@@ -218,13 +226,18 @@ Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
 ## État actuel (2026-06-19)
-- **Vue MJ — ennemis (v1)** (branche `feat/mj-ennemis`) : grille responsive (fin du scroll
+- **Vue MJ — ennemis (v1)** : **mergé sur `main` et déployé.** Grille responsive (fin du scroll
   horizontal) + suivi d'ennemis locaux (`localStorage`, zéro Firebase). Logique de combat pure
   testée (`mitigateDamage`, `applyDamageToPools`, moteur Excel). Attaque ennemi→joueur écrit les
   HP/bouclier du joueur ciblé en Firebase (type physique/magique/brut, bouclier d'abord, KO à 0) ;
   « Subir » baisse les HP de l'ennemi. 59 tests verts. **Zéro règle RTDB.** v2 éventuelle : plateau
-  partagé (joueurs voient les ennemis et cliquent). Reste : vérif visuelle + merge/déploiement.
-  (Spec/plan : `docs/superpowers/{specs,plans}/2026-06-19-vue-mj-ennemis*`.)
+  partagé (joueurs voient les ennemis et cliquent). (Spec/plan : `docs/superpowers/{specs,plans}/2026-06-19-vue-mj-ennemis*`.)
+- **Nav allégée** : Récap en avant-dernier ; Journal+Progression dans un menu « ⋯ Plus » ;
+  Design System en footer (staff). Mergé/déployé.
+- **Correctifs fiche (mergés/déployés)** : arme affichée = arme équipée (slot `armePrincipale`) ;
+  bourse live + ordre cuivre→platine ; **HealPanel plafonne sur les stats effectives** (corrige le
+  soin bridé à la valeur de base malgré les bonus runes/items). Bouclier max par défaut : 0 pour
+  Urskaar/Smith/Elias, 200 pour Rathäel/Jett. Pulsation du cadre des cartes MJ (orange < 50%, rouge < 25%).
 
 ## État précédent (2026-06-18)
 - **Arbre de runes (page Runes)** : **mergé sur `main` et déployé.** `RUNES` (5 familles, data.jsx) +
