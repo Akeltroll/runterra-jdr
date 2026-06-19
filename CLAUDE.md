@@ -60,9 +60,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `setInvItem`/`removeInvItem` + équipement `setEquipment` + monnaie `setCoin`), `useAllCharStates`,
   `useSharedInventory` (inventaire commun), `useSharedCoins` (monnaie commune), `useAuthIdentity`
   (identité + `/users/{uid}`, auto-inscription), `useAllUsers`, `setUserAssignment`,
-  `seedIfEmpty(role)` (réservé staff). Orchestrateurs de transfert RTDB `moveItem` (via
-  `planItemTransfer`) / `moveCoins`. Constantes `CAMPAIGN = 'campaign/runeterra'`,
-  `SHARED_INV`, `SHARED_COINS`.
+  `seedIfEmpty(role)` (réservé staff). Compétences : `setCounter`/`setCooldown` (sur `useCharState`),
+  `useSharedTurn` (tour partagé). **Plateau partagé** : `useMJEnemies` (ennemis Firebase), `usePendingHits`
+  (file d'attaques), orchestrateur `applyHitToEnemy` (`mitigateDamage`→`applyDamageToPools`→PV ennemi).
+  Orchestrateurs de transfert RTDB `moveItem` (via `planItemTransfer`) / `moveCoins`. Constantes
+  `CAMPAIGN = 'campaign/runeterra'`, `SHARED_INV`, `SHARED_COINS`, `COMBAT_TURN`, `ENEMIES`, `PENDING_HITS`.
 - `components.jsx` — UI partagée : `Avatar`, `ResourceBar`, `BuffBadge`, toasts
   (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), `LoginScreen`,
   `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`, `AttackModal`,
@@ -87,10 +89,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Le mini-sac des cartes lit l'inventaire **live** (`st.inventory`, items qty>0, images
   `item.img`), fallback `c.inv`. Édition d'un joueur = bouton **⛶ plein écran** → `SheetBody`
   (inventaire éditable, upload d'image inclus). Grille **responsive** (plus de scroll
-  horizontal). **Section Ennemis** (locaux, `localStorage` `runeterra_mj_enemies` — zéro
-  Firebase) : `useMJEnemies`, `EnemyCard` (HP/mana, édition inline, « Subir » = dégâts
-  joueurs→ennemi), `EnemyAttackModal` (ennemi→joueur : `mitigateDamage`+`applyDamageToPools`,
-  écrit `hpCur`/`shield` du joueur ciblé en Firebase, KO à 0). Cartes : barre de bouclier
+  horizontal). **Section Ennemis** (désormais **partagés en Firebase** `combat/enemies`, lecture
+  inscrits/écriture staff) : `useMJEnemies` (migré localStorage→Firebase, API inchangée),
+  `EnemyCard` (HP/mana/**armure/resmag** édition inline, « Subir » = dégâts joueurs→ennemi),
+  `EnemyAttackModal` (ennemi→joueur : `mitigateDamage`+`applyDamageToPools`, écrit `hpCur`/`shield`
+  du joueur ciblé en Firebase, KO à 0). **Section « Attaques en attente »** (`PendingHitsPanel`,
+  file `combat/pendingHits`) : un joueur cast une comp à dégâts → propose une attaque sur un ennemi
+  ciblé ; le MJ ajuste le nombre (son d20 Roll20) + le type, puis **Appliquer** (`applyHitToEnemy`)
+  ou **Rejeter**. Cartes : barre de bouclier
   **toujours affichée** (0/0 si vide) ; **pulsation du cadre** selon les PV (classe `mj-card-warn`
   orange < 50%, `mj-card-danger` rouge < 25% — keyframes CSS dans `runeterra.css`).
   **Compteur de tour PARTAGÉ** dans l'en-tête (`useSharedTurn`, Firebase `combat/turn` :
@@ -142,14 +148,18 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   variables d'attaque (1er coup / furtif / cases / cibles) en état local de carte. **Persos câblés** :
   Elias/Smith/Urskaar/Jett ; **Rathael = carte « refonte MJ en cours »** (en pause). Passif calculable
   (Elias +AD/charge, plat) branché via `sumPassiveMods`→`computeEffective`. Visible des 3 rôles, sélecteur
-  de perso pour le staff. Logique pure + testée dans `game-logic.js`.
+  de perso pour le staff. Logique pure + testée dans `game-logic.js`. **Plateau partagé** : bandeau
+  ennemis en lecture seule (`useMJEnemies`) + sélecteur de **cible** ; le cast d'une comp à dégâts
+  avec cible crée une attaque en attente (`usePendingHits.addHit`) que le MJ résout.
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
   joueur = sa fiche seule, staff = tout ; `sharedInventory` = R/W pour tout participant
   inscrit, écriture au niveau `$itemId` ; `sharedCoins` = R/W tout participant inscrit,
   `.validate` par dénomination (nombre ≥ 0) ; `combat/turn` = lecture tout inscrit, **écriture staff**
-  (nombre ≥ 1) — tour partagé des compétences.
+  (nombre ≥ 1) — tour partagé ; `combat/enemies` = lecture inscrits, **écriture staff** (ennemis
+  partagés) ; `combat/pendingHits` = lecture inscrits, **écriture tout inscrit** (un joueur propose
+  une attaque ; le staff applique/supprime).
 - `test/auth.test.js` — tests unitaires des helpers d'auth (`node --test`).
 - `test/game-logic.test.js` — tests unitaires (`node --test`).
 - `test/smoke.mjs` — test de démarrage Playwright (charge l'app réelle, teste le
@@ -179,6 +189,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     { id, cat, name, sub, qty, ic, img, type, mods }
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
 /campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
+/campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note } ; lecture inscrits, écriture staff
+/campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, targetId, ts } ; le MJ ajuste+applique
 ```
 `type` = emplacement d'équipement (`EQUIP_TYPES` : helmet/chest/ring/weapon/accessory/…) ;
 vide = non équipable. Renseigné dans l'éditeur d'item quand `cat === 'Équipement'`.
@@ -241,16 +253,20 @@ SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées
 Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
-## État actuel (2026-06-19)
-- **Compétences (actif/passif)** — branche `feat/competences`, **prête, à merger/déployer.** Onglet
-  Compétences (`pages-competences.jsx`) : cast = mana − coût + cooldown + affichage des dégâts (le MJ
-  saisit dans « Subir »). Persos câblés : **Elias, Smith, Urskaar, Jett** (formules transcrites des
-  scripts `.gs`, le script prime) ; **Rathael en pause** (refonte MJ : trop de compteurs ; passif
-  base/effective non tranché). Tour **partagé** (`useSharedTurn`, `combat/turn`) pilote les cooldowns
-  (modèle `readyAt`) ; « ⟲ Combat » reset tout. Passif Elias (+AD/charge) branché sur `computeEffective`.
-  69 tests verts (logique pure). ⚠️ **RESTE EN CONSOLE FIREBASE : republier `database.rules.json`**
-  (ajout `combat/turn`) sinon le tour partagé est bloqué en écriture. Reste : vérif visuelle + merge.
-  (Spec/plan : `docs/superpowers/{specs,plans}/2026-06-*-competences*`.)
+## État actuel (2026-06-20)
+- **Compétences (actif/passif) + Plateau partagé** — branche `feat/competences`, **prête, à
+  merger/déployer.** (1) Onglet Compétences (`pages-competences.jsx`) : cast = mana − coût + cooldown +
+  dégâts calculés. Persos câblés : **Elias, Smith, Urskaar, Jett** (formules des scripts `.gs`, le
+  script prime) ; **Rathael en pause** (refonte MJ). Tour **partagé** (`useSharedTurn`, `combat/turn`)
+  pilote les cooldowns (`readyAt`) ; « ⟲ Combat » reset tout. Passif Elias (+AD/charge) → `computeEffective`.
+  (2) **Plateau partagé** : ennemis migrés en Firebase (`combat/enemies`, lecture inscrits/écriture staff,
+  +armure/resmag) ; au cast d'une comp à dégâts le joueur **cible un ennemi** → attaque proposée
+  (`combat/pendingHits`) → la vue MJ l'**ajuste (d20) et applique** (`applyHitToEnemy`). 69 tests verts.
+  ⚠️ **RESTE EN CONSOLE FIREBASE : republier `database.rules.json`** (`combat/turn` + `combat/enemies` +
+  `combat/pendingHits`) sinon tour/ennemis/attaques bloqués. Reste : vérif visuelle connectée + merge.
+  **Hors périmètre, à faire** : buffs sur soi (SP3, stats temp combat effacées par « ⟲ Combat » ;
+  +30% PV max Urskaar C4 demandera un % sur PV max pour les skill-buffs). Specs/plans :
+  `docs/superpowers/{specs,plans}/2026-06-{16,19,20}-*` (compétences + plateau-partage).
 - **Vue MJ — ennemis (v1)** : **mergé sur `main` et déployé.** Grille responsive (fin du scroll
   horizontal) + suivi d'ennemis locaux (`localStorage`, zéro Firebase). Logique de combat pure
   testée (`mitigateDamage`, `applyDamageToPools`, moteur Excel). Attaque ennemi→joueur écrit les
