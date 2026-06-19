@@ -97,8 +97,8 @@ function InvItem({ item }) {
 /* --- Monnaie --- */
 function Coins({ coins, size='md' }) {
   const list = [
-    ['plat','coin-plat', coins.plat], ['or','coin-or', coins.or],
-    ['arg','coin-arg', coins.arg], ['cuiv','coin-cuiv', coins.cuiv],
+    ['cuiv','coin-cuiv', coins.cuiv], ['arg','coin-arg', coins.arg],
+    ['or','coin-or', coins.or], ['plat','coin-plat', coins.plat],
   ];
   return (
     <div className="coins wrap">

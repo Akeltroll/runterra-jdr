@@ -100,7 +100,7 @@ function SecondaryStats({ stats, variant }) {
 }
 
 /* ---- Colonne 3 : buffs + inventaire ---- */
-function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventory, onSaveItem, onRemoveItem, canEdit }) {
+function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventory, coins, onSaveItem, onRemoveItem, canEdit }) {
   const toast = useToast();
   const active = new Set(activeBuffs);
   const [catCat, setCatCat] = useState(null);   // catégorie pré-filtrée ; null = picker fermé
@@ -149,7 +149,7 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
             onRemove={onRemoveItem} onAdd={canEdit ? (cat) => setCatCat(cat) : undefined} />
           <div>
             <div className="overline" style={{ marginBottom:7 }}>Bourse</div>
-            <Coins coins={char.coins} />
+            <Coins coins={coins} />
           </div>
         </div>
       </div>
@@ -168,10 +168,9 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
 }
 
 /* ---- Colonne 2 : combat & armes ---- */
-function CombatColumn({ char, onAttack, hp, setHp, mana, setMana, shield, setShield, fatigue, eau, setField, activeBuffs }) {
+function CombatColumn({ char, weapon, eff, onAttack, hp, setHp, mana, setMana, shield, setShield, fatigue, eau, setField, activeBuffs }) {
   const [lethality, setLethality] = useState(char.lethality);
-  const weapon = WEAPONS.find(w => w.id === char.weaponId);
-  const power = weapon.stat === 'ap' ? char.stats.ap : char.stats.ad;
+  const power = weapon.stat === 'ap' ? eff.ap : eff.ad;
   const estimate = power;
   return (
     <div className="col gap-5">
@@ -299,6 +298,13 @@ function SheetBody({ char, variant }) {
   const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES));
   const eff = computeEffective(char.stats, state.modifiers, activeBuffs, mergeMods(itemMods, runeMods));
+  // Arme affichée = celle équipée dans le slot « Arme principale » (live), reliée à WEAPONS
+  // par son nom ; sinon item brut synthétisé ; sinon repli sur l'arme par défaut du perso.
+  const equippedId = state.equipment && state.equipment.armePrincipale;
+  const equippedItem = (equippedId && state.inventory) ? state.inventory[equippedId] : null;
+  const equippedWeapon = (equippedItem && WEAPONS.find(w => w.name === equippedItem.name))
+    || (equippedItem ? { name: equippedItem.name, ic: equippedItem.ic || '⚔', cat:'Physique', type:'—', stat:'ad' } : null)
+    || WEAPONS.find(w => w.id === char.weaponId);
   return (
     <div style={{ padding:'20px 24px' }}>
       <div style={{ display:'grid', gridTemplateColumns:'minmax(300px,1fr) minmax(300px,1fr) minmax(320px,1.05fr)', gap:20, alignItems:'start' }} className="sheet-grid">
@@ -316,12 +322,12 @@ function SheetBody({ char, variant }) {
           </div>
         </div>
         {/* COLONNE 2 — COMBAT */}
-        <CombatColumn char={char} onAttack={() => setModal(true)}
+        <CombatColumn char={char} weapon={equippedWeapon} eff={eff} onAttack={() => setModal(true)}
           hp={hp} setHp={setHp} mana={mana} setMana={setMana} shield={shield} setShield={setShield}
           fatigue={state.fatigue} eau={state.eau} setField={setField} activeBuffs={activeBuffs} />
         {/* COLONNE 3 — BUFFS + MODIFICATEURS + INVENTAIRE */}
         <BuffInvColumn char={char} activeBuffs={activeBuffs} setBuff={setBuff} setMod={setMod} modifiers={state.modifiers}
-          inventory={state.inventory} onSaveItem={setInvItem} onRemoveItem={removeInvItem} canEdit={canEdit} />
+          inventory={state.inventory} coins={state.coins || char.coins} onSaveItem={setInvItem} onRemoveItem={removeInvItem} canEdit={canEdit} />
       </div>
       {modal && <AttackModal char={char} onClose={() => setModal(false)} />}
     </div>
