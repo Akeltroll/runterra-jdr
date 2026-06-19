@@ -324,3 +324,46 @@ test('sumRuneMods ne somme que les plats et résout adp', () => {
 test('mergeMods additionne deux objets de mods', () => {
   assert.deepEqual(L.mergeMods({ hp:50, ad:10 }, { ad:20, ap:5 }), { hp:50, ad:30, ap:5 });
 });
+
+/* --- Combat (vue MJ ennemis) : mitigation Excel + bouclier/HP --- */
+test('mitigateDamage — physique : AR/(AR+120)', () => {
+  // AR=120 → réduction 0.5 → ceil(100*0.5)=50
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }), 50);
+});
+
+test('mitigateDamage — magique utilise resmag', () => {
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }), 50);
+});
+
+test('mitigateDamage — brut ignore toute défense', () => {
+  assert.equal(L.mitigateDamage(100, 'brut', { armure: 999, resmag: 999 }), 100);
+});
+
+test("mitigateDamage — léthalité réduit l'armure sans passer sous 0", () => {
+  // armure 50, léthalité 80 → AR efficace 0 → aucune réduction
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 50 }, 80), 100);
+});
+
+test('mitigateDamage — armure 0 = dégâts pleins', () => {
+  assert.equal(L.mitigateDamage(40, 'physique', { armure: 0 }), 40);
+});
+
+test('applyDamageToPools — bouclier absorbe tout, HP intacts', () => {
+  assert.deepEqual(L.applyDamageToPools({ hpCur: 100, shield: 30 }, 20),
+    { hpCur: 100, shield: 10, ko: false });
+});
+
+test('applyDamageToPools — excédent passe aux HP, bouclier à 0', () => {
+  assert.deepEqual(L.applyDamageToPools({ hpCur: 100, shield: 30 }, 50),
+    { hpCur: 80, shield: 0, ko: false });
+});
+
+test('applyDamageToPools — sans bouclier', () => {
+  assert.deepEqual(L.applyDamageToPools({ hpCur: 100, shield: 0 }, 40),
+    { hpCur: 60, shield: 0, ko: false });
+});
+
+test('applyDamageToPools — KO si dégâts >= HP', () => {
+  assert.deepEqual(L.applyDamageToPools({ hpCur: 40, shield: 0 }, 40),
+    { hpCur: 0, shield: 0, ko: true });
+});
