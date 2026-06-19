@@ -105,26 +105,30 @@
 
 <!-- Shell -->
 <script type="text/babel">
+/* group: 'main' (barre principale, défaut) | 'more' (menu « ⋯ Plus ») | 'footer' (lien discret bas de page). */
 const PAGES = [
   { id:'lobby',   label:'Accueil',      render:() => <LobbyPage go={setRoute} /> },
   { id:'mj',      label:'Vue MJ',       render:() => <MJPage go={setRoute} /> },
   { id:'sheet',   label:'Fiche Joueur', render:(auth) => <SheetPage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
-  { id:'journal', label:'Journal',      render:() => <JournalPage /> },
-  { id:'prog',    label:'Progression',  render:() => <ProgressionPage /> },
-  { id:'ds',      label:'Design System',render:() => <DesignSystemPage /> },
   { id:'equip',   label:'Équipement',   render:(auth) => <EquipPage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
   { id:'inv',     label:'Inventaire commun', render:() => <CommonInventoryPage /> },
-  { id:'recap',   label:'Récap',        render:() => <RecapPage /> },
   { id:'runes',   label:'Runes',        render:(auth) => <RuneTreePage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
+  { id:'recap',   label:'Récap',        render:() => <RecapPage /> },
   { id:'admin',   label:'Admin',        render:() => <AdminPage /> },
+  // secondaires : regroupés dans le menu « ⋯ Plus » (staff)
+  { id:'journal', label:'Journal',      group:'more', render:() => <JournalPage /> },
+  { id:'prog',    label:'Progression',  group:'more', render:() => <ProgressionPage /> },
+  // référence/dev : lien discret en footer (staff)
+  { id:'ds',      label:'Design System',group:'footer', render:() => <DesignSystemPage /> },
 ];
 let setRoute; // remonté par App pour la navigation depuis les pages
 
 function App() {
   const auth = useAuthIdentity();
   const [ready, setReady] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [route, _setRoute] = useState(() => localStorage.getItem('runeterra_route') || null);
-  setRoute = (r) => { _setRoute(r); localStorage.setItem('runeterra_route', r); };
+  setRoute = (r) => { _setRoute(r); localStorage.setItem('runeterra_route', r); setMoreOpen(false); };
 
   useEffect(() => { window.RTDB.ready.then(() => setReady(true)); }, []);
   useEffect(() => { if (auth.role) seedIfEmpty(auth.role); }, [auth.role]);
@@ -142,11 +146,15 @@ function App() {
     return <ToastProvider><PendingScreen username={auth.username} onSignOut={() => window.RTDB.signOut()} /></ToastProvider>;
   }
 
-  // Navigation filtrée par rôle.
+  // Navigation filtrée par rôle, puis répartie par groupe.
   const allowed = PAGES.filter(p => canSeePage(p.id, auth.role));
+  const mainPages   = allowed.filter(p => (p.group || 'main') === 'main');
+  const morePages   = allowed.filter(p => p.group === 'more');
+  const footerPages = allowed.filter(p => p.group === 'footer');
   const fallback = defaultRoute(auth.role);
   const activeId = allowed.some(p => p.id === route) ? route : fallback;
   const cur = allowed.find(p => p.id === activeId) || allowed[0];
+  const moreActive = morePages.some(p => p.id === activeId);
 
   return (
     <ToastProvider>
@@ -156,13 +164,35 @@ function App() {
           <span className="ttl">Chroniques de Runeterra</span>
         </div>
         <nav className="nav">
-          {allowed.map(p => (
+          {mainPages.map(p => (
             <button key={p.id} className={p.id === activeId ? 'active' : ''} onClick={() => setRoute(p.id)}>{p.label}</button>
           ))}
+          {morePages.length > 0 && (
+            <div style={{ position:'relative' }}>
+              <button className={moreActive ? 'active' : ''} onClick={() => setMoreOpen(o => !o)}>⋯ Plus</button>
+              {moreOpen && (
+                <React.Fragment>
+                  <div onClick={() => setMoreOpen(false)} style={{ position:'fixed', inset:0, zIndex:40 }} />
+                  <div style={{ position:'absolute', top:'100%', left:0, zIndex:50, marginTop:4, display:'flex', flexDirection:'column', minWidth:170, background:'var(--bg-inset)', border:'1px solid var(--line-gold)', borderRadius:6, overflow:'hidden', boxShadow:'0 8px 24px rgba(0,0,0,.55)' }}>
+                    {morePages.map(p => (
+                      <button key={p.id} className={p.id === activeId ? 'active' : ''} style={{ textAlign:'left', whiteSpace:'nowrap', borderRadius:0 }} onClick={() => setRoute(p.id)}>{p.label}</button>
+                    ))}
+                  </div>
+                </React.Fragment>
+              )}
+            </div>
+          )}
         </nav>
         <SignOutButton username={auth.username} role={auth.role} onSignOut={() => window.RTDB.signOut()} />
       </div>
       <div className="page hex-bg">{cur.render(auth)}</div>
+      {footerPages.length > 0 && (
+        <footer style={{ display:'flex', justifyContent:'center', gap:14, padding:'10px 16px', borderTop:'1px solid var(--line)', background:'var(--bg-inset)' }}>
+          {footerPages.map(p => (
+            <button key={p.id} onClick={() => setRoute(p.id)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:11, letterSpacing:.5, textTransform:'uppercase', color: p.id === activeId ? 'var(--gold-bright)' : 'var(--ink-dim)' }}>{p.label}</button>
+          ))}
+        </footer>
+      )}
     </ToastProvider>
   );
 }
