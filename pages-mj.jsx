@@ -3,27 +3,9 @@
    Sidebar joueurs + grille de fiches compactes, temps réel.
    ============================================================ */
 
-/* --- Ennemis (local au MJ, localStorage — zéro Firebase) --- */
+/* --- Ennemis : `useMJEnemies` migré en Firebase partagé (voir data-state.jsx). --- */
 // Style de champ (le projet n'a pas de classe CSS d'input ; cf. InvItemRow).
 const ENEMY_FLD = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontSize:12, width:'100%', boxSizing:'border-box' };
-const ENEMIES_KEY = 'runeterra_mj_enemies';
-let _enemySeq = 0;
-function newEnemyId() { return 'enemy_' + Date.now().toString(36) + '_' + (_enemySeq++); }
-function makeEnemy(name) {
-  return { id: newEnemyId(), name: name || 'Ennemi', hpCur: 100, hpMax: 100, manaCur: 0, manaMax: 0, atk: 10 };
-}
-function loadEnemies() {
-  try { const a = JSON.parse(localStorage.getItem(ENEMIES_KEY) || '[]'); return Array.isArray(a) ? a : []; }
-  catch (e) { return []; }
-}
-function useMJEnemies() {
-  const [enemies, setEnemies] = useState(loadEnemies);
-  const persist = (next) => { setEnemies(next); try { localStorage.setItem(ENEMIES_KEY, JSON.stringify(next)); } catch (e) {} };
-  const addEnemy = (name) => persist([...enemies, makeEnemy(name)]);
-  const updateEnemy = (id, patch) => persist(enemies.map(e => e.id === id ? { ...e, ...patch } : e));
-  const removeEnemy = (id) => persist(enemies.filter(e => e.id !== id));
-  return { enemies, addEnemy, updateEnemy, removeEnemy };
-}
 
 /* Compteur de tour : migré en `useSharedTurn` (Firebase, partagé) — voir data-state.jsx. */
 
@@ -200,6 +182,8 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
           {field('Mana actuel', 'manaCur')}
           {field('Mana max', 'manaMax')}
           {field("Dégât d'attaque", 'atk')}
+          {field('Armure', 'armure')}
+          {field('Rés. magique', 'resmag')}
         </div>
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => onRemove(enemy.id)} style={{ marginRight:'auto', color:'var(--debuff-bright)' }}>Supprimer</button>
