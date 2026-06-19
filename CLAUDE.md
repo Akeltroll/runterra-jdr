@@ -109,10 +109,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   3 rôles, **lecture seule, zéro Firebase, zéro règle RTDB**. Ajouter une séance = déposer les
   `.webp` dans `recaps/seance-XX/` + une entrée `RECAPS`.
 - `pages-runes.jsx` — onglet **Runes** (`RuneTreePage`) : arbre des 5 familles (data `RUNES`),
-  sélection stricte (points = niveau, ordre Mineure→Avancée→Fondamentale), persistée `state/runes`
-  (`setRuneSelected`/`setRuneChoice`/`resetRunes`). Bonus plats via `sumRuneMods`+`mergeMods` →
-  `computeEffective` (fiche/MJ/équip) ; conditionnel/actif en panneau « Rappels ». Toggle AD/AP
-  (clé `adp`). Visible des 3 rôles, sélecteur de perso pour le staff. Logique pure dans `game-logic.js`.
+  sélection stricte (budget = `level + runeBonus`, ordre Mineure→Avancée→Fondamentale), persistée
+  `state/runes` (`setRuneSelected`/`setRuneChoice`/`resetRunes`). Bonus plats via `sumRuneMods`+`mergeMods`
+  → `computeEffective` (fiche/MJ/équip) ; conditionnel/actif **et sous-effets non calculés** (champ
+  `note` : létalité Sadisme, renvoi Peau épineuse) en panneau « Rappels ». Toggle AD/AP (clé `adp`).
+  **Thématique** : la *condition* est en bas du cadre famille ; le *bonus* (capstone **par voie**) est
+  affiché dans la rune **fondamentale** (rectangle en 2 sous-sections). **Stepper points bonus MJ**
+  (staff only, `setField('runeBonus')`) pour tester/gérer la montée de niveau. Visible des 3 rôles,
+  sélecteur de perso pour le staff. Logique pure dans `game-logic.js`.
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
@@ -141,6 +145,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     coins:     { plat, or, arg, cuiv }   ← monnaie perso (entiers ≥ 0), via setCoin / moveCoins
     coinsInit: true   ← marqueur de migration (amorçage unique des pièces)
     runes:     { selected:{[nodeId]:true}, choices:{[nodeId]:'ad'|'ap'} }   ← arbre de runes (page Runes)
+    runeBonus: 0   ← points de rune bonus accordés par le MJ (test / montée de niveau) ; budget = level + runeBonus
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
     { id, cat, name, sub, qty, ic, img, type, mods }
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
@@ -207,12 +212,15 @@ Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
 ## État actuel (2026-06-18)
-- **Arbre de runes (page Runes)** (branche `feat/arbre-runes`) : `RUNES` (5 familles, data.jsx) +
+- **Arbre de runes (page Runes)** : **mergé sur `main` et déployé.** `RUNES` (5 familles, data.jsx) +
   logique pure testée (`game-logic.js` : `buildRuneIndex`, `runeBudget`, `runeSpent`, `canSelectRune`,
-  `canDeselectRune`, `sumRuneMods`, `mergeMods`) + persistance `state/runes` + page interactive
-  (`pages-runes.jsx`, sélection stricte / points / respec / toggle AD/AP / rappels, sélecteur perso staff)
-  + intégration stats aux 3 sites. 50 tests verts, syntaxe OK. **Aucune règle RTDB.** Reste : vérif
-  visuelle + merge/déploiement. (Spec/plan : `docs/superpowers/{specs,plans}/2026-06-18-arbre-runes*`.)
+  `canDeselectRune`, `sumRuneMods`, `mergeMods`) + persistance `state/runes` (+`runeBonus`) + page
+  interactive (`pages-runes.jsx`, sélection stricte / respec / toggle AD/AP / rappels incl. sous-effets,
+  thématique par voie dans la fondamentale + condition en bas, stepper points bonus MJ, sélecteur perso
+  staff) + intégration stats aux 3 sites. 50 tests verts. **Aucune règle RTDB.**
+  (Spec/plan : `docs/superpowers/{specs,plans}/2026-06-18-arbre-runes*`.)
+  **À confirmer MJ** : capstone par voie vs thématique −2 CD unique ; 2 cellules Excel tronquées
+  (Inspiration « Altruisme excessif » + 1er capstone Amélioration).
 - **Onglet Récap (résumés de séance + BD flipbook)** (branche `feat/recap-seances`) : `recaps.js`
   (`RECAPS`), `pages-recap.jsx` (`RecapPage`/`RecapBook`/`RecapLightbox` + `useMediaQuery`),
   dossier `recaps/seance-XX/`, `paginate()` (logique pure testée). Livre double page + flip CSS 3D
@@ -263,8 +271,9 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 - **Compétences** (gros chantier, design validé, voir specs) : kits dans `info-mj/`.
   COMPLETS : Smith, Urskaar, Elias. **Manque : Rathael comp 4 ; Jett comp 3+4.**
   Approche hybride : outil calcule dégâts/charges/CD/états, narratif = rappel.
-- **Arbre de runes** (style LoL, mockup `idée/`) : règles dans `info-mj/Système de Runes.md`.
-  **Manque** : effets chiffrés des runes des 4 familles hors Domination (~45 runes au total).
+- **Arbre de runes** : **FAIT et déployé** (voir « État actuel »). Les 5 familles sont chiffrées
+  (`RUNES`, data.jsx) et interactives. Reste seulement la validation MJ (capstone vs thématique,
+  2 cellules tronquées).
 - **Nouveau système d'attaques de base** (`info-mj/`) : catégories d'armes + propriétés +
   maîtrise (−25 % si non maîtrisée). **Remplace** l'ancienne idée ×1.5/×1.75.
 - **Journal de combat partagé** : écrire les attaques live dans Firebase (pas encore fait).
