@@ -80,15 +80,16 @@ function MJSidebarRow({ c, st, active, onClick }) {
 
 function MJCompactCard({ c, st, onFull }) {
   const L = mjLive(c, st);
-  const danger = L.hpPct < 40;
+  // < 25% PV → pulsation rouge ; < 50% → orange ; sinon bordure normale.
+  const hpCls = L.hpPct < 25 ? 'mj-card-danger' : L.hpPct < 50 ? 'mj-card-warn' : '';
   const stats = [['ad', L.eff.ad], ['ap', L.eff.ap], ['armure', L.eff.armure], ['resmag', L.eff.resmag]];
   // Inventaire live (objet Firebase → tableau, items à qty>0) ; fallback sur l'inv. par défaut tant qu'aucun état.
   const inv = (st && st.inventory)
     ? Object.values(st.inventory).filter(it => (it.qty || 0) > 0)
     : (c.inv || []);
   return (
-    <div className="panel" style={{ display:'flex', flexDirection:'column',
-      borderColor: danger ? 'rgba(200,48,42,.45)' : 'var(--line)' }}>
+    <div className={'panel' + (hpCls ? ' ' + hpCls : '')} style={{ display:'flex', flexDirection:'column',
+      borderColor: hpCls ? undefined : 'var(--line)' }}>
       {/* en-tête */}
       <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--line)', display:'flex', gap:11, alignItems:'center' }}>
         <Avatar char={c} size={42} radius={8} />
