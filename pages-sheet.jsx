@@ -210,7 +210,7 @@ function CombatColumn({ char, weapon, eff, onAttack, hp, setHp, mana, setMana, s
         </div>
       </div>
 
-      <HealPanel char={char} hp={hp} setHp={setHp} mana={mana} setMana={setMana} shield={shield} setShield={setShield} activeBuffs={activeBuffs} />
+      <HealPanel char={char} eff={eff} hp={hp} setHp={setHp} mana={mana} setMana={setMana} shield={shield} setShield={setShield} activeBuffs={activeBuffs} />
 
       <div className="panel">
         <div className="panel-head"><h3>Ressources de survie</h3><span className="overline">temps réel</span></div>
@@ -224,9 +224,10 @@ function CombatColumn({ char, weapon, eff, onAttack, hp, setHp, mana, setMana, s
 }
 
 /* ---- Panneau Soins & ressources (modifie l'état en temps réel) ---- */
-function HealPanel({ char, hp, setHp, mana, setMana, shield, setShield, activeBuffs }) {
+function HealPanel({ char, eff, hp, setHp, mana, setMana, shield, setShield, activeBuffs }) {
   const toast = useToast();
-  const maxHp = char.stats.hp, maxMana = char.stats.mana, maxShield = char.shieldMax;
+  // Plafonds = stats EFFECTIVES (incluent runes / items / modificateurs), pas les stats de base.
+  const maxHp = eff.hp, maxMana = eff.mana, maxShield = char.shieldMax;
   const [amt, setAmt] = useState(50);
   const clampV = (v, m) => Math.max(0, Math.min(m, Math.round(v)));
   const potHp = Math.round(15 + maxHp * 0.15);
