@@ -102,7 +102,7 @@ function MJCompactCard({ c, st, onFull }) {
       <div className="col gap-2" style={{ padding:'14px 16px' }}>
         <ResourceBar kind="hp" cur={L.hp} max={L.maxHp} />
         <ResourceBar kind="mana" cur={L.mana} max={L.maxMana} />
-        {L.shield > 0 && <ResourceBar kind="shield" cur={L.shield} max={c.shieldMax} />}
+        <ResourceBar kind="shield" cur={L.shield} max={c.shieldMax || 0} />
       </div>
       {/* survie */}
       <div className="row gap-2" style={{ padding:'0 16px 12px' }}>
