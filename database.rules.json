@@ -34,6 +34,9 @@
           "turn": {
             ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
             ".validate": "newData.isNumber() && newData.val() >= 1"
+          },
+          "enemies": {
+            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')"
           }
         },
         "characters": {

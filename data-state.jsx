@@ -63,6 +63,25 @@ function useSharedTurn() {
   return { turn, nextTurn: () => persist(turn + 1), prevTurn: () => persist(turn - 1), resetCombat };
 }
 
+/* Ennemis PARTAGÉS (Firebase). Lecture tout inscrit, écriture staff (règle combat/enemies).
+   API identique à l'ancien hook localStorage : la vue MJ ne change pas. */
+const ENEMIES = `${CAMPAIGN}/combat/enemies`;
+let _enemySeq = 0;
+function newEnemyId() { return 'enemy_' + Date.now().toString(36) + '_' + (_enemySeq++); }
+function makeEnemy(name) {
+  return { id: newEnemyId(), name: name || 'Ennemi', hpCur: 100, hpMax: 100,
+    manaCur: 0, manaMax: 0, atk: 10, armure: 0, resmag: 0, note: '' };
+}
+function useMJEnemies() {
+  const [map, setMap] = useState(null);
+  useEffect(() => window.RTDB.subscribePath(ENEMIES, (v) => setMap(v || {})), []);
+  const enemies = map ? Object.values(map).sort((a, b) => (a.id < b.id ? -1 : 1)) : [];
+  const addEnemy = useCallback((name) => { const e = makeEnemy(name); window.RTDB.updatePath(ENEMIES, { [e.id]: e }); }, []);
+  const updateEnemy = useCallback((id, patch) => window.RTDB.updatePath(`${ENEMIES}/${id}`, patch), []);
+  const removeEnemy = useCallback((id) => window.RTDB.updatePath(ENEMIES, { [id]: null }), []);
+  return { enemies, addEnemy, updateEnemy, removeEnemy };
+}
+
 /* Snapshot live de tous les persos (vue MJ). */
 function useAllCharStates() {
   const [all, setAll] = useState(null);
@@ -165,4 +184,5 @@ Object.assign(window, {
   useAuthIdentity, useAllUsers, setUserAssignment,
   seedIfEmpty, charPath, CAMPAIGN, SHARED_INV, SHARED_COINS, moveItem, moveCoins,
   useSharedTurn, COMBAT_TURN,
+  useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
 });
