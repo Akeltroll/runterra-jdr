@@ -25,6 +25,18 @@ function useMJEnemies() {
   return { enemies, addEnemy, updateEnemy, removeEnemy };
 }
 
+/* --- Compteur de tour (local au MJ, localStorage — fondation des futurs CD) --- */
+const TURN_KEY = 'runeterra_mj_turn';
+function loadTurn() {
+  const n = parseInt(localStorage.getItem(TURN_KEY) || '1', 10);
+  return (Number.isFinite(n) && n >= 1) ? n : 1;
+}
+function useMJTurn() {
+  const [turn, setTurn] = useState(loadTurn);
+  const persist = (n) => { const v = Math.max(1, n | 0); setTurn(v); try { localStorage.setItem(TURN_KEY, String(v)); } catch (e) {} };
+  return { turn, nextTurn: () => persist(turn + 1), prevTurn: () => persist(turn - 1), resetTurn: () => persist(1) };
+}
+
 /* Fusionne la définition du perso (règles) avec son état live (Firebase). */
 function mjLive(c, st) {
   const buffs = st ? Object.keys(st.buffs || {}) : (c.buffs || []);
@@ -265,6 +277,7 @@ function MJPage({ go }) {
   const [selected, setSelected] = useState('rathael');
   const [full, setFull] = useState(null);
   const { enemies, addEnemy, updateEnemy, removeEnemy } = useMJEnemies();
+  const { turn, nextTurn, prevTurn, resetTurn } = useMJTurn();
   const [attacker, setAttacker] = useState(null); // ennemi en cours d'attaque (Task 4)
   const stOf = (id) => (all && all[id] && all[id].state) || null;
   return (
@@ -296,7 +309,13 @@ function MJPage({ go }) {
             <h2 style={{ fontSize:21 }}>Tableau de bord</h2>
             <span className="faint" style={{ fontSize:12 }}>Vue d'ensemble temps réel</span>
           </div>
-          <div className="row gap-2">
+          <div className="row gap-3" style={{ alignItems:'center', flexWrap:'wrap' }}>
+            <div className="row gap-2" style={{ alignItems:'center', padding:'6px 10px', background:'var(--bg-inset)', border:'1px solid var(--line)', borderRadius:8 }}>
+              <span className="mono" style={{ fontSize:13, color:'var(--gold-pale)', whiteSpace:'nowrap' }}>⏱ Tour {turn}</span>
+              <button className="btn btn-sm btn-ghost" onClick={prevTurn} title="Tour précédent" style={{ padding:'4px 8px' }}>◂</button>
+              <button className="btn btn-sm btn-gold" onClick={nextTurn} style={{ whiteSpace:'nowrap' }}>Fin de tour ▸</button>
+              <button className="btn btn-sm btn-ghost" onClick={resetTurn} title="Réinitialiser le compteur" style={{ padding:'4px 8px' }}>↺</button>
+            </div>
             <ExportImportPanel />
           </div>
         </div>
