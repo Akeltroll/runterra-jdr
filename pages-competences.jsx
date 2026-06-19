@@ -133,6 +133,9 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
 function CompetencesBody({ char, staff }) {
   const { state, setField, setCounter, setCooldown } = useCharState(char.id);
   const { turn } = useSharedTurn();
+  const { enemies } = useMJEnemies();
+  const { addHit } = usePendingHits();
+  const [targetId, setTargetId] = useState('');
   if (!state) return <div className="panel" style={{ margin: 20, padding: 20 }}>Chargement…</div>;
 
   const kit = SKILLS[char.id];
@@ -165,7 +168,15 @@ function CompetencesBody({ char, staff }) {
     setField('manaCur', manaCur - cost);
     if (sk.kind === 'combat') setCooldown(sk.id, CD_LOCKED);
     else setCooldown(sk.id, nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));
-    toast(`<b>${char.name}</b> lance ${sk.name}`, 'buff');
+    // Comp à dégâts + cible choisie → propose une attaque au MJ (il ajuste au d20 puis applique).
+    const dmg = sk.dmg ? sk.dmg(eff, baseCtx) : null; // dégâts unitaires (multi-cibles : le MJ duplique/ajuste)
+    if (dmg != null && targetId) {
+      addHit({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
+        type: (wType === 'Magique' ? 'magique' : 'physique'), computedDmg: dmg, targetId });
+      toast(`<b>${char.name}</b> vise un ennemi avec ${sk.name} (${dmg}) — envoyé au MJ`, 'buff');
+    } else {
+      toast(`<b>${char.name}</b> lance ${sk.name}`, 'buff');
+    }
   }
 
   return (
@@ -174,6 +185,25 @@ function CompetencesBody({ char, staff }) {
         <h2 style={{ fontSize: 20 }}>Compétences — {char.name}</h2>
         <span className="badge" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>⏱ Tour {turn}</span>
       </div>
+      {enemies.length > 0 && (
+        <div className="panel" style={{ padding: '10px 14px' }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div className="overline" style={{ marginBottom: 6 }}>Ennemis en jeu</div>
+              <div className="row gap-3 wrap">
+                {enemies.map(e => <span key={e.id} className="mono" style={{ fontSize: 12, color: e.hpCur === 0 ? 'var(--faint)' : 'var(--ink)' }}>{e.name} · {e.hpCur}/{e.hpMax} PV</span>)}
+              </div>
+            </div>
+            <label className="row gap-2" style={{ alignItems: 'center', fontSize: 12.5 }}>Cible
+              <select value={targetId} onChange={e => setTargetId(e.target.value)}
+                style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '6px 9px', fontSize: 13 }}>
+                <option value="">— aucune —</option>
+                {enemies.filter(en => en.hpCur > 0).map(en => <option key={en.id} value={en.id}>{en.name} ({en.hpCur} PV)</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
       <PassiveCard kit={kitWithId} eff={eff} counters={counters} level={level} color={color} setCounter={setCounter} />
       <div className="comp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
         {kit.actives.map(sk => (
