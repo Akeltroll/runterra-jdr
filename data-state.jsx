@@ -37,8 +37,30 @@ function useCharState(charId) {
     window.RTDB.updatePath(`${charPath(charId)}/runes/choices`, { [nodeId]: choice || null }), [charId]);
   const resetRunes = useCallback(() =>
     window.RTDB.setPath(`${charPath(charId)}/runes`, null), [charId]);
+  // Compétences : compteurs (charges/marques/CN/tranches) + cooldowns (readyAt = n° de tour).
+  const setCounter  = useCallback((key, value) =>
+    window.RTDB.updatePath(`${charPath(charId)}/counters`, { [key]: Math.max(0, value | 0) || null }), [charId]);
+  const setCooldown = useCallback((skillId, readyAt) =>
+    window.RTDB.updatePath(`${charPath(charId)}/cooldowns`, { [skillId]: readyAt || null }), [charId]);
   return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment, setCoin,
-    setRuneSelected, setRuneChoice, resetRunes };
+    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown };
+}
+
+/* Compteur de tour PARTAGÉ (combat). Écriture staff (règle RTDB combat/turn).
+   « Nouveau combat » = remet le tour à 1 et purge compteurs + cooldowns de tous. */
+const COMBAT_TURN = `${CAMPAIGN}/combat/turn`;
+function useSharedTurn() {
+  const [turn, setTurn] = useState(1);
+  useEffect(() => window.RTDB.subscribePath(COMBAT_TURN, (v) => setTurn(Number.isFinite(v) && v >= 1 ? v : 1)), []);
+  const persist = useCallback((n) => window.RTDB.setPath(COMBAT_TURN, Math.max(1, n | 0)), []);
+  const resetCombat = useCallback(() => {
+    window.RTDB.setPath(COMBAT_TURN, 1);
+    CHARACTERS.forEach((c) => {
+      window.RTDB.setPath(`${charPath(c.id)}/counters`, null);
+      window.RTDB.setPath(`${charPath(c.id)}/cooldowns`, null);
+    });
+  }, []);
+  return { turn, nextTurn: () => persist(turn + 1), prevTurn: () => persist(turn - 1), resetCombat };
 }
 
 /* Snapshot live de tous les persos (vue MJ). */
@@ -142,4 +164,5 @@ Object.assign(window, {
   useCharState, useAllCharStates, useSharedInventory, useSharedCoins,
   useAuthIdentity, useAllUsers, setUserAssignment,
   seedIfEmpty, charPath, CAMPAIGN, SHARED_INV, SHARED_COINS, moveItem, moveCoins,
+  useSharedTurn, COMBAT_TURN,
 });
