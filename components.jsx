@@ -150,6 +150,29 @@ function ToastProvider({ children }) {
 }
 const useToast = () => React.useContext(ToastCtx);
 
+/* --- Journal de combat (partagé, lecture seule) --- */
+function CombatLog({ canClear }) {
+  const { entries, clearLog } = useCombatLog();
+  const COL = { gold: 'var(--gold-pale)', buff: 'var(--buff-bright)', debuff: 'var(--debuff-bright)' };
+  return (
+    <div className="panel" style={{ padding:'12px 14px' }}>
+      <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <div className="overline">Journal de combat</div>
+        {canClear && entries.length > 0 && <button className="btn btn-sm btn-ghost" onClick={clearLog}>Vider</button>}
+      </div>
+      {entries.length === 0
+        ? <div style={{ fontSize:12, color:'var(--ink-faint)' }}>Aucun événement.</div>
+        : <div className="col gap-1" style={{ maxHeight:220, overflow:'auto' }}>
+            {entries.map(e => (
+              <div key={e.id} style={{ fontSize:12.5, lineHeight:1.5, color: COL[e.kind] || 'var(--ink)' }}>
+                {renderToastMsg(e.text)}
+              </div>
+            ))}
+          </div>}
+    </div>
+  );
+}
+
 /* --- Annotation dev (pin numéroté + tooltip) --- */
 function AnnoPin({ n, note, style }) {
   return (
@@ -741,5 +764,5 @@ Object.assign(window, {
   ToastProvider, useToast, AnnoPin, AttackModal, STAT_GLYPH, STAT_LABEL,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
   InventoryGrid, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invThumbStyle,
-  AmountStepper, ItemActionMenu, ItemCatalogPicker,
+  AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog,
 });

@@ -212,6 +212,7 @@ function CompetencesBody({ char, staff }) {
             manaCur={state.manaCur || 0} onCast={() => cast(sk)} />
         ))}
       </div>
+      <CombatLog canClear={false} />
     </div>
   );
 }

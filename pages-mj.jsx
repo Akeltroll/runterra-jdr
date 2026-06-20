@@ -232,6 +232,7 @@ function EnemyAttackModal({ enemy, stOf, onClose }) {
     window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
     toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
       res.ko ? 'debuff' : 'gold');
+    pushLog(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`, res.ko ? 'debuff' : 'gold');
     onClose();
   };
 
@@ -297,6 +298,7 @@ function PendingHitsPanel({ enemies }) {
   const apply = (hit, enemy, finalDmg, type) => {
     const r = applyHitToEnemy(enemy, finalDmg, type);
     toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
+    pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
     removeHit(hit.id);
   };
   return (
@@ -375,6 +377,9 @@ function MJPage({ go }) {
                     <EnemyCard key={e.id} enemy={e} onUpdate={updateEnemy} onRemove={removeEnemy} onAttack={setAttacker} />
                   ))}
                 </div>}
+          </div>
+          <div style={{ marginTop:28 }}>
+            <CombatLog canClear={true} />
           </div>
         </div>
       </main>
