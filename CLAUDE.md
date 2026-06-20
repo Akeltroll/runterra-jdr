@@ -60,13 +60,17 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `setInvItem`/`removeInvItem` + équipement `setEquipment` + monnaie `setCoin`), `useAllCharStates`,
   `useSharedInventory` (inventaire commun), `useSharedCoins` (monnaie commune), `useAuthIdentity`
   (identité + `/users/{uid}`, auto-inscription), `useAllUsers`, `setUserAssignment`,
-  `seedIfEmpty(role)` (réservé staff). Compétences : `setCounter`/`setCooldown` (sur `useCharState`),
-  `useSharedTurn` (tour partagé). **Plateau partagé** : `useMJEnemies` (ennemis Firebase), `usePendingHits`
-  (file d'attaques), orchestrateur `applyHitToEnemy` (`mitigateDamage`→`applyDamageToPools`→PV ennemi).
-  Orchestrateurs de transfert RTDB `moveItem` (via `planItemTransfer`) / `moveCoins`. Constantes
-  `CAMPAIGN = 'campaign/runeterra'`, `SHARED_INV`, `SHARED_COINS`, `COMBAT_TURN`, `ENEMIES`, `PENDING_HITS`.
+  `seedIfEmpty(role)` (réservé staff). Compétences : `setCounter`/`setCooldown`/**`setSkillBuff`** (sur
+  `useCharState` ; `setSkillBuff(skillId, mods)` = buff sur soi, snapshot de mods plats).
+  `useSharedTurn` (tour partagé ; `resetCombat` efface aussi `skillBuffs` + `combat/log`). **Plateau partagé** :
+  `useMJEnemies` (ennemis Firebase), `usePendingHits` (file d'attaques), orchestrateur `applyHitToEnemy`
+  (`mitigateDamage`→`applyDamageToPools`→PV ennemi) ; **journal** `pushLog(text,kind)`/`useCombatLog()`
+  (`combat/log`, ~30 derniers). Orchestrateurs de transfert RTDB `moveItem` (via `planItemTransfer`) /
+  `moveCoins`. Constantes `CAMPAIGN = 'campaign/runeterra'`, `SHARED_INV`, `SHARED_COINS`, `COMBAT_TURN`,
+  `ENEMIES`, `PENDING_HITS`, `COMBAT_LOG`.
 - `components.jsx` — UI partagée : `Avatar`, `ResourceBar`, `BuffBadge`, toasts
-  (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), `LoginScreen`,
+  (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), **`CombatLog`** (journal de combat
+  partagé lecture seule, lit `useCombatLog` ; prop `canClear` = bouton « Vider » staff), `LoginScreen`,
   `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`, `AttackModal`,
   `InvItemRow` + `InventoryPanel` (inventaire éditable réutilisable). L'éditeur
   `InvItemRow` permet de **téléverser une image** (`downscaleImageToDataURL`, max 128px,
@@ -100,8 +104,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   **toujours affichée** (0/0 si vide) ; **pulsation du cadre** selon les PV (classe `mj-card-warn`
   orange < 50%, `mj-card-danger` rouge < 25% — keyframes CSS dans `runeterra.css`).
   **Compteur de tour PARTAGÉ** dans l'en-tête (`useSharedTurn`, Firebase `combat/turn` :
-  Fin de tour / précédent / **⟲ Combat** = reset tour + toutes charges/cooldowns) — pilote les CD
-  des compétences. Sous chaque carte joueur : ligne **charges + cooldowns actifs** (lecture MJ).
+  Fin de tour / précédent / **⟲ Combat** = reset tour + toutes charges/cooldowns + skillBuffs + journal)
+  — pilote les CD des compétences. Sous chaque carte joueur : ligne **charges + cooldowns actifs**
+  (lecture MJ). **`CombatLog`** (journal de combat partagé) affiché sous le plateau, « Vider » staff ;
+  `pushLog` alimenté à la résolution joueur→ennemi (`PendingHitsPanel`) et ennemi→joueur (`EnemyAttackModal`).
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
 - `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé) :
   rendu en **grille partagée** (`InventoryGrid`). Clic item → `ItemActionMenu` (Prendre / Éditer /
@@ -150,7 +156,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (Elias +AD/charge, plat) branché via `sumPassiveMods`→`computeEffective`. Visible des 3 rôles, sélecteur
   de perso pour le staff. Logique pure + testée dans `game-logic.js`. **Plateau partagé** : bandeau
   ennemis en lecture seule (`useMJEnemies`) + sélecteur de **cible** ; le cast d'une comp à dégâts
-  avec cible crée une attaque en attente (`usePendingHits.addHit`) que le MJ résout.
+  avec cible crée une attaque en attente (`usePendingHits.addHit`) que le MJ résout. **Buffs sur soi** :
+  une comp avec `selfBuff` (% de la stat de base) écrit `state/skillBuffs` (mods plats) → panneau
+  **« Effets de combat actifs » en orange** (`--skillbuff`) + boost en temps réel via `sumSkillBuffs`→
+  `computeEffective` ; une comp avec `shield` ajoute le bouclier au pool au cast. **Journal de combat**
+  (`CombatLog`, lecture seule) affiché en bas.
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
@@ -159,7 +169,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `.validate` par dénomination (nombre ≥ 0) ; `combat/turn` = lecture tout inscrit, **écriture staff**
   (nombre ≥ 1) — tour partagé ; `combat/enemies` = lecture inscrits, **écriture staff** (ennemis
   partagés) ; `combat/pendingHits` = lecture inscrits, **écriture tout inscrit** (un joueur propose
-  une attaque ; le staff applique/supprime).
+  une attaque ; le staff applique/supprime) ; `combat/log` = lecture+**écriture tout inscrit**
+  (`.validate` `text` string) — journal de combat partagé.
 - `test/auth.test.js` — tests unitaires des helpers d'auth (`node --test`).
 - `test/game-logic.test.js` — tests unitaires (`node --test`).
 - `test/smoke.mjs` — test de démarrage Playwright (charge l'app réelle, teste le
@@ -185,12 +196,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     runeBonus: 0   ← points de rune bonus accordés par le MJ (test / montée de niveau) ; budget = level + runeBonus
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
+    skillBuffs: { [skillId]: { [stat]: n } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; effacés par « ⟲ Combat »
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
     { id, cat, name, sub, qty, ic, img, type, mods }
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
 /campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
 /campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note } ; lecture inscrits, écriture staff
 /campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, targetId, ts } ; le MJ ajuste+applique
+/campaign/runeterra/combat/log/{id}   ← journal de combat PARTAGÉ { id, ts, text, kind:'gold'|'buff'|'debuff' } ; lecture+écriture tout inscrit ; ~30 derniers ; vidé par « ⟲ Combat »
 ```
 `type` = emplacement d'équipement (`EQUIP_TYPES` : helmet/chest/ring/weapon/accessory/…) ;
 vide = non équipable. Renseigné dans l'éditeur d'item quand `cat === 'Équipement'`.
@@ -261,12 +274,17 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   pilote les cooldowns (`readyAt`) ; « ⟲ Combat » reset tout. Passif Elias (+AD/charge) → `computeEffective`.
   (2) **Plateau partagé** : ennemis migrés en Firebase (`combat/enemies`, lecture inscrits/écriture staff,
   +armure/resmag) ; au cast d'une comp à dégâts le joueur **cible un ennemi** → attaque proposée
-  (`combat/pendingHits`) → la vue MJ l'**ajuste (d20) et applique** (`applyHitToEnemy`). 69 tests verts.
+  (`combat/pendingHits`) → la vue MJ l'**ajuste (d20) et applique** (`applyHitToEnemy`).
+  (3) **Buffs sur soi + journal de combat** (SP3, empilé) : `combat/log` (journal partagé `pushLog`/
+  `useCombatLog`, composant `CombatLog` sous le plateau MJ + bas de Compétences, vidé par « ⟲ Combat ») ;
+  `state/skillBuffs` (mods plats snapshotés au cast — Urskaar C4 +30% PV/AD/Armure de base, **PV max
+  agrandi sans soin**) sommés (`sumSkillBuffs`) dans `computeEffective` → boost live, **couleur orange
+  `--skillbuff`** (panneau Compétences + stats Équipement) ; Urskaar C3 ajoute son bouclier au pool au cast.
+  70 tests verts (esbuild + chargement headless OK).
   ⚠️ **RESTE EN CONSOLE FIREBASE : republier `database.rules.json`** (`combat/turn` + `combat/enemies` +
-  `combat/pendingHits`) sinon tour/ennemis/attaques bloqués. Reste : vérif visuelle connectée + merge.
-  **Hors périmètre, à faire** : buffs sur soi (SP3, stats temp combat effacées par « ⟲ Combat » ;
-  +30% PV max Urskaar C4 demandera un % sur PV max pour les skill-buffs). Specs/plans :
-  `docs/superpowers/{specs,plans}/2026-06-{16,19,20}-*` (compétences + plateau-partage).
+  `combat/pendingHits` + **`combat/log`**) sinon tour/ennemis/attaques/journal bloqués. Reste : vérif
+  visuelle connectée + merge. Specs/plans :
+  `docs/superpowers/{specs,plans}/2026-06-{16,19,20}-*` (compétences + plateau-partage + buffs/journal).
 - **Vue MJ — ennemis (v1)** : **mergé sur `main` et déployé.** Grille responsive (fin du scroll
   horizontal) + suivi d'ennemis locaux (`localStorage`, zéro Firebase). Logique de combat pure
   testée (`mitigateDamage`, `applyDamageToPools`, moteur Excel). Attaque ennemi→joueur écrit les
@@ -348,7 +366,7 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   2 cellules tronquées).
 - **Nouveau système d'attaques de base** (`info-mj/`) : catégories d'armes + propriétés +
   maîtrise (−25 % si non maîtrisée). **Remplace** l'ancienne idée ×1.5/×1.75.
-- **Journal de combat partagé** : écrire les attaques live dans Firebase (pas encore fait).
+- **Journal de combat partagé** : **FAIT** (`combat/log`, `CombatLog` ; voir « État actuel »).
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
 - `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/
