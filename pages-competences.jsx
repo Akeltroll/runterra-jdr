@@ -131,7 +131,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
 }
 
 function CompetencesBody({ char, staff }) {
-  const { state, setField, setCounter, setCooldown } = useCharState(char.id);
+  const { state, setField, setCounter, setCooldown, setSkillBuff } = useCharState(char.id);
   const { turn } = useSharedTurn();
   const { enemies } = useMJEnemies();
   const { addHit } = usePendingHits();
@@ -168,6 +168,18 @@ function CompetencesBody({ char, staff }) {
     setField('manaCur', manaCur - cost);
     if (sk.kind === 'combat') setCooldown(sk.id, CD_LOCKED);
     else setCooldown(sk.id, nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));
+    // Buff sur soi : snapshot des mods plats (% de la stat de base) → effet de combat orange.
+    if (sk.selfBuff) {
+      const flat = {};
+      Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (char.stats[k] || 0)); if (f) flat[k] = f; });
+      setSkillBuff(sk.id, flat);
+      toast(`<b>${char.name}</b> — ${sk.name} actif (effet de combat)`, 'gold');
+    }
+    // Bouclier au cast (one-shot, ajouté au pool).
+    if (sk.shield) {
+      const sh = sk.shield(eff, baseCtx);
+      if (sh) { setField('shield', (state.shield || 0) + sh); toast(`<b>${char.name}</b> gagne ${sh} bouclier`, 'gold'); }
+    }
     // Comp à dégâts + cible choisie → propose une attaque au MJ (il ajuste au d20 puis applique).
     const dmg = sk.dmg ? sk.dmg(eff, baseCtx) : null; // dégâts unitaires (multi-cibles : le MJ duplique/ajuste)
     if (dmg != null && targetId) {
@@ -204,6 +216,19 @@ function CompetencesBody({ char, staff }) {
           </div>
         </div>
       )}
+      {(() => {
+        const sb = sumSkillBuffs(state.skillBuffs || {});
+        const keys = Object.keys(sb);
+        if (!keys.length) return null;
+        return (
+          <div className="panel" style={{ padding: '10px 14px', borderLeft: '3px solid var(--skillbuff)' }}>
+            <div className="overline" style={{ marginBottom: 6 }}>Effets de combat actifs</div>
+            <div className="row gap-3 wrap">
+              {keys.map(k => <span key={k} className="mono" style={{ fontSize: 12.5, color: 'var(--skillbuff)' }}>+{sb[k]} {k.toUpperCase()}</span>)}
+            </div>
+          </div>
+        );
+      })()}
       <PassiveCard kit={kitWithId} eff={eff} counters={counters} level={level} color={color} setCounter={setCounter} />
       <div className="comp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
         {kit.actives.map(sk => (
