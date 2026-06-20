@@ -3,39 +3,11 @@
    Sidebar joueurs + grille de fiches compactes, temps réel.
    ============================================================ */
 
-/* --- Ennemis (local au MJ, localStorage — zéro Firebase) --- */
+/* --- Ennemis : `useMJEnemies` migré en Firebase partagé (voir data-state.jsx). --- */
 // Style de champ (le projet n'a pas de classe CSS d'input ; cf. InvItemRow).
 const ENEMY_FLD = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontSize:12, width:'100%', boxSizing:'border-box' };
-const ENEMIES_KEY = 'runeterra_mj_enemies';
-let _enemySeq = 0;
-function newEnemyId() { return 'enemy_' + Date.now().toString(36) + '_' + (_enemySeq++); }
-function makeEnemy(name) {
-  return { id: newEnemyId(), name: name || 'Ennemi', hpCur: 100, hpMax: 100, manaCur: 0, manaMax: 0, atk: 10 };
-}
-function loadEnemies() {
-  try { const a = JSON.parse(localStorage.getItem(ENEMIES_KEY) || '[]'); return Array.isArray(a) ? a : []; }
-  catch (e) { return []; }
-}
-function useMJEnemies() {
-  const [enemies, setEnemies] = useState(loadEnemies);
-  const persist = (next) => { setEnemies(next); try { localStorage.setItem(ENEMIES_KEY, JSON.stringify(next)); } catch (e) {} };
-  const addEnemy = (name) => persist([...enemies, makeEnemy(name)]);
-  const updateEnemy = (id, patch) => persist(enemies.map(e => e.id === id ? { ...e, ...patch } : e));
-  const removeEnemy = (id) => persist(enemies.filter(e => e.id !== id));
-  return { enemies, addEnemy, updateEnemy, removeEnemy };
-}
 
-/* --- Compteur de tour (local au MJ, localStorage — fondation des futurs CD) --- */
-const TURN_KEY = 'runeterra_mj_turn';
-function loadTurn() {
-  const n = parseInt(localStorage.getItem(TURN_KEY) || '1', 10);
-  return (Number.isFinite(n) && n >= 1) ? n : 1;
-}
-function useMJTurn() {
-  const [turn, setTurn] = useState(loadTurn);
-  const persist = (n) => { const v = Math.max(1, n | 0); setTurn(v); try { localStorage.setItem(TURN_KEY, String(v)); } catch (e) {} };
-  return { turn, nextTurn: () => persist(turn + 1), prevTurn: () => persist(turn - 1), resetTurn: () => persist(1) };
-}
+/* Compteur de tour : migré en `useSharedTurn` (Firebase, partagé) — voir data-state.jsx. */
 
 /* Fusionne la définition du perso (règles) avec son état live (Firebase). */
 function mjLive(c, st) {
@@ -44,7 +16,9 @@ function mjLive(c, st) {
   const runesSt  = (st && st.runes) || {};
   const runeMods = st ? sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES)) : {};
-  const eff = computeEffective(c.stats, st ? st.modifiers : c.modifiers, buffs, mergeMods(itemMods, runeMods));
+  const passiveMods = st ? sumPassiveMods(c.id, st.counters || {}, c.level || 1) : {};
+  const skillBuffMods = st ? sumSkillBuffs(st.skillBuffs || {}) : {};
+  const eff = computeEffective(c.stats, st ? st.modifiers : c.modifiers, buffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   const hp = st ? st.hpCur : Math.round(c.hpCur * c.stats.hp);
   const mana = st ? st.manaCur : Math.round(c.manaCur * c.stats.mana);
   const shield = st ? st.shield : c.shieldCur;
@@ -90,11 +64,17 @@ function MJSidebarRow({ c, st, active, onClick }) {
   );
 }
 
-function MJCompactCard({ c, st, onFull }) {
+function MJCompactCard({ c, st, turn, onFull }) {
   const L = mjLive(c, st);
   // < 25% PV → pulsation rouge ; < 50% → orange ; sinon bordure normale.
   const hpCls = L.hpPct < 25 ? 'mj-card-danger' : L.hpPct < 50 ? 'mj-card-warn' : '';
   const stats = [['ad', L.eff.ad], ['ap', L.eff.ap], ['armure', L.eff.armure], ['resmag', L.eff.resmag]];
+  // Compétences : charges (compteur du passif) + cooldowns actifs (lecture pour le MJ).
+  const kit = SKILLS[c.id];
+  const counters = (st && st.counters) || {};
+  const cooldowns = (st && st.cooldowns) || {};
+  const ctr = kit && kit.passive && kit.passive.counter;
+  const onCd = (kit && !kit.pending ? kit.actives : []).filter(sk => !cooldownReady(cooldowns[sk.id], turn));
   // Inventaire live (objet Firebase → tableau, items à qty>0) ; fallback sur l'inv. par défaut tant qu'aucun état.
   const inv = (st && st.inventory)
     ? Object.values(st.inventory).filter(it => (it.qty || 0) > 0)
@@ -141,6 +121,20 @@ function MJCompactCard({ c, st, onFull }) {
           }) : <span className="faint" style={{ fontSize:11 }}>Aucun</span>}
         </div>
       </div>
+      {/* compétences : charges + cooldowns (lecture MJ) */}
+      {kit && !kit.pending && (ctr || onCd.length > 0) && (
+        <div style={{ padding:'10px 16px', borderBottom:'1px solid var(--line)' }}>
+          <div className="overline" style={{ marginBottom:6 }}>Compétences</div>
+          <div className="row gap-2 wrap" style={{ alignItems:'center' }}>
+            {ctr && <span className="mono" style={{ fontSize:11, color:'var(--gold-pale)' }}>{ctr.label} : {counters[ctr.key] || 0}</span>}
+            {onCd.map(sk => (
+              <span key={sk.id} className="mono faint" style={{ fontSize:11 }}>
+                {sk.name} : {cooldowns[sk.id] === 999999 ? '1×/combat ✓' : 'tour ' + cooldowns[sk.id]}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {/* inventaire miniature — live (st.inventory) avec images, fallback sur l'inv. par défaut */}
       <div style={{ padding:'12px 16px' }}>
         <div className="overline" style={{ marginBottom:6 }}>Sac · {inv.length} objets</div>
@@ -189,6 +183,8 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
           {field('Mana actuel', 'manaCur')}
           {field('Mana max', 'manaMax')}
           {field("Dégât d'attaque", 'atk')}
+          {field('Armure', 'armure')}
+          {field('Rés. magique', 'resmag')}
         </div>
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => onRemove(enemy.id)} style={{ marginRight:'auto', color:'var(--debuff-bright)' }}>Supprimer</button>
@@ -237,6 +233,7 @@ function EnemyAttackModal({ enemy, stOf, onClose }) {
     window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
     toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
       res.ko ? 'debuff' : 'gold');
+    pushLog(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`, res.ko ? 'debuff' : 'gold');
     onClose();
   };
 
@@ -272,12 +269,55 @@ function EnemyAttackModal({ enemy, stOf, onClose }) {
   );
 }
 
+/* Une attaque en attente : dégâts pré-remplis éditables (le MJ ajuste à son d20) + type + appliquer/rejeter. */
+function PendingHitRow({ hit, enemies, onApply, onReject }) {
+  const enemy = enemies.find(e => e.id === hit.targetId);
+  const [dmg, setDmg] = useState(String(hit.computedDmg || 0));
+  const [type, setType] = useState(hit.type || 'physique');
+  return (
+    <div className="panel" style={{ padding:'10px 14px', display:'flex', flexDirection:'column', gap:8 }}>
+      <div className="row" style={{ justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
+        <span style={{ fontSize:13 }}><b className="gold">{hit.attackerName}</b> · {hit.skillName} → <b>{enemy ? enemy.name : '— cible disparue —'}</b></span>
+        <span className="mono faint" style={{ fontSize:11 }}>calculé : {hit.computedDmg}</span>
+      </div>
+      <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>
+        <input style={{ ...ENEMY_FLD, width:80 }} value={dmg} onChange={e => setDmg(e.target.value)} title="Dégâts (ajuste au d20)" />
+        <div className="row gap-1">
+          {['physique','magique','brut'].map(t => (
+            <button key={t} className={'btn btn-sm ' + (type===t ? 'btn-gold' : 'btn-ghost')} onClick={() => setType(t)} style={{ textTransform:'capitalize' }}>{t}</button>
+          ))}
+        </div>
+        <button className="btn btn-sm btn-gold" disabled={!enemy} onClick={() => onApply(hit, enemy, Math.max(0, parseInt(dmg,10)||0), type)} style={{ marginLeft:'auto' }}>Appliquer</button>
+        <button className="btn btn-sm btn-ghost" onClick={() => onReject(hit.id)}>Rejeter</button>
+      </div>
+    </div>
+  );
+}
+function PendingHitsPanel({ enemies }) {
+  const { hits, removeHit } = usePendingHits();
+  if (!hits.length) return null;
+  const apply = (hit, enemy, finalDmg, type) => {
+    const r = applyHitToEnemy(enemy, finalDmg, type);
+    toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
+    pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
+    removeHit(hit.id);
+  };
+  return (
+    <div style={{ marginBottom:24 }}>
+      <h3 style={{ fontSize:16, marginBottom:12 }}>Attaques en attente <span className="mono faint" style={{ fontSize:12 }}>· {hits.length}</span></h3>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:12 }}>
+        {hits.map(h => <PendingHitRow key={h.id} hit={h} enemies={enemies} onApply={apply} onReject={removeHit} />)}
+      </div>
+    </div>
+  );
+}
+
 function MJPage({ go }) {
   const all = useAllCharStates();
   const [selected, setSelected] = useState('rathael');
   const [full, setFull] = useState(null);
   const { enemies, addEnemy, updateEnemy, removeEnemy } = useMJEnemies();
-  const { turn, nextTurn, prevTurn, resetTurn } = useMJTurn();
+  const { turn, nextTurn, prevTurn, resetCombat } = useSharedTurn();
   const [attacker, setAttacker] = useState(null); // ennemi en cours d'attaque (Task 4)
   const stOf = (id) => (all && all[id] && all[id].state) || null;
   return (
@@ -314,14 +354,17 @@ function MJPage({ go }) {
               <span className="mono" style={{ fontSize:13, color:'var(--gold-pale)', whiteSpace:'nowrap' }}>⏱ Tour {turn}</span>
               <button className="btn btn-sm btn-ghost" onClick={prevTurn} title="Tour précédent" style={{ padding:'4px 8px' }}>◂</button>
               <button className="btn btn-sm btn-gold" onClick={nextTurn} style={{ whiteSpace:'nowrap' }}>Fin de tour ▸</button>
-              <button className="btn btn-sm btn-ghost" onClick={resetTurn} title="Réinitialiser le compteur" style={{ padding:'4px 8px' }}>↺</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => { if (confirm('Nouveau combat : remettre le tour à 1 et vider toutes les charges + cooldowns ?')) resetCombat(); }} title="Nouveau combat (reset charges + cooldowns)" style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>⟲ Combat</button>
             </div>
             <ExportImportPanel />
           </div>
         </div>
         <div style={{ flex:1, overflow:'auto', padding:24 }}>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:16, alignItems:'start', paddingBottom:8 }}>
-            {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} onFull={() => setFull(c)} />)}
+            {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} turn={turn} onFull={() => setFull(c)} />)}
+          </div>
+          <div style={{ marginTop:28 }}>
+            <PendingHitsPanel enemies={enemies} />
           </div>
           <div style={{ marginTop:28 }}>
             <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
@@ -335,6 +378,9 @@ function MJPage({ go }) {
                     <EnemyCard key={e.id} enemy={e} onUpdate={updateEnemy} onRemove={removeEnemy} onAttack={setAttacker} />
                   ))}
                 </div>}
+          </div>
+          <div style={{ marginTop:28 }}>
+            <CombatLog canClear={true} />
           </div>
         </div>
       </main>

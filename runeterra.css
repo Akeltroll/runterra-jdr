@@ -42,6 +42,7 @@
   --buff-bright:   #34C77F;
   --debuff:        #C8302A;   /* débuff négatif (rouge sang) */
   --debuff-bright: #E85A52;
+  --skillbuff:     #E8923C;   /* bonus temporaire de compétence (orange) */
 
   /* ---- COULEURS : TEXTE ---- */
   --ink:           #EDE7D8;   /* texte principal */

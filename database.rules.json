@@ -29,6 +29,28 @@
             ".validate": "newData.isNumber() && newData.val() >= 0"
           }
         },
+        "combat": {
+          ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+          "turn": {
+            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+            ".validate": "newData.isNumber() && newData.val() >= 1"
+          },
+          "enemies": {
+            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')"
+          },
+          "pendingHits": {
+            "$hitId": {
+              ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+              ".validate": "newData.hasChildren(['attackerId', 'targetId', 'computedDmg'])"
+            }
+          },
+          "log": {
+            "$logId": {
+              ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+              ".validate": "newData.child('text').isString()"
+            }
+          }
+        },
         "characters": {
           "$charId": {
             ".read":  "auth != null && root.child('users').child(auth.uid).child('charId').val() === $charId",

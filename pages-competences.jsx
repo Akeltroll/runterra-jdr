@@ -1,0 +1,270 @@
+/* ============================================================
+   Onglet COMPÉTENCES — cast (mana + cooldown + dégâts affichés),
+   compteurs (charges/marques/CN/tranches), cooldowns sur tour partagé.
+   Formules = SKILLS (data.jsx) → fns pures de game-logic.js. Le MJ saisit
+   le nombre de dégâts dans « Subir » de l'ennemi (pas d'auto-application).
+   ============================================================ */
+
+/* Variables d'attaque à demander selon la compétence (non persistées). */
+const SKILL_VARS = {
+  tir_cible: ['firstHit'],
+  attaque_sournoise: ['furtif'],
+  pugilat: ['side', 'moved'],
+  ecrasement: ['moved'],
+  demi_ours: ['moved'],
+  salve_corsaire: ['nbTargets'],
+};
+
+/* Type de dégâts de l'arme équipée (slot armePrincipale) → 'Physique'|'Magique'|'Hybride'. */
+function weaponTypeOf(state, char) {
+  const eqId = state.equipment && state.equipment.armePrincipale;
+  const item = (eqId && state.inventory) ? state.inventory[eqId] : null;
+  const w = (item && WEAPONS.find(x => x.name === item.name)) || WEAPONS.find(x => x.id === char.weaponId);
+  return (w && w.cat) || 'Physique';
+}
+
+/* Mods de runes (miroir des autres pages). */
+function runeModsOf(state) {
+  const rs = state.runes || {};
+  return sumRuneMods(Object.keys(rs.selected || {}).filter(id => rs.selected[id]), rs.choices || {}, buildRuneIndex(RUNES));
+}
+
+const CD_LOCKED = 999999; // sentinelle « 1×/combat » (débloqué par Nouveau combat)
+
+/* Petit stepper de compteur (max arbitraire, contrairement à NumberStepper borné 5). */
+function CounterStepper({ label, value, max, color, onChange }) {
+  const v = value || 0;
+  return (
+    <div className="row gap-2" style={{ alignItems: 'center' }}>
+      <span className="overline" style={{ minWidth: 92 }}>{label}</span>
+      <button className="btn btn-sm btn-ghost" onClick={() => onChange(Math.max(0, v - 1))} disabled={v <= 0}>−</button>
+      <span className="mono" style={{ fontSize: 15, color: color || 'var(--gold-pale)', minWidth: 54, textAlign: 'center' }}>{v} / {max}</span>
+      <button className="btn btn-sm btn-ghost" onClick={() => onChange(Math.min(max, v + 1))} disabled={v >= max}>+</button>
+    </div>
+  );
+}
+
+function PassiveCard({ kit, eff, counters, level, color, setCounter }) {
+  const p = kit.passive || {};
+  const ctr = p.counter;
+  const max = ctr ? (typeof ctr.max === 'function' ? ctr.max(level) : ctr.max) : 0;
+  const cur = ctr ? (counters[ctr.key] || 0) : 0;
+  const bonus = sumPassiveMods(kit._id, counters, level); // { stat: n }
+  return (
+    <div className="panel" style={{ borderLeft: `3px solid ${color}` }}>
+      <div className="panel-head"><h3>⟡ {p.name || 'Passif'}</h3><span className="overline">Passif</span></div>
+      <div style={{ padding: '10px 14px' }}>
+        {p.note && <div className="faint" style={{ fontSize: 12.5, marginBottom: ctr ? 12 : 0, lineHeight: 1.5 }}>{p.note}</div>}
+        {ctr && (
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <CounterStepper label={ctr.label} value={cur} max={max} color={color} onChange={(n) => setCounter(ctr.key, n)} />
+            {p.statHint && bonus[p.statHint] ? (
+              <span className="mono" style={{ fontSize: 13, color: 'var(--buff)' }}>
+                +{bonus[p.statHint]} {p.statHint.toUpperCase()}
+              </span>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast }) {
+  const [vars, setVars] = useState({ firstHit: false, furtif: false, side: 'droite', moved: 0, nbTargets: 1 });
+  const needed = SKILL_VARS[sk.id] || [];
+  const ctx = Object.assign({}, baseCtx, vars);
+  const dmg = sk.dmg ? sk.dmg(eff, ctx) : null;
+  const shield = sk.shield ? sk.shield(eff, ctx) : null;
+  const heal = sk.heal ? sk.heal(eff, ctx) : null;
+  const total = (dmg != null && sk.id === 'salve_corsaire') ? dmg * (vars.nbTargets || 1) : null;
+  const enoughMana = manaCur >= (sk.mana || 0);
+  const cdLabel = ready ? 'Prêt' : (readyAt === CD_LOCKED ? '1×/combat utilisé' : `prêt tour ${readyAt}`);
+
+  return (
+    <div className="panel" style={{ borderLeft: `3px solid ${ready ? color : 'var(--line-strong)'}`, opacity: ready ? 1 : 0.7 }}>
+      <div className="panel-head">
+        <h3>⚔ {sk.name}</h3>
+        <span className="row gap-2" style={{ alignItems: 'center' }}>
+          <span className="badge" style={{ background: 'var(--bg-inset)' }}>{sk.mana} mana</span>
+          <span className="badge" style={{ background: ready ? 'var(--bg-inset)' : 'var(--bg-panel-2)', color: ready ? 'var(--buff)' : 'var(--gold-pale)' }}>{cdLabel}</span>
+        </span>
+      </div>
+      <div style={{ padding: '10px 14px' }}>
+        {/* Contrôles de variables d'attaque */}
+        {needed.length > 0 && (
+          <div className="row gap-3" style={{ flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+            {needed.includes('firstHit') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={vars.firstHit} onChange={e => setVars(s => ({ ...s, firstHit: e.target.checked }))} /> 1er coup (+25%)</label>}
+            {needed.includes('furtif') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={vars.furtif} onChange={e => setVars(s => ({ ...s, furtif: e.target.checked }))} /> Camouflé (×1,5)</label>}
+            {needed.includes('side') && (
+              <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Frappe
+                <select value={vars.side} onChange={e => setVars(s => ({ ...s, side: e.target.value }))} style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }}>
+                  <option value="gauche">Gauche</option><option value="droite">Droite</option>
+                </select>
+              </label>
+            )}
+            {needed.includes('moved') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Cases <input type="number" min="0" value={vars.moved} onChange={e => setVars(s => ({ ...s, moved: Math.max(0, e.target.value | 0) }))} style={{ width: 56, background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }} /></label>}
+            {needed.includes('nbTargets') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Cibles <input type="number" min="1" value={vars.nbTargets} onChange={e => setVars(s => ({ ...s, nbTargets: Math.max(1, e.target.value | 0) }))} style={{ width: 56, background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }} /></label>}
+          </div>
+        )}
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div className="col" style={{ gap: 2 }}>
+            {dmg != null ? (
+              <span className="mono" style={{ fontSize: 22, color: 'var(--hp)', fontWeight: 700 }}>
+                {dmg}{total != null ? <span style={{ fontSize: 13, color: 'var(--gold-pale)' }}> /cible · total {total}</span> : null}
+                <span style={{ fontSize: 12, color: 'var(--faint)' }}> dégâts</span>
+              </span>
+            ) : shield != null ? (
+              <span className="mono" style={{ fontSize: 22, color: 'var(--gold)', fontWeight: 700 }}>{shield}<span style={{ fontSize: 12, color: 'var(--faint)' }}> bouclier</span></span>
+            ) : (
+              <span className="faint" style={{ fontSize: 13 }}>Utilitaire (pas de dégât direct)</span>
+            )}
+            {heal != null && <span className="mono" style={{ fontSize: 12.5, color: 'var(--buff)' }}>soin allié {heal}</span>}
+          </div>
+          <button className="btn btn-gold" onClick={onCast} disabled={!ready || !enoughMana}
+            title={!enoughMana ? 'Pas assez de mana' : (!ready ? 'En cooldown' : '')}>Lancer</button>
+        </div>
+        {sk.note && <div className="faint" style={{ fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>{sk.note}</div>}
+      </div>
+    </div>
+  );
+}
+
+function CompetencesBody({ char, staff }) {
+  const { state, setField, setCounter, setCooldown, setSkillBuff } = useCharState(char.id);
+  const { turn } = useSharedTurn();
+  const { enemies } = useMJEnemies();
+  const { addHit } = usePendingHits();
+  const [targetId, setTargetId] = useState('');
+  if (!state) return <div className="panel" style={{ margin: 20, padding: 20 }}>Chargement…</div>;
+
+  const kit = SKILLS[char.id];
+  const color = char.color || 'var(--gold)';
+  const counters = state.counters || {};
+  const cooldowns = state.cooldowns || {};
+  const level = char.level || 1;
+
+  if (kit && kit.pending) {
+    return (
+      <div className="panel" style={{ margin: 20, padding: 20, borderLeft: `3px solid ${color}` }}>
+        <h3 style={{ marginBottom: 8 }}>⟡ {char.name} — compétences en refonte</h3>
+        <div className="faint" style={{ fontSize: 13, lineHeight: 1.6 }}>{kit.note}</div>
+      </div>
+    );
+  }
+  if (!kit) return <div className="panel" style={{ margin: 20, padding: 20 }}>Aucune compétence définie.</div>;
+
+  const itemMods = sumItemMods(state.equipment, state.inventory);
+  const passiveMods = sumPassiveMods(char.id, counters, level);
+  const eff = computeEffective(char.stats, state.modifiers, [], mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods));
+  const wType = weaponTypeOf(state, char);
+  const baseCtx = { counters, level, wType, hpMax: char.stats.hp };
+  const kitWithId = Object.assign({ _id: char.id }, kit);
+
+  function cast(sk) {
+    const cost = sk.mana || 0;
+    const manaCur = state.manaCur || 0;
+    if (manaCur < cost) { toast(`<b>${char.name}</b> — pas assez de mana (${manaCur}/${cost})`, 'gold'); return; }
+    setField('manaCur', manaCur - cost);
+    if (sk.kind === 'combat') setCooldown(sk.id, CD_LOCKED);
+    else setCooldown(sk.id, nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));
+    // Buff sur soi : snapshot des mods plats (% de la stat de base) → effet de combat orange.
+    if (sk.selfBuff) {
+      const flat = {};
+      Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (char.stats[k] || 0)); if (f) flat[k] = f; });
+      setSkillBuff(sk.id, flat);
+      toast(`<b>${char.name}</b> — ${sk.name} actif (effet de combat)`, 'gold');
+    }
+    // Bouclier au cast (one-shot, ajouté au pool).
+    if (sk.shield) {
+      const sh = sk.shield(eff, baseCtx);
+      if (sh) { setField('shield', (state.shield || 0) + sh); toast(`<b>${char.name}</b> gagne ${sh} bouclier`, 'gold'); }
+    }
+    // Comp à dégâts + cible choisie → propose une attaque au MJ (il ajuste au d20 puis applique).
+    const dmg = sk.dmg ? sk.dmg(eff, baseCtx) : null; // dégâts unitaires (multi-cibles : le MJ duplique/ajuste)
+    if (dmg != null && targetId) {
+      addHit({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
+        type: (wType === 'Magique' ? 'magique' : 'physique'), computedDmg: dmg, targetId });
+      toast(`<b>${char.name}</b> vise un ennemi avec ${sk.name} (${dmg}) — envoyé au MJ`, 'buff');
+    } else {
+      toast(`<b>${char.name}</b> lance ${sk.name}`, 'buff');
+    }
+  }
+
+  return (
+    <div className="col gap-4" style={{ padding: 20 }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <h2 style={{ fontSize: 20 }}>Compétences — {char.name}</h2>
+        <span className="badge" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>⏱ Tour {turn}</span>
+      </div>
+      {enemies.length > 0 && (
+        <div className="panel" style={{ padding: '10px 14px' }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div className="overline" style={{ marginBottom: 6 }}>Ennemis en jeu</div>
+              <div className="row gap-3 wrap">
+                {enemies.map(e => <span key={e.id} className="mono" style={{ fontSize: 12, color: e.hpCur === 0 ? 'var(--faint)' : 'var(--ink)' }}>{e.name} · {e.hpCur}/{e.hpMax} PV</span>)}
+              </div>
+            </div>
+            <label className="row gap-2" style={{ alignItems: 'center', fontSize: 12.5 }}>Cible
+              <select value={targetId} onChange={e => setTargetId(e.target.value)}
+                style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '6px 9px', fontSize: 13 }}>
+                <option value="">— aucune —</option>
+                {enemies.filter(en => en.hpCur > 0).map(en => <option key={en.id} value={en.id}>{en.name} ({en.hpCur} PV)</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
+      {(() => {
+        const sb = sumSkillBuffs(state.skillBuffs || {});
+        const keys = Object.keys(sb);
+        if (!keys.length) return null;
+        return (
+          <div className="panel" style={{ padding: '10px 14px', borderLeft: '3px solid var(--skillbuff)' }}>
+            <div className="overline" style={{ marginBottom: 6 }}>Effets de combat actifs</div>
+            <div className="row gap-3 wrap">
+              {keys.map(k => <span key={k} className="mono" style={{ fontSize: 12.5, color: 'var(--skillbuff)' }}>+{sb[k]} {k.toUpperCase()}</span>)}
+            </div>
+          </div>
+        );
+      })()}
+      <PassiveCard kit={kitWithId} eff={eff} counters={counters} level={level} color={color} setCounter={setCounter} />
+      <div className="comp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+        {kit.actives.map(sk => (
+          <ActiveCard key={sk.id} sk={sk} eff={eff} baseCtx={baseCtx} color={color}
+            ready={cooldownReady(cooldowns[sk.id], turn)} readyAt={cooldowns[sk.id]} turn={turn}
+            manaCur={state.manaCur || 0} onCast={() => cast(sk)} />
+        ))}
+      </div>
+      <CombatLog canClear={false} />
+    </div>
+  );
+}
+
+function CompetencesPage({ lockedCharId }) {
+  const [charId, setCharId] = useState(() => {
+    if (lockedCharId) return lockedCharId;
+    const id = localStorage.getItem('runeterra_identity');
+    return (id && id !== 'mj' && CHARACTERS.some(c => c.id === id)) ? id : 'rathael';
+  });
+  const char = CHARACTERS.find(c => c.id === charId) || CHARACTERS[0];
+  return (
+    <div className="col" style={{ height: '100%', minHeight: 0 }}>
+      {!lockedCharId && (
+        <div className="row" style={{ justifyContent: 'flex-end', gap: 8, alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid var(--line)', flex: '0 0 auto' }}>
+          <span className="overline">Perso</span>
+          <select value={charId} onChange={e => setCharId(e.target.value)}
+            style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '7px 10px', fontSize: 13 }}>
+            {CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      )}
+      <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto' }}>
+        <CompetencesBody key={char.id} char={char} staff={!lockedCharId} />
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { CompetencesPage });
