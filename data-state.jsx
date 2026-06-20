@@ -56,13 +56,26 @@ function useSharedTurn() {
   const [turn, setTurn] = useState(1);
   useEffect(() => window.RTDB.subscribePath(COMBAT_TURN, (v) => setTurn(Number.isFinite(v) && v >= 1 ? v : 1)), []);
   const persist = useCallback((n) => window.RTDB.setPath(COMBAT_TURN, Math.max(1, n | 0)), []);
-  const resetCombat = useCallback(() => {
+  const resetCombat = useCallback(async () => {
     window.RTDB.setPath(COMBAT_TURN, 1);
-    CHARACTERS.forEach((c) => {
-      window.RTDB.setPath(`${charPath(c.id)}/counters`, null);
-      window.RTDB.setPath(`${charPath(c.id)}/cooldowns`, null);
-      window.RTDB.setPath(`${charPath(c.id)}/skillBuffs`, null);
-    });
+    for (const c of CHARACTERS) {
+      const p = charPath(c.id);
+      const st = (await window.RTDB.getSnapshot(p)) || {};
+      const itemMods = sumItemMods(st.equipment, st.inventory);
+      const runesSt = st.runes || {};
+      const runeMods = sumRuneMods(
+        Object.keys(runesSt.selected || {}).filter((id) => runesSt.selected[id]),
+        runesSt.choices || {}, buildRuneIndex(RUNES));
+      const lvl = (st.level != null ? st.level : c.level) || 1;
+      const passiveMods = sumPassiveMods(c.id, st.counters || {}, lvl);
+      // Max de base SANS skillBuffs (les buffs BUFFS n'affectent pas les PV max).
+      const baseMax = computeEffective(c.stats, st.modifiers, [],
+        mergeMods(mergeMods(itemMods, runeMods), passiveMods));
+      const patch = { counters: null, cooldowns: null, skillBuffs: null };
+      if (st.hpCur != null) patch.hpCur = Math.min(st.hpCur, baseMax.hp);
+      patch.shield = Math.min(st.shield || 0, c.shieldMax || 0);
+      window.RTDB.updatePath(p, patch);
+    }
     window.RTDB.setPath(COMBAT_LOG, null);
   }, []);
   return { turn, nextTurn: () => persist(turn + 1), prevTurn: () => persist(turn - 1), resetCombat };
