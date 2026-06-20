@@ -355,6 +355,10 @@
   function nextReadyAt(currentTurn, cd) {
     return currentTurn + (cd | 0);
   }
+  /* Déblocage des compétences par niveau : active n° i (0-based) requiert le niveau i+1. */
+  function skillUnlocked(index, level) {
+    return (Number(level) || 0) >= (Number(index) || 0) + 1;
+  }
 
   /* --- Elias (Fab.gs) : passif Instinct du Chasseur (AD plat par charge) --- */
   function eliasPassiveAD(level) { return 10 + 5 * ((level || 1) - 1); }
@@ -457,7 +461,7 @@
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,
     mitigateDamage, applyDamageToPools,
-    skillBaseDamage, cooldownReady, nextReadyAt,
+    skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,

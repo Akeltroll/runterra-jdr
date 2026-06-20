@@ -458,3 +458,13 @@ test('sumSkillBuffs somme les mods plats par compétence', () => {
   assert.deepEqual(L.sumSkillBuffs({}), {});
   assert.deepEqual(L.sumSkillBuffs(null), {});
 });
+
+/* --- Déblocage par niveau : skillUnlocked --- */
+test('skillUnlocked : active n° i requiert niveau i+1', () => {
+  assert.equal(L.skillUnlocked(0, 1), true);   // C1 niv 1
+  assert.equal(L.skillUnlocked(1, 2), true);   // C2 niv 2
+  assert.equal(L.skillUnlocked(2, 2), false);  // C3 niv 2 -> verrouillé
+  assert.equal(L.skillUnlocked(2, 3), true);   // C3 niv 3
+  assert.equal(L.skillUnlocked(3, 3), false);  // C4 niv 3 -> verrouillé
+  assert.equal(L.skillUnlocked(3, 4), true);   // C4 niv 4
+});
