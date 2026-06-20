@@ -42,8 +42,11 @@ function useCharState(charId) {
     window.RTDB.updatePath(`${charPath(charId)}/counters`, { [key]: Math.max(0, value | 0) || null }), [charId]);
   const setCooldown = useCallback((skillId, readyAt) =>
     window.RTDB.updatePath(`${charPath(charId)}/cooldowns`, { [skillId]: readyAt || null }), [charId]);
+  // Buff sur soi : snapshot des mods plats d'une compétence (effacé par « ⟲ Combat »).
+  const setSkillBuff = useCallback((skillId, mods) =>
+    window.RTDB.updatePath(`${charPath(charId)}/skillBuffs`, { [skillId]: mods || null }), [charId]);
   return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment, setCoin,
-    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown };
+    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff };
 }
 
 /* Compteur de tour PARTAGÉ (combat). Écriture staff (règle RTDB combat/turn).

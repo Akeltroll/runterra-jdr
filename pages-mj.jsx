@@ -17,7 +17,8 @@ function mjLive(c, st) {
   const runeMods = st ? sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES)) : {};
   const passiveMods = st ? sumPassiveMods(c.id, st.counters || {}, c.level || 1) : {};
-  const eff = computeEffective(c.stats, st ? st.modifiers : c.modifiers, buffs, mergeMods(mergeMods(itemMods, runeMods), passiveMods));
+  const skillBuffMods = st ? sumSkillBuffs(st.skillBuffs || {}) : {};
+  const eff = computeEffective(c.stats, st ? st.modifiers : c.modifiers, buffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   const hp = st ? st.hpCur : Math.round(c.hpCur * c.stats.hp);
   const mana = st ? st.manaCur : Math.round(c.manaCur * c.stats.mana);
   const shield = st ? st.shield : c.shieldCur;

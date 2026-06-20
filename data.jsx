@@ -402,7 +402,8 @@ const SKILLS = {
       { id: 'ralliement', name: 'Ralliement', mana: 100, cd: 5, kind: 'cd',
         dmg: () => null, shield: (eff, c) => urskaarC3Shield(eff, c.hpMax), note: 'Bouclier (30% +10%/50 AP des PV) + Peau de Fer ; alliés : Bravoure 2 tours. +1 charisme (permanent).' },
       { id: 'demi_ours', name: 'On ne m\'arrêtera pas', mana: 100, cd: 0, kind: 'combat',
-        dmg: (eff, c) => dmgUrskaarC4(eff, c.moved), note: 'Transfo 5 tours : +30% PV/AD/Armure. Déplacement : 100% AD (+25%/tranche) par unité. 1×/combat.' },
+        dmg: (eff, c) => dmgUrskaarC4(eff, c.moved), selfBuff: { hp: 0.30, ad: 0.30, armure: 0.30 },
+        note: 'Transfo 5 tours : +30% PV/AD/Armure. Déplacement : 100% AD (+25%/tranche) par unité. 1×/combat.' },
     ],
   },
   jett: {
