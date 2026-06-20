@@ -58,7 +58,9 @@ function useSharedTurn() {
     CHARACTERS.forEach((c) => {
       window.RTDB.setPath(`${charPath(c.id)}/counters`, null);
       window.RTDB.setPath(`${charPath(c.id)}/cooldowns`, null);
+      window.RTDB.setPath(`${charPath(c.id)}/skillBuffs`, null);
     });
+    window.RTDB.setPath(COMBAT_LOG, null);
   }, []);
   return { turn, nextTurn: () => persist(turn + 1), prevTurn: () => persist(turn - 1), resetCombat };
 }
@@ -102,6 +104,22 @@ function applyHitToEnemy(enemy, finalDmg, type) {
   const res = applyDamageToPools({ hpCur: enemy.hpCur || 0, shield: 0 }, dmg);
   window.RTDB.updatePath(`${ENEMIES}/${enemy.id}`, { hpCur: res.hpCur });
   return { applied: dmg, hpCur: res.hpCur };
+}
+
+/* Journal de combat PARTAGÉ : file d'événements (dégâts résolus, KO…) que tout
+   inscrit lit. Écriture tout inscrit (règle combat/log). ~30 derniers affichés.
+   « ⟲ Combat » (resetCombat) le purge. */
+const COMBAT_LOG = `${CAMPAIGN}/combat/log`;
+function pushLog(text, kind) {
+  const id = 'log_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e4);
+  window.RTDB.updatePath(COMBAT_LOG, { [id]: { id, ts: Date.now(), text: String(text || ''), kind: kind || 'gold' } });
+}
+function useCombatLog() {
+  const [map, setMap] = useState(null);
+  useEffect(() => window.RTDB.subscribePath(COMBAT_LOG, (v) => setMap(v || {})), []);
+  const entries = map ? Object.values(map).sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 30) : [];
+  const clearLog = useCallback(() => window.RTDB.setPath(COMBAT_LOG, null), []);
+  return { entries, clearLog };
 }
 
 /* Snapshot live de tous les persos (vue MJ). */
@@ -208,4 +226,5 @@ Object.assign(window, {
   useSharedTurn, COMBAT_TURN,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   usePendingHits, applyHitToEnemy, PENDING_HITS,
+  pushLog, useCombatLog, COMBAT_LOG,
 });

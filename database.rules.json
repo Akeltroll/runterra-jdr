@@ -43,6 +43,12 @@
               ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
               ".validate": "newData.hasChildren(['attackerId', 'targetId', 'computedDmg'])"
             }
+          },
+          "log": {
+            "$logId": {
+              ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+              ".validate": "newData.child('text').isString()"
+            }
           }
         },
         "characters": {
