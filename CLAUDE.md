@@ -389,6 +389,17 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 - **Nouveau système d'attaques de base** (`info-mj/`) : catégories d'armes + propriétés +
   maîtrise (−25 % si non maîtrisée). **Remplace** l'ancienne idée ×1.5/×1.75.
 - **Journal de combat partagé** : **FAIT** (`combat/log`, `CombatLog` ; voir « État actuel »).
+- **Cycle de séance + XP + distribution de récompenses (vue MJ)** — *idée proposée (2026-06-20), à
+  brainstormer.* Concept : à l'ouverture de la vue MJ, une **modal** « Début séance / Visite du site ».
+  Si « Début séance » → un état de **séance en cours** (bandeau + bouton « Clôturer »). À la **clôture**,
+  une interface propose au MJ de : (1) **donner de l'XP** aux joueurs → chaque perso a une **barre d'XP**
+  qui alimente le **niveau** (réutilise `state/level` + le déblocage de comps déjà en place ; définir la
+  courbe XP/niveau — voir `LEVELS` dans data.jsx) ; (2) **distribuer items / stuff / potions / argent**
+  aux joueurs (réutilise `moveItem`/`moveCoins`/inventaires). **En plus** du système actuel (le MJ ajoute
+  déjà des items en live pendant la session). Découpage probable : (A) fondation **XP & niveau**
+  (`state/xp`, barre, courbe, montée → `state/level`) ; (B) **séance** (modal début/visite, état partagé,
+  clôture → panneau de récompenses qui orchestre A + transferts). Décisions à trancher au brainstorm :
+  courbe d'XP (table dédiée vs `LEVELS`), montée auto vs validée par le MJ, séance partagée vs MJ-local.
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
 - `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/
