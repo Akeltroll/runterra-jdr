@@ -400,8 +400,13 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 - **Nouveau système d'attaques de base** (`info-mj/`) : catégories d'armes + propriétés +
   maîtrise (−25 % si non maîtrisée). **Remplace** l'ancienne idée ×1.5/×1.75.
 - **Journal de combat partagé** : **FAIT** (`combat/log`, `CombatLog` ; voir « État actuel »).
-- **Cycle de séance + XP + distribution de récompenses (vue MJ)** — *idée proposée (2026-06-20), à
-  brainstormer.* Concept : à l'ouverture de la vue MJ, une **modal** « Début séance / Visite du site ».
+- **Cycle de séance + XP + distribution de récompenses (vue MJ)** — découpé en **A** (XP & niveau) +
+  **B** (séance + récompenses). **A = FAIT et déployé (2026-06-21)** : `state/xp` (progression intra-niveau),
+  `xpToNext`/`applyXp` (game-logic, testés), orchestrateur `addXp` (montée auto + report + `pushLog`),
+  composant `XpBar` (fiche + Progression + cartes MJ), contrôle « +XP » ad-hoc côté MJ. Aucune règle RTDB.
+  Spec/plan : `docs/superpowers/{specs,plans}/2026-06-21-xp-niveau*`. **B = reste à brainstormer/faire**
+  (décisions ouvertes : séance partagée vs MJ-local ; modal début/visite ; clôture → panneau qui orchestre
+  `addXp` en lot + `moveItem`/`moveCoins`). Concept B : à l'ouverture de la vue MJ, une **modal** « Début séance / Visite du site ».
   Si « Début séance » → un état de **séance en cours** (bandeau + bouton « Clôturer »). À la **clôture**,
   une interface propose au MJ de : (1) **donner de l'XP** aux joueurs → chaque perso a une **barre d'XP**
   qui alimente le **niveau** (réutilise `state/level` + le déblocage de comps déjà en place ; définir la
