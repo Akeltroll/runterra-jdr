@@ -31,7 +31,7 @@ function ResourceStack({ char, eff, variant, hp, mana, shield }) {
       <div className="row gap-2" style={{ justifyContent:'space-around' }}>
         <Gauge cur={hp} max={eff.hp} color="var(--hp)" label="Vie" />
         <Gauge cur={mana} max={eff.mana} color="var(--mana-bright)" label="Mana" />
-        <Gauge cur={shield} max={char.shieldMax} color="var(--shield)" label="Bouclier" />
+        <Gauge cur={shield} max={Math.max(char.shieldMax || 0, shield)} color="var(--shield)" label="Bouclier" />
       </div>
     );
   }
@@ -48,7 +48,7 @@ function ResourceStack({ char, eff, variant, hp, mana, shield }) {
       </div>
       <div>
         <div className="row" style={{ justifyContent:'space-between', marginBottom:5 }}><span className="overline">Bouclier</span></div>
-        <ResourceBar kind="shield" cur={shield} max={char.shieldMax} big={big} segments={variant==='b'?10:0} />
+        <ResourceBar kind="shield" cur={shield} max={Math.max(char.shieldMax || 0, shield)} big={big} segments={variant==='b'?10:0} />
       </div>
     </div>
   );
@@ -59,7 +59,9 @@ function SecondaryStats({ stats, variant }) {
   const items = [
     ['ad', stats.ad, false], ['ap', stats.ap, true], ['armure', stats.armure, false],
     ['resmag', stats.resmag, true], ['crit', stats.crit + '%', false], ['dcrit', stats.dcrit + '%', false],
-    ['sapience', stats.sapience, false], ['omni', '0%', true], ['vol', '0%', false],
+    ['sapience', stats.sapience, false],
+    ['omni', (stats.omni || 0) + '%', true],
+    ['vol', (stats.vol || 0) + '%', false],
   ];
   if (variant === 'b') {
     // tuiles angulaires hextech
@@ -298,7 +300,8 @@ function SheetBody({ char, variant }) {
   const runesSt  = state.runes || {};
   const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES));
-  const passiveMods = sumPassiveMods(char.id, state.counters || {}, char.level || 1);
+  const effLevel = (state.level != null ? state.level : char.level) || 1;
+  const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel);
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});
   const eff = computeEffective(char.stats, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   // Arme affichée = celle équipée dans le slot « Arme principale » (live), reliée à WEAPONS

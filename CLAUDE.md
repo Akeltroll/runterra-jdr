@@ -62,7 +62,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (identité + `/users/{uid}`, auto-inscription), `useAllUsers`, `setUserAssignment`,
   `seedIfEmpty(role)` (réservé staff). Compétences : `setCounter`/`setCooldown`/**`setSkillBuff`** (sur
   `useCharState` ; `setSkillBuff(skillId, mods)` = buff sur soi, snapshot de mods plats).
-  `useSharedTurn` (tour partagé ; `resetCombat` efface aussi `skillBuffs` + `combat/log`). **Plateau partagé** :
+  `useSharedTurn` (tour partagé ; `resetCombat` **async** : efface counters/cooldowns/`skillBuffs`/`combat/log`
+  ET **ramène PV/bouclier aux caps de base** via `computeEffective` sans skillBuffs). **Plateau partagé** :
   `useMJEnemies` (ennemis Firebase), `usePendingHits` (file d'attaques), orchestrateur `applyHitToEnemy`
   (`mitigateDamage`→`applyDamageToPools`→PV ennemi) ; **journal** `pushLog(text,kind)`/`useCombatLog()`
   (`combat/log`, ~30 derniers). Orchestrateurs de transfert RTDB `moveItem` (via `planItemTransfer`) /
@@ -84,6 +85,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   depuis `ITEM_CATALOG` → `AmountStepper` → `onPick(entry,qty)` ; bouton « Objet personnalisé » = filet) ;
   constantes `INV_*`/`inv*` (styles/format/filtres/pièces).
 - `pages-sheet.jsx` — fiche joueur (3 colonnes, 3 variantes visuelles a/b/c).
+  Jauge **bouclier à max dynamique** (`max(shieldMax, bouclier)`) pour afficher le bouclier de comp.
+  **Omnivamp/vol de vie lus depuis `eff`** (`SecondaryStats`, plus de `0%` en dur).
   Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel, **inventaire perso
   temps réel** (migration unique via marqueur `invInit`). **Arme affichée = celle équipée**
   (slot `armePrincipale` de `state.equipment`, reliée à `WEAPONS` par nom ; repli `char.weaponId`).
@@ -159,8 +162,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   avec cible crée une attaque en attente (`usePendingHits.addHit`) que le MJ résout. **Buffs sur soi** :
   une comp avec `selfBuff` (% de la stat de base) écrit `state/skillBuffs` (mods plats) → panneau
   **« Effets de combat actifs » en orange** (`--skillbuff`) + boost en temps réel via `sumSkillBuffs`→
-  `computeEffective` ; une comp avec `shield` ajoute le bouclier au pool au cast. **Journal de combat**
-  (`CombatLog`, lecture seule) affiché en bas.
+  `computeEffective` ; un `selfBuff.hp` **soigne aussi** les PV au cast (la jauge se remplit) ; une comp
+  avec `shield` ajoute le bouclier au pool au cast. **Journal de combat** (`CombatLog`, lecture seule)
+  affiché en bas. **Déblocage par niveau** : active n° *i* → niveau *i* requis (`skillUnlocked`), carte
+  verrouillée grisée + 🔒 ; **stepper « Niveau » staff** dans l'en-tête (`setField('level')`, niveau
+  effectif = `state.level ?? char.level`, pilote aussi passif + budget runes).
 - `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
@@ -194,6 +200,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     coinsInit: true   ← marqueur de migration (amorçage unique des pièces)
     runes:     { selected:{[nodeId]:true}, choices:{[nodeId]:'ad'|'ap'} }   ← arbre de runes (page Runes)
     runeBonus: 0   ← points de rune bonus accordés par le MJ (test / montée de niveau) ; budget = level + runeBonus
+    level:     2   ← niveau effectif (entier ≥ 1, stepper staff onglet Compétences) ; défaut = char.level ; pilote déblocage des comps + passif + budget runes
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
     skillBuffs: { [skillId]: { [stat]: n } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; effacés par « ⟲ Combat »
@@ -235,7 +242,14 @@ Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDe
 - **Lunick (mort) → Elias Crowe** : id interne `lunick` conservé (clé Firebase/Admin),
   seul l'affichage change (nom/image/titre). Pas de migration.
 - **Niveau 2** pour tous (les 12 pts de stats = 11 du niveau + 1 point bonus de création) ;
-  page Progression affiche le bonus en gold.
+  page Progression affiche le bonus en gold. **Niveau effectif live** = `state.level` (stepper staff
+  onglet Compétences), défaut `char.level` ; pilote déblocage des comps + passif + budget runes.
+- **Déblocage des compétences par niveau** : active n° *i* (0-based) → **niveau *i*+1 requis**
+  (`skillUnlocked`), passif toujours dispo. Tous niveau 2 → C3/C4 verrouillés tant que le MJ ne monte
+  pas le niveau.
+- **Buffs de ressource remplissent la jauge** : `selfBuff.hp` **soigne** au cast (PV max + actuels),
+  bouclier de comp affiché via jauge à max dynamique. **« ⟲ Combat » = retour total aux caps de base**
+  (PV plafonnés au max normal, bouclier vidé, skillBuffs effacés).
 - **Système de mode de combat (offensif/équilibré/défensif) RETIRÉ** : attaques = dégâts pleins.
 - **Inventaire** : perso (par fiche) + commun (coffre partagé). Items `{id,cat,name,sub,qty,ic,img,type,mods}`,
   images dans `ATH/`. Bonus `mods` non encore branchés. **`type`** = emplacement explicite (saisi à
@@ -267,7 +281,17 @@ Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
 ## État actuel (2026-06-20)
-- **Compétences (actif/passif) + Plateau partagé** — branche `feat/competences`, **prête, à
+- **Correctifs de playtest compétences** — branche `feat/competences-playtest`, **prête, à
+  merger/déployer (zéro nouvelle règle RTDB).** 4 retours de test corrigés : (1) **buffs de ressource
+  remplissent la jauge** — `selfBuff.hp` soigne au cast (Urskaar C4 → 130/130), bouclier de comp affiché
+  (jauge à max dynamique fiche+MJ) ; (2) **déblocage par niveau** — `skillUnlocked` (active n° i → niveau
+  i+1), cartes verrouillées grisées + 🔒, + **stepper « Niveau » staff** (`state/level`, niveau effectif
+  branché sur passif + budget runes) → C3/C4 verrouillés à niveau 2 ; (3) **« ⟲ Combat »** ramène
+  PV/bouclier aux caps de base (`resetCombat` async, `computeEffective` sans skillBuffs) ; (4) **fix
+  omnivamp/vol de vie** sur la fiche (`SecondaryStats` lit `eff`, plus de `0%` en dur). 71 tests verts
+  (esbuild + headless OK). Spec/plan : `docs/superpowers/{specs,plans}/2026-06-20-competences-playtest-fixes*`.
+- **Compétences (actif/passif) + Plateau partagé + Buffs/Journal** — **mergé sur `main` et déployé**
+  (règles `combat/log` republiées). (1) Onglet Compétences (`pages-competences.jsx`) : cast = mana − coût + cooldown +
   merger/déployer.** (1) Onglet Compétences (`pages-competences.jsx`) : cast = mana − coût + cooldown +
   dégâts calculés. Persos câblés : **Elias, Smith, Urskaar, Jett** (formules des scripts `.gs`, le
   script prime) ; **Rathael en pause** (refonte MJ). Tour **partagé** (`useSharedTurn`, `combat/turn`)
@@ -277,13 +301,11 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   (`combat/pendingHits`) → la vue MJ l'**ajuste (d20) et applique** (`applyHitToEnemy`).
   (3) **Buffs sur soi + journal de combat** (SP3, empilé) : `combat/log` (journal partagé `pushLog`/
   `useCombatLog`, composant `CombatLog` sous le plateau MJ + bas de Compétences, vidé par « ⟲ Combat ») ;
-  `state/skillBuffs` (mods plats snapshotés au cast — Urskaar C4 +30% PV/AD/Armure de base, **PV max
-  agrandi sans soin**) sommés (`sumSkillBuffs`) dans `computeEffective` → boost live, **couleur orange
-  `--skillbuff`** (panneau Compétences + stats Équipement) ; Urskaar C3 ajoute son bouclier au pool au cast.
-  70 tests verts (esbuild + chargement headless OK).
-  ⚠️ **RESTE EN CONSOLE FIREBASE : republier `database.rules.json`** (`combat/turn` + `combat/enemies` +
-  `combat/pendingHits` + **`combat/log`**) sinon tour/ennemis/attaques/journal bloqués. Reste : vérif
-  visuelle connectée + merge. Specs/plans :
+  `state/skillBuffs` (mods plats snapshotés au cast) sommés (`sumSkillBuffs`) dans `computeEffective`
+  → boost live, **couleur orange `--skillbuff`** (panneau Compétences + stats Équipement) ; Urskaar C3
+  ajoute son bouclier au pool au cast. Règles `combat/turn`+`enemies`+`pendingHits`+`log` **publiées**.
+  (Note : le « PV max sans soin » initial a été **remplacé** par le soin au cast — voir « Correctifs de
+  playtest » ci-dessus.) Specs/plans :
   `docs/superpowers/{specs,plans}/2026-06-{16,19,20}-*` (compétences + plateau-partage + buffs/journal).
 - **Vue MJ — ennemis (v1)** : **mergé sur `main` et déployé.** Grille responsive (fin du scroll
   horizontal) + suivi d'ennemis locaux (`localStorage`, zéro Firebase). Logique de combat pure
@@ -367,6 +389,17 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 - **Nouveau système d'attaques de base** (`info-mj/`) : catégories d'armes + propriétés +
   maîtrise (−25 % si non maîtrisée). **Remplace** l'ancienne idée ×1.5/×1.75.
 - **Journal de combat partagé** : **FAIT** (`combat/log`, `CombatLog` ; voir « État actuel »).
+- **Cycle de séance + XP + distribution de récompenses (vue MJ)** — *idée proposée (2026-06-20), à
+  brainstormer.* Concept : à l'ouverture de la vue MJ, une **modal** « Début séance / Visite du site ».
+  Si « Début séance » → un état de **séance en cours** (bandeau + bouton « Clôturer »). À la **clôture**,
+  une interface propose au MJ de : (1) **donner de l'XP** aux joueurs → chaque perso a une **barre d'XP**
+  qui alimente le **niveau** (réutilise `state/level` + le déblocage de comps déjà en place ; définir la
+  courbe XP/niveau — voir `LEVELS` dans data.jsx) ; (2) **distribuer items / stuff / potions / argent**
+  aux joueurs (réutilise `moveItem`/`moveCoins`/inventaires). **En plus** du système actuel (le MJ ajoute
+  déjà des items en live pendant la session). Découpage probable : (A) fondation **XP & niveau**
+  (`state/xp`, barre, courbe, montée → `state/level`) ; (B) **séance** (modal début/visite, état partagé,
+  clôture → panneau de récompenses qui orchestre A + transferts). Décisions à trancher au brainstorm :
+  courbe d'XP (table dédiée vs `LEVELS`), montée auto vs validée par le MJ, séance partagée vs MJ-local.
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
 - `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/

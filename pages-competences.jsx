@@ -70,8 +70,22 @@ function PassiveCard({ kit, eff, counters, level, color, setCounter }) {
   );
 }
 
-function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast }) {
+function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast, locked, minLevel }) {
   const [vars, setVars] = useState({ firstHit: false, furtif: false, side: 'droite', moved: 0, nbTargets: 1 });
+  if (locked) {
+    return (
+      <div className="panel" style={{ borderLeft: '3px solid var(--line-strong)', opacity: 0.5 }}>
+        <div className="panel-head">
+          <h3>⚔ {sk.name}</h3>
+          <span className="badge" style={{ background: 'var(--bg-panel-2)', color: 'var(--gold-pale)' }}>🔒 Niveau {minLevel}</span>
+        </div>
+        <div style={{ padding: '10px 14px' }}>
+          <div className="faint" style={{ fontSize: 12.5 }}>Se débloque au niveau {minLevel}.</div>
+          {sk.note && <div className="faint" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>{sk.note}</div>}
+        </div>
+      </div>
+    );
+  }
   const needed = SKILL_VARS[sk.id] || [];
   const ctx = Object.assign({}, baseCtx, vars);
   const dmg = sk.dmg ? sk.dmg(eff, ctx) : null;
@@ -142,7 +156,7 @@ function CompetencesBody({ char, staff }) {
   const color = char.color || 'var(--gold)';
   const counters = state.counters || {};
   const cooldowns = state.cooldowns || {};
-  const level = char.level || 1;
+  const level = (state.level != null ? state.level : char.level) || 1;
 
   if (kit && kit.pending) {
     return (
@@ -163,6 +177,11 @@ function CompetencesBody({ char, staff }) {
 
   function cast(sk) {
     const cost = sk.mana || 0;
+    const skIndex = kit.actives.indexOf(sk);
+    if (!skillUnlocked(skIndex, level)) {
+      toast(`<b>${char.name}</b> — ${sk.name} se débloque au niveau ${skIndex + 1}`, 'gold');
+      return;
+    }
     const manaCur = state.manaCur || 0;
     if (manaCur < cost) { toast(`<b>${char.name}</b> — pas assez de mana (${manaCur}/${cost})`, 'gold'); return; }
     setField('manaCur', manaCur - cost);
@@ -173,6 +192,10 @@ function CompetencesBody({ char, staff }) {
       const flat = {};
       Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (char.stats[k] || 0)); if (f) flat[k] = f; });
       setSkillBuff(sk.id, flat);
+      if (flat.hp) {
+        const newMax = (eff.hp || 0) + flat.hp;
+        setField('hpCur', Math.min((state.hpCur || 0) + flat.hp, newMax));
+      }
       toast(`<b>${char.name}</b> — ${sk.name} actif (effet de combat)`, 'gold');
     }
     // Bouclier au cast (one-shot, ajouté au pool).
@@ -195,7 +218,17 @@ function CompetencesBody({ char, staff }) {
     <div className="col gap-4" style={{ padding: 20 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <h2 style={{ fontSize: 20 }}>Compétences — {char.name}</h2>
-        <span className="badge" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>⏱ Tour {turn}</span>
+        <span className="row gap-2" style={{ alignItems: 'center' }}>
+          {staff && (
+            <span className="row gap-1" style={{ alignItems: 'center' }}>
+              <span className="overline">Niveau</span>
+              <button className="btn btn-sm btn-ghost" onClick={() => setField('level', Math.max(1, level - 1))} disabled={level <= 1}>−</button>
+              <span className="mono" style={{ fontSize: 15, color: 'var(--gold-pale)', minWidth: 22, textAlign: 'center' }}>{level}</span>
+              <button className="btn btn-sm btn-ghost" onClick={() => setField('level', level + 1)}>+</button>
+            </span>
+          )}
+          <span className="badge" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>⏱ Tour {turn}</span>
+        </span>
       </div>
       {enemies.length > 0 && (
         <div className="panel" style={{ padding: '10px 14px' }}>
@@ -231,10 +264,11 @@ function CompetencesBody({ char, staff }) {
       })()}
       <PassiveCard kit={kitWithId} eff={eff} counters={counters} level={level} color={color} setCounter={setCounter} />
       <div className="comp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-        {kit.actives.map(sk => (
+        {kit.actives.map((sk, i) => (
           <ActiveCard key={sk.id} sk={sk} eff={eff} baseCtx={baseCtx} color={color}
             ready={cooldownReady(cooldowns[sk.id], turn)} readyAt={cooldowns[sk.id]} turn={turn}
-            manaCur={state.manaCur || 0} onCast={() => cast(sk)} />
+            manaCur={state.manaCur || 0} onCast={() => cast(sk)}
+            locked={!skillUnlocked(i, level)} minLevel={i + 1} />
         ))}
       </div>
       <CombatLog canClear={false} />

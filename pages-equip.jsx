@@ -152,7 +152,8 @@ function EquipBody({ char }) {
   const runesSt  = state.runes || {};
   const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES));
-  const passiveMods = sumPassiveMods(char.id, state.counters || {}, char.level || 1);
+  const effLevel = (state.level != null ? state.level : char.level) || 1;
+  const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel);
   const bonuses = mergeMods(mergeMods(sumItemMods(equipment, itemsById), runeMods), passiveMods);  // items + runes + passif -> vert
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});  // buffs de compétence -> orange
   const eff = computeEffective(char.stats, state.modifiers, activeBuffs, mergeMods(bonuses, skillBuffMods));

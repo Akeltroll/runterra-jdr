@@ -16,7 +16,8 @@ function mjLive(c, st) {
   const runesSt  = (st && st.runes) || {};
   const runeMods = st ? sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES)) : {};
-  const passiveMods = st ? sumPassiveMods(c.id, st.counters || {}, c.level || 1) : {};
+  const effLevel = (st && st.level != null ? st.level : c.level) || 1;
+  const passiveMods = st ? sumPassiveMods(c.id, st.counters || {}, effLevel) : {};
   const skillBuffMods = st ? sumSkillBuffs(st.skillBuffs || {}) : {};
   const eff = computeEffective(c.stats, st ? st.modifiers : c.modifiers, buffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   const hp = st ? st.hpCur : Math.round(c.hpCur * c.stats.hp);
@@ -95,7 +96,7 @@ function MJCompactCard({ c, st, turn, onFull }) {
       <div className="col gap-2" style={{ padding:'14px 16px' }}>
         <ResourceBar kind="hp" cur={L.hp} max={L.maxHp} />
         <ResourceBar kind="mana" cur={L.mana} max={L.maxMana} />
-        <ResourceBar kind="shield" cur={L.shield} max={c.shieldMax || 0} />
+        <ResourceBar kind="shield" cur={L.shield} max={Math.max(c.shieldMax || 0, L.shield)} />
       </div>
       {/* survie */}
       <div className="row gap-2" style={{ padding:'0 16px 12px' }}>
