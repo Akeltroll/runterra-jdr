@@ -67,6 +67,9 @@ function MJSidebarRow({ c, st, active, onClick }) {
 
 function MJCompactCard({ c, st, turn, onFull }) {
   const L = mjLive(c, st);
+  const toast = useToast();
+  const [xpIn, setXpIn] = useState('');
+  const effLevel = (st && st.level != null ? st.level : c.level) || 1;
   // < 25% PV → pulsation rouge ; < 50% → orange ; sinon bordure normale.
   const hpCls = L.hpPct < 25 ? 'mj-card-danger' : L.hpPct < 50 ? 'mj-card-warn' : '';
   const stats = [['ad', L.eff.ad], ['ap', L.eff.ap], ['armure', L.eff.armure], ['resmag', L.eff.resmag]];
@@ -102,6 +105,20 @@ function MJCompactCard({ c, st, turn, onFull }) {
       <div className="row gap-2" style={{ padding:'0 16px 12px' }}>
         <span className="mono faint" style={{ fontSize:11 }}>🜂 Fatigue {L.fatigue}/5</span>
         <span className="mono faint" style={{ fontSize:11 }}>💧 Eau {L.eau}/5</span>
+      </div>
+      {/* XP / niveau (lecture + don MJ ad-hoc) */}
+      <div className="col gap-2" style={{ padding:'0 16px 12px' }}>
+        <XpBar level={effLevel} xp={(st && st.xp) || 0} />
+        <div className="row gap-2" style={{ alignItems:'center' }}>
+          <input type="number" min="0" value={xpIn} onChange={e => setXpIn(e.target.value)} placeholder="+XP"
+            style={{ width:72, background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontSize:13 }} />
+          <button className="btn btn-sm btn-ghost" title="Donner de l'XP" onClick={async () => {
+            const n = Math.max(0, parseInt(xpIn, 10) || 0); if (!n) return;
+            const res = await addXp(c.id, n);
+            if (res.levelsGained > 0) toast(`<b>${c.name}</b> passe niveau <b>${res.level}</b> !`, 'buff');
+            setXpIn('');
+          }}>+ XP</button>
+        </div>
       </div>
       {/* stats clés */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding:'0 16px 14px' }}>
