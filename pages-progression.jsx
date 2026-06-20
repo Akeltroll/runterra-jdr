@@ -5,6 +5,8 @@
 function ProgressionPage() {
   const [charId, setCharId] = useState('rathael');
   const char = CHARACTERS.find(c => c.id === charId);
+  const { state } = useCharState(charId);
+  const effLevel = (state && state.level != null ? state.level : char.level) || 1;
   const a = char.attrs;
   const totalUsed = a.force + a.hab + a.mental + a.magie;
   const lvlRow = LEVELS.find(l => l.lvl === char.level) || LEVELS[LEVELS.length - 1];
@@ -23,6 +25,10 @@ function ProgressionPage() {
             {CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+      </div>
+
+      <div className="panel" style={{ padding:'10px 16px', marginBottom:18 }}>
+        <XpBar level={effLevel} xp={(state && state.xp) || 0} />
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr', gap:20, alignItems:'start' }} className="prog-grid">
