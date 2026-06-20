@@ -435,6 +435,18 @@
     return {};
   }
 
+  /* Buffs sur soi (compétences) : somme des mods plats snapshotés au cast,
+     toutes compétences confondues. Mergé dans computeEffective (couche items). */
+  function sumSkillBuffs(skillBuffs) {
+    skillBuffs = skillBuffs || {};
+    const out = {};
+    for (const id of Object.keys(skillBuffs)) {
+      const m = skillBuffs[id] || {};
+      for (const k of Object.keys(m)) { const v = Number(m[k]) || 0; if (v) out[k] = (out[k] || 0) + v; }
+    }
+    return out;
+  }
+
   return {
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,
@@ -450,6 +462,6 @@
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
-    sumPassiveMods,
+    sumPassiveMods, sumSkillBuffs,
   };
 });

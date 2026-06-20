@@ -451,3 +451,10 @@ test('sumPassiveMods : Elias = +AD par charge (niv 2)', () => {
   assert.deepEqual(L.sumPassiveMods('smith', { marques: 2 }, 2), {});
   assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 3 }, 2), {});
 });
+
+/* --- Buffs sur soi : sumSkillBuffs --- */
+test('sumSkillBuffs somme les mods plats par compétence', () => {
+  assert.deepEqual(L.sumSkillBuffs({ demi_ours: { hp: 60, ad: 30 }, autre: { ad: 10 } }), { hp: 60, ad: 40 });
+  assert.deepEqual(L.sumSkillBuffs({}), {});
+  assert.deepEqual(L.sumSkillBuffs(null), {});
+});
