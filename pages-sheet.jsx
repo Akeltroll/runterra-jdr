@@ -298,7 +298,8 @@ function SheetBody({ char, variant }) {
   const runesSt  = state.runes || {};
   const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES));
-  const passiveMods = sumPassiveMods(char.id, state.counters || {}, char.level || 1);
+  const effLevel = (state.level != null ? state.level : char.level) || 1;
+  const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel);
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});
   const eff = computeEffective(char.stats, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   // Arme affichée = celle équipée dans le slot « Arme principale » (live), reliée à WEAPONS

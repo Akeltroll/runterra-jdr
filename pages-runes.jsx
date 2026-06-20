@@ -74,7 +74,8 @@ function RuneBody({ char, staff }) {
   const choices = runes.choices || {};
   const selectedIds = Object.keys(selectedSet).filter(id => selectedSet[id]);
   const bonus = state.runeBonus || 0;          // points additionnels accordés par le MJ (test / niveau)
-  const budget = runeBudget(char.level) + bonus;
+  const effLevel = (state.level != null ? state.level : char.level) || 1;
+  const budget = runeBudget(effLevel) + bonus;
   const spent = runeSpent(selectedIds, RUNE_INDEX);
 
   const nodeState = (id) => {
