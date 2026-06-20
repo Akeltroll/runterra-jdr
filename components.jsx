@@ -44,6 +44,25 @@ function ResourceBar({ kind='hp', cur, max, big=false, segments=0 }) {
   );
 }
 
+/* --- Barre d'XP (lecture seule) : progression DANS le niveau courant. --- */
+function XpBar({ level, xp }) {
+  const lvl = Math.max(1, level | 0);
+  const need = xpToNext(lvl);
+  const cur = Math.max(0, xp | 0);
+  const pct = need > 0 ? Math.max(0, Math.min(100, (cur / need) * 100)) : 0;
+  return (
+    <div className="col gap-1">
+      <div className="row" style={{ justifyContent:'space-between', alignItems:'baseline' }}>
+        <span className="overline">Niveau {lvl}</span>
+        <span className="mono faint" style={{ fontSize:11 }}>{cur} / {need} XP</span>
+      </div>
+      <div className="bar">
+        <div className="fill" style={{ width: pct + '%', background:'var(--gold-bright)' }}></div>
+      </div>
+    </div>
+  );
+}
+
 /* --- Stat chip --- */
 function StatChip({ k, value, suffix='', magic=false }) {
   return (
@@ -764,5 +783,5 @@ Object.assign(window, {
   ToastProvider, useToast, AnnoPin, AttackModal, STAT_GLYPH, STAT_LABEL,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
   InventoryGrid, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invThumbStyle,
-  AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog,
+  AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar,
 });

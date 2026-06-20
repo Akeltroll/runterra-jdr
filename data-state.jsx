@@ -138,6 +138,23 @@ function useCombatLog() {
   return { entries, clearLog };
 }
 
+/* Don d'XP (orchestrateur, écriture staff). Lit l'état du perso ciblé, applique le
+   gain via applyXp (montée auto + report du surplus), écrit { level, xp }. Journalise
+   la montée (pushLog). Retourne le résultat pour que l'appelant puisse toaster. */
+async function addXp(charId, gain) {
+  gain = Math.max(0, gain | 0);
+  if (!gain) return { level: null, xp: null, levelsGained: 0 };
+  const c = CHARACTERS.find(x => x.id === charId);
+  const p = charPath(charId);
+  const st = (await window.RTDB.getSnapshot(p)) || {};
+  const curLevel = (st.level != null ? st.level : (c ? c.level : 1)) || 1;
+  const curXp = Math.max(0, st.xp | 0);
+  const res = applyXp(curLevel, curXp, gain);
+  window.RTDB.updatePath(p, { level: res.level, xp: res.xp });
+  if (res.levelsGained > 0) pushLog(`<b>${c ? c.name : charId}</b> passe niveau <b>${res.level}</b> !`, 'buff');
+  return res;
+}
+
 /* Snapshot live de tous les persos (vue MJ). */
 function useAllCharStates() {
   const [all, setAll] = useState(null);
@@ -242,5 +259,5 @@ Object.assign(window, {
   useSharedTurn, COMBAT_TURN,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   usePendingHits, applyHitToEnemy, PENDING_HITS,
-  pushLog, useCombatLog, COMBAT_LOG,
+  pushLog, useCombatLog, COMBAT_LOG, addXp,
 });

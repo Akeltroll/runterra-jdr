@@ -451,6 +451,17 @@
     return out;
   }
 
+  /* XP & niveau : courbe générique (à remplacer plus tard) + application d'un gain.
+     xp = progression DANS le niveau courant ; le surplus reporte en cascade. */
+  function xpToNext(level) { return 100 * Math.max(1, level | 0); }
+  function applyXp(level, xp, gain) {
+    level = Math.max(1, level | 0);
+    xp = Math.max(0, xp | 0) + Math.max(0, gain | 0);
+    let levelsGained = 0;
+    while (xp >= xpToNext(level)) { xp -= xpToNext(level); level += 1; levelsGained += 1; }
+    return { level, xp, levelsGained };
+  }
+
   return {
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,
@@ -467,5 +478,6 @@
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
+    xpToNext, applyXp,
   };
 });

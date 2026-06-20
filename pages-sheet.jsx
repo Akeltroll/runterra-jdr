@@ -313,6 +313,9 @@ function SheetBody({ char, variant }) {
     || WEAPONS.find(w => w.id === char.weaponId);
   return (
     <div style={{ padding:'20px 24px' }}>
+      <div className="panel" style={{ padding:'10px 16px', marginBottom:16 }}>
+        <XpBar level={effLevel} xp={state.xp || 0} />
+      </div>
       <div style={{ display:'grid', gridTemplateColumns:'minmax(300px,1fr) minmax(300px,1fr) minmax(320px,1.05fr)', gap:20, alignItems:'start' }} className="sheet-grid">
         {/* COLONNE 1 — STATS */}
         <div className="col gap-5">

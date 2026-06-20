@@ -37,7 +37,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Design System, staff). Récap placé en avant-dernier (Admin reste dernier).
 - `game-logic.js` — **logique pure** (UMD : testable en Node + `window`). `clamp`,
   `clampGauge`, `DEFAULT_MODIFIERS`, `BUFF_STAT_MAP`, `computeEffective`,
-  `applyHealMods`, `buildDefaultState`. Combat (vue MJ) : `mitigateDamage`
+  `applyHealMods`, `buildDefaultState`. **XP** : `xpToNext(level)` (courbe générique `100*level`,
+  point unique à changer) + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade).
+  Combat (vue MJ) : `mitigateDamage`
   (armure/resmag, AR-120, brut sans réduction) + `applyDamageToPools`
   (bouclier puis HP, KO) — reproduit le moteur Excel.
 - `auth.js` — logique d'auth pure (UMD) : `usernameToEmail`, `ROLES`, `isStaff`,
@@ -62,6 +64,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (identité + `/users/{uid}`, auto-inscription), `useAllUsers`, `setUserAssignment`,
   `seedIfEmpty(role)` (réservé staff). Compétences : `setCounter`/`setCooldown`/**`setSkillBuff`** (sur
   `useCharState` ; `setSkillBuff(skillId, mods)` = buff sur soi, snapshot de mods plats).
+  **XP** : orchestrateur `addXp(charId, gain)` (async, écriture staff : `getSnapshot`→`applyXp`→écrit
+  `{level, xp}`, `pushLog` au level-up, retourne `{level, xp, levelsGained}` pour le toast appelant).
   `useSharedTurn` (tour partagé ; `resetCombat` **async** : efface counters/cooldowns/`skillBuffs`/`combat/log`
   ET **ramène PV/bouclier aux caps de base** via `computeEffective` sans skillBuffs). **Plateau partagé** :
   `useMJEnemies` (ennemis Firebase), `usePendingHits` (file d'attaques), orchestrateur `applyHitToEnemy`
@@ -69,7 +73,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (`combat/log`, ~30 derniers). Orchestrateurs de transfert RTDB `moveItem` (via `planItemTransfer`) /
   `moveCoins`. Constantes `CAMPAIGN = 'campaign/runeterra'`, `SHARED_INV`, `SHARED_COINS`, `COMBAT_TURN`,
   `ENEMIES`, `PENDING_HITS`, `COMBAT_LOG`.
-- `components.jsx` — UI partagée : `Avatar`, `ResourceBar`, `BuffBadge`, toasts
+- `components.jsx` — UI partagée : `Avatar`, `ResourceBar`, **`XpBar`** (barre d'XP lecture seule :
+  `xp/xpToNext(level)` + label niveau), `BuffBadge`, toasts
   (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), **`CombatLog`** (journal de combat
   partagé lecture seule, lit `useCombatLog` ; prop `canClear` = bouton « Vider » staff), `LoginScreen`,
   `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`, `AttackModal`,
@@ -196,6 +201,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 ```
 /campaign/runeterra/characters/{charId}/state/
     hpCur, manaCur, shield (valeurs ABSOLUES), fatigue (0-5), eau (0-5)
+    xp:        0   ← progression DANS le niveau courant (entier ≥ 0, < xpToNext(level)) ; via addXp ; montée auto → level
     buffs:     { [buffId]: true }
     modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, sapience }
     inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods } }   ← perso, éditable

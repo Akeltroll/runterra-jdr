@@ -468,3 +468,27 @@ test('skillUnlocked : active n° i requiert niveau i+1', () => {
   assert.equal(L.skillUnlocked(3, 3), false);  // C4 niv 3 -> verrouillé
   assert.equal(L.skillUnlocked(3, 4), true);   // C4 niv 4
 });
+
+/* --- Task XP : courbe & application --- */
+test('xpToNext croît avec le niveau (formule générique)', () => {
+  assert.equal(L.xpToNext(1), 100);
+  assert.equal(L.xpToNext(2), 200);
+  assert.equal(L.xpToNext(5), 500);
+});
+test('applyXp : gain sans montée de niveau', () => {
+  assert.deepEqual(L.applyXp(2, 50, 100), { level: 2, xp: 150, levelsGained: 0 });
+});
+test('applyXp : gain pile au seuil → +1 niveau, xp remis à 0', () => {
+  assert.deepEqual(L.applyXp(2, 0, 200), { level: 3, xp: 0, levelsGained: 1 });
+});
+test('applyXp : report du surplus sur le niveau suivant', () => {
+  // niv2 (seuil 200) : 150 + 100 = 250 → +1 niveau, reste 50
+  assert.deepEqual(L.applyXp(2, 150, 100), { level: 3, xp: 50, levelsGained: 1 });
+});
+test('applyXp : gros gain → montée multi-niveaux + report', () => {
+  // niv1→ seuils 100/200/300 : 650 → -100(n2) -200(n3) -300(n4), reste 50
+  assert.deepEqual(L.applyXp(1, 0, 650), { level: 4, xp: 50, levelsGained: 3 });
+});
+test('applyXp : gain nul = no-op', () => {
+  assert.deepEqual(L.applyXp(2, 30, 0), { level: 2, xp: 30, levelsGained: 0 });
+});
