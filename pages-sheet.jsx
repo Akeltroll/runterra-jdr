@@ -31,7 +31,7 @@ function ResourceStack({ char, eff, variant, hp, mana, shield }) {
       <div className="row gap-2" style={{ justifyContent:'space-around' }}>
         <Gauge cur={hp} max={eff.hp} color="var(--hp)" label="Vie" />
         <Gauge cur={mana} max={eff.mana} color="var(--mana-bright)" label="Mana" />
-        <Gauge cur={shield} max={char.shieldMax} color="var(--shield)" label="Bouclier" />
+        <Gauge cur={shield} max={Math.max(char.shieldMax || 0, shield)} color="var(--shield)" label="Bouclier" />
       </div>
     );
   }
@@ -48,7 +48,7 @@ function ResourceStack({ char, eff, variant, hp, mana, shield }) {
       </div>
       <div>
         <div className="row" style={{ justifyContent:'space-between', marginBottom:5 }}><span className="overline">Bouclier</span></div>
-        <ResourceBar kind="shield" cur={shield} max={char.shieldMax} big={big} segments={variant==='b'?10:0} />
+        <ResourceBar kind="shield" cur={shield} max={Math.max(char.shieldMax || 0, shield)} big={big} segments={variant==='b'?10:0} />
       </div>
     </div>
   );

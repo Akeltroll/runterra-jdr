@@ -192,6 +192,10 @@ function CompetencesBody({ char, staff }) {
       const flat = {};
       Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (char.stats[k] || 0)); if (f) flat[k] = f; });
       setSkillBuff(sk.id, flat);
+      if (flat.hp) {
+        const newMax = (eff.hp || 0) + flat.hp;
+        setField('hpCur', Math.min((state.hpCur || 0) + flat.hp, newMax));
+      }
       toast(`<b>${char.name}</b> — ${sk.name} actif (effet de combat)`, 'gold');
     }
     // Bouclier au cast (one-shot, ajouté au pool).
