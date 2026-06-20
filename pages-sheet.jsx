@@ -59,7 +59,9 @@ function SecondaryStats({ stats, variant }) {
   const items = [
     ['ad', stats.ad, false], ['ap', stats.ap, true], ['armure', stats.armure, false],
     ['resmag', stats.resmag, true], ['crit', stats.crit + '%', false], ['dcrit', stats.dcrit + '%', false],
-    ['sapience', stats.sapience, false], ['omni', '0%', true], ['vol', '0%', false],
+    ['sapience', stats.sapience, false],
+    ['omni', (stats.omni || 0) + '%', true],
+    ['vol', (stats.vol || 0) + '%', false],
   ];
   if (variant === 'b') {
     // tuiles angulaires hextech
