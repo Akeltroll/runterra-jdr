@@ -187,6 +187,7 @@ function CompetencesBody({ char, staff }) {
     setField('manaCur', manaCur - cost);
     if (sk.kind === 'combat') setCooldown(sk.id, CD_LOCKED);
     else setCooldown(sk.id, nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));
+    const logParts = []; // effets appliqués au lanceur, agrégés en une entrée de journal
     // Buff sur soi : snapshot des mods plats (% de la stat de base) → effet de combat orange.
     if (sk.selfBuff) {
       const flat = {};
@@ -196,20 +197,24 @@ function CompetencesBody({ char, staff }) {
         const newMax = (eff.hp || 0) + flat.hp;
         setField('hpCur', Math.min((state.hpCur || 0) + flat.hp, newMax));
       }
+      logParts.push(flat.hp ? `+${flat.hp} PV` : 'effet de combat');
       toast(`<b>${char.name}</b> — ${sk.name} actif (effet de combat)`, 'gold');
     }
     // Bouclier au cast (one-shot, ajouté au pool).
     if (sk.shield) {
       const sh = sk.shield(eff, baseCtx);
-      if (sh) { setField('shield', (state.shield || 0) + sh); toast(`<b>${char.name}</b> gagne ${sh} bouclier`, 'gold'); }
+      if (sh) { setField('shield', (state.shield || 0) + sh); logParts.push(`+${sh} bouclier`); toast(`<b>${char.name}</b> gagne ${sh} bouclier`, 'gold'); }
     }
     // Comp à dégâts + cible choisie → propose une attaque au MJ (il ajuste au d20 puis applique).
     const dmg = sk.dmg ? sk.dmg(eff, baseCtx) : null; // dégâts unitaires (multi-cibles : le MJ duplique/ajuste)
     if (dmg != null && targetId) {
       addHit({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
         type: (wType === 'Magique' ? 'magique' : 'physique'), computedDmg: dmg, targetId });
+      const tgt = enemies.find(en => en.id === targetId);
+      pushLog(`<b>${char.name}</b> vise <b>${tgt ? tgt.name : 'un ennemi'}</b> avec <b>${sk.name}</b> (${dmg}) — en attente MJ`, 'gold');
       toast(`<b>${char.name}</b> vise un ennemi avec ${sk.name} (${dmg}) — envoyé au MJ`, 'buff');
     } else {
+      pushLog(`<b>${char.name}</b> lance <b>${sk.name}</b>${logParts.length ? ' — ' + logParts.join(', ') : ''}`, logParts.length ? 'buff' : 'gold');
       toast(`<b>${char.name}</b> lance ${sk.name}`, 'buff');
     }
   }

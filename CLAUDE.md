@@ -110,7 +110,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Fin de tour / précédent / **⟲ Combat** = reset tour + toutes charges/cooldowns + skillBuffs + journal)
   — pilote les CD des compétences. Sous chaque carte joueur : ligne **charges + cooldowns actifs**
   (lecture MJ). **`CombatLog`** (journal de combat partagé) affiché sous le plateau, « Vider » staff ;
-  `pushLog` alimenté à la résolution joueur→ennemi (`PendingHitsPanel`) et ennemi→joueur (`EnemyAttackModal`).
+  `pushLog` alimenté à la résolution joueur→ennemi (`PendingHitsPanel`), ennemi→joueur (`EnemyAttackModal`),
+  au bouton **« Subir »** (`EnemyCard.applySubir`, dégâts manuels MJ) et au **cast de compétence** (côté joueur, voir `pages-competences.jsx`).
 - `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
 - `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé) :
   rendu en **grille partagée** (`InventoryGrid`). Clic item → `ItemActionMenu` (Prendre / Éditer /
@@ -163,11 +164,15 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   une comp avec `selfBuff` (% de la stat de base) écrit `state/skillBuffs` (mods plats) → panneau
   **« Effets de combat actifs » en orange** (`--skillbuff`) + boost en temps réel via `sumSkillBuffs`→
   `computeEffective` ; un `selfBuff.hp` **soigne aussi** les PV au cast (la jauge se remplit) ; une comp
-  avec `shield` ajoute le bouclier au pool au cast. **Journal de combat** (`CombatLog`, lecture seule)
+  avec `shield` ajoute le bouclier au pool au cast. **Chaque cast journalise** (`pushLog` : buff/soin/bouclier
+  agrégés, ou attaque visée « en attente MJ », ou lancer simple). **Journal de combat** (`CombatLog`, lecture seule)
   affiché en bas. **Déblocage par niveau** : active n° *i* → niveau *i* requis (`skillUnlocked`), carte
   verrouillée grisée + 🔒 ; **stepper « Niveau » staff** dans l'en-tête (`setField('level')`, niveau
   effectif = `state.level ?? char.level`, pilote aussi passif + budget runes).
-- `pages-lobby/journal/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
+- `pages-journal.jsx` — onglet **Journal** (`JournalPage`, staff) : **flux d'événements live** du `combat/log`
+  partagé (`useCombatLog`), filtres par `kind` (tous/actions/buffs/KO) + horodatage + « Vider » (purge partagée).
+  Remplace l'ancien mockup statique. Lecture seule, alimenté par `pushLog`.
+- `pages-lobby/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
   joueur = sa fiche seule, staff = tout ; `sharedInventory` = R/W pour tout participant

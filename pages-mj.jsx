@@ -163,7 +163,9 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
   const applySubir = () => {
     const n = num(subir);
     if (n <= 0) return;
-    onUpdate(enemy.id, { hpCur: Math.max(0, enemy.hpCur - n) });
+    const nhp = Math.max(0, enemy.hpCur - n);
+    onUpdate(enemy.id, { hpCur: nhp });
+    pushLog(`<b>${enemy.name}</b> subit <b>${n}</b> dégâts${nhp === 0 ? ' — KO !' : ''}`, nhp === 0 ? 'debuff' : 'gold');
     setSubir('');
   };
 
