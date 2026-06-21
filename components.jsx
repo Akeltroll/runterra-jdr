@@ -215,10 +215,10 @@ function AttackModal({ char, onClose }) {
 
   const launch = () => {
     const base = charBaseStats(char, null);
-    const isCrit = Math.random() * 100 < base.crit;
-    const r = computeAttack({ weapon, stats: base, lethality, isCrit });
+    const cr = rollCrit(base.crit || 0, base.dcrit || 0);
+    const r = computeAttack({ weapon, stats: base, lethality, critMult: cr.multiplier });
     setResult(r);
-    toast(`<b>${char.name}</b> inflige <b>${r.dmg}</b> dégâts ${weapon.cat.toLowerCase()}s${isCrit ? ' — CRITIQUE !' : ''}`, isCrit ? 'buff' : 'gold');
+    toast(`<b>${char.name}</b> inflige <b>${r.dmg}</b> dégâts ${weapon.cat.toLowerCase()}s${cr.didCrit ? (cr.tiers > 1 ? ` — SURCRIT ×${cr.multiplier.toFixed(2)} !` : ' — CRITIQUE !') : ''}`, cr.didCrit ? 'buff' : 'gold');
   };
 
   return (

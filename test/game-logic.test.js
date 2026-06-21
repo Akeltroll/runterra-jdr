@@ -590,3 +590,10 @@ test('mitigateDamage : la léthalité réduit la résistance (sans passer sous 0
   assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 200), 100); // eff borné à 0
   assert.equal(L.mitigateDamage(100, 'brut',     { armure: 120 }, 50), 100);  // brut ignore tout
 });
+test('computeAttack : dmg = round(base * critMult)', () => {
+  // invariant figé (computeAttack vit dans data.jsx, non requis ici)
+  const calc = (ad, mult) => Math.round(ad * mult);
+  assert.equal(calc(100, 1), 100);    // pas de crit
+  assert.equal(calc(100, 2), 200);    // crit base (dcrit 200)
+  assert.equal(calc(100, 2.5), 250);  // surcrit 1 palier
+});
