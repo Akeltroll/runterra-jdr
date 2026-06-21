@@ -332,6 +332,29 @@ function PendingHitsPanel({ enemies }) {
   );
 }
 
+/* État de séance MJ-local (localStorage). v2 possible : partagé en Firebase. */
+const SESSION_KEY = 'runeterra_session';
+function useSession() {
+  const [active, setActive] = useState(() => { try { return localStorage.getItem(SESSION_KEY) === '1'; } catch (e) { return false; } });
+  const start = useCallback(() => { try { localStorage.setItem(SESSION_KEY, '1'); } catch (e) {} setActive(true); }, []);
+  const close = useCallback(() => { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} setActive(false); }, []);
+  return { active, start, close };
+}
+function SessionStartModal({ onStart, onVisit }) {
+  return (
+    <div className="modal-scrim" style={{ alignItems:'center' }}>
+      <div style={{ width:'min(420px,100%)', background:'var(--bg-deep)', border:'1px solid var(--line-gold)', borderRadius:12, boxShadow:'var(--shadow-modal)', padding:'24px' }}>
+        <h3 style={{ fontSize:20, marginBottom:6 }}>Ouverture de la table</h3>
+        <p className="faint" style={{ fontSize:13, marginBottom:18 }}>Démarrer une séance (pour distribuer XP &amp; récompenses à la clôture) ou simplement visiter le site ?</p>
+        <div className="col gap-2">
+          <button className="btn btn-gold" style={{ justifyContent:'center' }} onClick={onStart}>🎲 Début de séance</button>
+          <button className="btn btn-ghost" style={{ justifyContent:'center' }} onClick={onVisit}>Visite du site</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MJPage({ go }) {
   const all = useAllCharStates();
   const [selected, setSelected] = useState('rathael');
@@ -340,6 +363,9 @@ function MJPage({ go }) {
   const { turn, nextTurn, prevTurn, resetCombat } = useSharedTurn();
   const [attacker, setAttacker] = useState(null); // ennemi en cours d'attaque (Task 4)
   const stOf = (id) => (all && all[id] && all[id].state) || null;
+  const { active, start, close } = useSession();
+  const [decided, setDecided] = useState(false);
+  const [rewards, setRewards] = useState(false);
   return (
     <div style={{ display:'grid', gridTemplateColumns:'264px 1fr', height:'100%', minHeight:0 }}>
       {/* SIDEBAR */}
@@ -379,6 +405,12 @@ function MJPage({ go }) {
             <ExportImportPanel />
           </div>
         </div>
+        {active && (
+          <div className="row" style={{ justifyContent:'space-between', alignItems:'center', padding:'10px 24px', background:'var(--bg-inset)', borderBottom:'1px solid var(--line-gold)' }}>
+            <span className="mono" style={{ fontSize:13, color:'var(--gold-pale)' }}>🎲 Séance en cours</span>
+            <button className="btn btn-sm btn-gold" onClick={() => setRewards(true)}>Clôturer la séance</button>
+          </div>
+        )}
         <div style={{ flex:1, overflow:'auto', padding:24 }}>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:16, alignItems:'start', paddingBottom:8 }}>
             {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} turn={turn} onFull={() => setFull(c)} />)}
@@ -405,6 +437,8 @@ function MJPage({ go }) {
         </div>
       </main>
 
+      {!active && !decided && <SessionStartModal onStart={() => { start(); setDecided(true); }} onVisit={() => setDecided(true)} />}
+      {rewards && <SessionRewardsModal onLoot={() => go('inv')} onCancel={() => setRewards(false)} onDone={() => { setRewards(false); close(); }} />}
       {full && <FullScreenSheet char={full} onClose={() => setFull(null)} />}
       {attacker && <EnemyAttackModal enemy={attacker} stOf={stOf} onClose={() => setAttacker(null)} />}
     </div>
