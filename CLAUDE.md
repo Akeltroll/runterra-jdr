@@ -37,7 +37,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Design System, staff). Récap placé en avant-dernier (Admin reste dernier).
 - `game-logic.js` — **logique pure** (UMD : testable en Node + `window`). `clamp`,
   `clampGauge`, `DEFAULT_MODIFIERS`, `BUFF_STAT_MAP`, `computeEffective`,
-  `applyHealMods`, `buildDefaultState`. **XP** : `xpToNext(level)` (courbe officielle du MJ
+  `applyHealMods`, `buildDefaultState`. **Moteur de stats refondu** (système hypermétrique) :
+  `computeStats(F,H,M,C,level)` (8 stats dérivées : magnitude escaladée via `escalationFactor(p)`
+  [tranches de 4, table §4.3, zone PNJ quadratique >20] + socle de niveau + bonus de départ Habileté/fondu ;
+  **sans Sapience**, retirée du socle) + `charBaseStats(char,state)` (base **live** : caracs effectives
+  `state.attrs ?? char.attrs`, niveau `state.level ?? char.level`). Validé contre les profils §9.
+  **XP** : `xpToNext(level)` (courbe officielle du MJ
   `180 + 100*level` = `info-mj/tableau_XP.png` ; **cap niveau 18** → `Infinity` au cap, `MAX_LEVEL=18`)
   + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade, figée au cap).
   Combat (vue MJ) : `mitigateDamage`
@@ -55,10 +60,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   jusqu'à 99 puis crée de nouvelles piles pour le surplus → patch `{itemId:item}`) +
   `planItemAdd(items,entry,qty)` (`{patch}`, ajout depuis le catalogue) ;
   `buildDefaultState` amorce `inventory` depuis `char.inv` et `coins` depuis `char.coins`.
-- `data.jsx` — règles immuables : formules `computeStats`, `CHARACTERS` (avec `inv`
-  par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS`, `RUNE`, `JOURNAL`,
+- `data.jsx` — règles immuables : `CHARACTERS` (avec `inv`
+  par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS` (caps §3, cap PJ 20), `ATTRIBUTES`, `RUNE`, `JOURNAL`,
   `ITEM_CATALOG` (catalogue d'items pré-enregistrés pour l'ajout staff : `{cat,name,sub,ic,img,type}`).
-  `mkChar` y attache les `modifiers` par défaut. (`ATTACK_MODES` **retiré** — voir Décisions.)
+  `mkChar` attache `attrs` + `modifiers` (ne bake **plus** `stats` : calcul live via `charBaseStats`,
+  voir `game-logic.js`). (`ATTACK_MODES` **retiré** — voir Décisions.)
 - `data-state.jsx` — hooks temps réel : `useCharState` (+ setters inventaire
   `setInvItem`/`removeInvItem` + équipement `setEquipment` + monnaie `setCoin`), `useAllCharStates`,
   `useSharedInventory` (inventaire commun), `useSharedCoins` (monnaie commune), `useAuthIdentity`
@@ -197,6 +203,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `docs/superpowers/specs/` et `docs/superpowers/plans/` — design et plan d'implémentation.
 - `ATH/` — images : `Armes/` + `Items/` (icônes d'items `.webp`) + `Perso/*.webp` (portraits).
 - `info-mj/` — **source de vérité du MJ** (règles détaillées) ; voir « Infos MJ » plus bas.
+  **Gitignored** (privé : le dépôt est public) — ne jamais committer ; édité/lu en local uniquement.
 - `idée/` — assets de travail lourds (modèle 3D abandonné) ; **gitignore** (avec `*.glb/obj/fbx`).
 
 ## Modèle de données Firebase
@@ -213,7 +220,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     coinsInit: true   ← marqueur de migration (amorçage unique des pièces)
     runes:     { selected:{[nodeId]:true}, choices:{[nodeId]:'ad'|'ap'} }   ← arbre de runes (page Runes)
     runeBonus: 0   ← points de rune bonus accordés par le MJ (test / montée de niveau) ; budget = level + runeBonus
-    level:     2   ← niveau effectif (entier ≥ 1, stepper staff onglet Compétences) ; défaut = char.level ; pilote déblocage des comps + passif + budget runes
+    level:     2   ← niveau effectif (entier ≥ 1, stepper staff onglet Compétences) ; défaut = char.level ; pilote déblocage des comps + passif + budget runes + STATS (socle moteur refondu)
+    attrs:       { force, hab, mental, magie }   ← override de caracs (respec) ; ABSENT par défaut → repli char.attrs ; lu par charBaseStats
+    attrsLocked: true   ← verrou après respec joueur unique (UI à venir) ; le staff peut éditer/déverrouiller
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
     skillBuffs: { [skillId]: { [stat]: n } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; effacés par « ⟲ Combat »
@@ -413,13 +422,17 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   commun). `grantCoins(charId, patch)` = don additif d'argent (data-state). Aucune règle RTDB.
   Spec/plan : `docs/superpowers/{specs,plans}/2026-06-21-seance-recompenses*`.
   **Courbe XP officielle appliquée** (`info-mj/tableau_XP.png`) : `xpToNext = 180+100*level`, cap niveau 18.
-- **Refonte « système hypermétrique » (à venir, gros chantier)** — `info-mj/SPECIFICATION - Système refondu.md`
-  (livré MJ 2026-06-21). Remplace le modèle de stats par **4 caractéristiques** (Force/Magie/Habileté/Mental)
-  → 9 stats dérivées (matrice de poids, escalade anti-aplatissement, socle de niveau, bonus de départ,
-  surcrit par paliers, équipement en stats finales, zone PNJ quadratique). **Breaking change** sur le modèle
-  de perso + données Firebase → réécrit `computeStats`/`computeEffective`, fiche, MJ, Équipement, Runes.
-  Mérite son propre brainstorm + spec + plan (décisions MJ : répartition de départ des 5 persos, migration).
-  Note : mitigation `120/(120+res)` et table de points `LEVELS` collent déjà à la spec.
+- **Refonte « système hypermétrique »** — `info-mj/SPECIFICATION - Système refondu.md` (livré MJ 2026-06-21).
+  Modèle de stats = **4 caractéristiques** (Force/Habileté/Mental/Magie) → 8 stats dérivées (matrice de poids,
+  escalade anti-aplatissement, socle de niveau, bonus de départ, surcrit, équipement en stats finales, zone PNJ).
+  Découpé en sous-projets. **Fondation = FAITE (2026-06-21, branche `feat/moteur-stats-refondu`)** : `computeStats(F,H,M,C,level)`
+  + `escalationFactor` + `charBaseStats` (game-logic, testés §9), bascule de l'app en calcul **live** (fin du
+  `char.stats` figé ; 9 fichiers migrés), modèle de données `state/attrs`+`attrsLocked` (lecture seule ici),
+  caps `LEVELS` §3, libellés `ATTRIBUTES`, Sapience retirée du socle. Aucune règle RTDB. Spec/plan :
+  `docs/superpowers/{specs,plans}/2026-06-21-moteur-stats-refondu*`. **Reste** (sous-projets séparés) :
+  (1) **respec joueur** (UI : répartition des points, caps par niveau, confirmation → écrit `attrs`+`attrsLocked`) ;
+  (2) **équipement en stats finales** (armes 3 paliers + 18 armures §7) ; (3) **surcrit par paliers** (%Crit >100 % §6.3) ;
+  (4) **zone PNJ/divine** (escalade quadratique >20 §8 ; `escalationFactor` gère déjà >20).
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
 - `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/
@@ -437,5 +450,6 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 - L'Excel : feuilles Statistiques/Runes/Journal/Grille Personnage + Stats/Grille par joueur.
   Correspondance perso↔joueur : Rathäel=JB, Urskaar=Baptiste, Smith=Erwan,
   **Elias Crowe (id `lunick`)=Fab**, Jett=Steph.
-- Gitignore : `node_modules/`, `idée/`, `*.glb`/`*.obj`/`*.fbx` (assets lourds, hors dépôt).
+- Gitignore : `node_modules/`, `idée/`, `*.glb`/`*.obj`/`*.fbx` (assets lourds, hors dépôt),
+  `info-mj/` (règles privées du MJ — dépôt public).
 ```
