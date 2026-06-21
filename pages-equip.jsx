@@ -156,15 +156,16 @@ function EquipBody({ char }) {
   const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel);
   const bonuses = mergeMods(mergeMods(sumItemMods(equipment, itemsById), runeMods), passiveMods);  // items + runes + passif -> vert
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});  // buffs de compétence -> orange
-  const eff = computeEffective(char.stats, state.modifiers, activeBuffs, mergeMods(bonuses, skillBuffMods));
+  const eff = computeEffective(charBaseStats(char, state), state.modifiers, activeBuffs, mergeMods(bonuses, skillBuffMods));
   const sval = (k, base, pct) => (pct ? (base || 0).toFixed(1) + '%' : invFmt(base || 0));
   const scol = (k) => (skillBuffMods[k] ? 'var(--skillbuff)' : (bonuses[k] ? '#9fd07a' : '#e9dcc4'));
 
+  const eAttrs = (state.attrs || char.attrs);
   const attributs = [
-    { k:'Force',          v:char.attrs.force,  col:'#e9dcc4' },
-    { k:'Habileté',       v:char.attrs.hab,    col:'#e9dcc4' },
-    { k:'Mental',         v:char.attrs.mental, col:'#e9dcc4' },
-    { k:'Magie/Cosmique', v:char.attrs.magie,  col:'#e9dcc4' },
+    { k:'Force',          v:eAttrs.force,  col:'#e9dcc4' },
+    { k:'Habileté',       v:eAttrs.hab,    col:'#e9dcc4' },
+    { k:'Mental',         v:eAttrs.mental, col:'#e9dcc4' },
+    { k:'Magie/Cosmique', v:eAttrs.magie,  col:'#e9dcc4' },
   ];
   const combat = [
     { k:'Dégâts (AD)',  v:sval('ad', eff.ad),           col:scol('ad')   },

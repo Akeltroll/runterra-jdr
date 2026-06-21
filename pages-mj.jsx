@@ -19,9 +19,10 @@ function mjLive(c, st) {
   const effLevel = (st && st.level != null ? st.level : c.level) || 1;
   const passiveMods = st ? sumPassiveMods(c.id, st.counters || {}, effLevel) : {};
   const skillBuffMods = st ? sumSkillBuffs(st.skillBuffs || {}) : {};
-  const eff = computeEffective(c.stats, st ? st.modifiers : c.modifiers, buffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
-  const hp = st ? st.hpCur : Math.round(c.hpCur * c.stats.hp);
-  const mana = st ? st.manaCur : Math.round(c.manaCur * c.stats.mana);
+  const base = charBaseStats(c, st);
+  const eff = computeEffective(base, st ? st.modifiers : c.modifiers, buffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
+  const hp = st ? st.hpCur : Math.round(c.hpCur * base.hp);
+  const mana = st ? st.manaCur : Math.round(c.manaCur * base.mana);
   const shield = st ? st.shield : c.shieldCur;
   const maxHp = eff.hp, maxMana = eff.mana;
   return {

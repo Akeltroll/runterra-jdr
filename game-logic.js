@@ -287,8 +287,8 @@
       inventory[id] = makeItem({ id, cat: it.cat, name: it.name, sub: it.sub, qty: it.qty, ic: it.ic, img: it.img, type: it.type });
     });
     return {
-      hpCur:   Math.round((char.hpCur || 0) * char.stats.hp),
-      manaCur: Math.round((char.manaCur || 0) * char.stats.mana),
+      hpCur:   Math.round((char.hpCur || 0) * charBaseStats(char, null).hp),
+      manaCur: Math.round((char.manaCur || 0) * charBaseStats(char, null).mana),
       shield:  char.shieldCur || 0,
       fatigue: char.fatigue || 0,
       eau:     char.eau || 0,

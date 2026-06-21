@@ -88,14 +88,16 @@ test('applyHealMods applique miracule/hemorragie', () => {
 });
 
 test('buildDefaultState convertit ratios en valeurs absolues', () => {
+  // base dérivée des caracs + niveau (moteur refondu), pas d'un champ stats figé
   const char = {
-    id:'rathael', hpCur:1.0, manaCur:205/265, shieldCur:99,
+    id:'rathael', hpCur:1.0, manaCur:0.5, shieldCur:99,
     fatigue:1, eau:3, buffs:['bravoure'],
-    stats:{ hp:495, mana:265 }, shieldMax:200,
+    attrs:{ force:4, hab:3, mental:4, magie:1 }, level:2, shieldMax:200,
   };
+  const base = L.computeStats(4, 3, 4, 1, 2);
   const s = L.buildDefaultState(char);
-  assert.equal(s.hpCur, 495);
-  assert.equal(s.manaCur, 205);
+  assert.equal(s.hpCur, base.hp);                       // ratio 1.0
+  assert.equal(s.manaCur, Math.round(0.5 * base.mana)); // ratio 0.5
   assert.equal(s.shield, 99);
   assert.equal(s.fatigue, 1);
   assert.equal(s.eau, 3);
