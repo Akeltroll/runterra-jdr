@@ -59,7 +59,8 @@ function SecondaryStats({ stats, variant }) {
   const items = [
     ['ad', stats.ad, false], ['ap', stats.ap, true], ['armure', stats.armure, false],
     ['resmag', stats.resmag, true], ['crit', stats.crit + '%', false], ['dcrit', stats.dcrit + '%', false],
-    ['sapience', stats.sapience, false],
+    // Sapience retirée du socle (refonte) : affichée seulement si une source (item/comp) en accorde.
+    ...(stats.sapience > 0 ? [['sapience', stats.sapience, false]] : []),
     ['omni', (stats.omni || 0) + '%', true],
     ['vol', (stats.vol || 0) + '%', false],
   ];

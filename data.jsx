@@ -24,20 +24,20 @@ const LEVELS = [
   { lvl:10, gain:1, total:22, limit:14 },
   { lvl:11, gain:1, total:23, limit:15 },
   { lvl:12, gain:2, total:25, limit:16 },
-  { lvl:13, gain:1, total:26, limit:16 },
-  { lvl:14, gain:1, total:27, limit:16 },
-  { lvl:15, gain:2, total:29, limit:16 },
-  { lvl:16, gain:1, total:30, limit:16 },
-  { lvl:17, gain:1, total:31, limit:16 },
-  { lvl:18, gain:2, total:33, limit:16 },
+  { lvl:13, gain:1, total:26, limit:17 },
+  { lvl:14, gain:1, total:27, limit:18 },
+  { lvl:15, gain:2, total:29, limit:19 },
+  { lvl:16, gain:1, total:30, limit:20 },
+  { lvl:17, gain:1, total:31, limit:20 },
+  { lvl:18, gain:2, total:33, limit:20 },
 ];
 
 /* --- Attributs principaux et sous-stats dérivées (page Progression) --- */
 const ATTRIBUTES = [
-  { key:'force', name:'Force',          color:'var(--hp)',     sub:['+20 AD / pt', '+75 HP / pt', '+4-5 Armure / pt', '+2% D. Crit / pt'] },
-  { key:'hab',   name:'Habileté',       color:'var(--gold)',   sub:['+10 AD / pt', '+10 AP / pt', '+5% Crit / pt', '+2.5 Sapience / pt', '+1 Armure / pt'] },
-  { key:'mental',name:'Mental',         color:'var(--buff)',   sub:['+45 HP / pt', '+30 Mana / pt', '+5 AD/AP / pt', '+6 Armure / pt', '+6 Rés. Mag / pt'] },
-  { key:'magie', name:'Magie/Cosmique', color:'var(--silver)', sub:['+20 AP / pt', '+75 Mana / pt', '+5 HP / pt', '+2% D. Crit / pt', '+4-5 Rés. Mag / pt'] },
+  { key:'force', name:'Force',          color:'var(--hp)',     sub:['+20 AD / pt', '+20 PV / pt', '+4 Armure / pt', '+2 D.Crit / pt'] },
+  { key:'hab',   name:'Habileté',       color:'var(--gold)',   sub:['+8 AD / pt', '+8 AP / pt', '+10% Crit / pt', '+6 D.Crit / pt', 'Départ : +20 PV/+1 Arm/+1 RM (max 5 pts)'] },
+  { key:'mental',name:'Mental',         color:'var(--buff)',   sub:['+42 PV / pt', '+38 Mana / pt', '+3 AD/AP / pt', '+2% Crit / pt'] },
+  { key:'magie', name:'Magie/Cosmique', color:'var(--silver)', sub:['+20 AP / pt', '+20 PV / pt', '+17 Mana / pt', '+4 Rés. Mag / pt', '+2 D.Crit / pt'] },
 ];
 
 /* --- Les 16 buffs / débuffs réels --- */
