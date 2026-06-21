@@ -503,3 +503,18 @@ test('applyXp : montée jusqu’au cap, surplus jeté', () => {
   // au cap, plus aucune progression
   assert.deepEqual(L.applyXp(18, 0, 5000), { level: 18, xp: 0, levelsGained: 0 });
 });
+
+/* --- Refonte : escalade --- */
+const approx = (a, b, tol = 2) => Math.abs(a - b) <= tol;
+test('escalationFactor : table de référence §4.3', () => {
+  assert.equal(L.escalationFactor(0), 0);
+  assert.equal(L.escalationFactor(4), 4.00);
+  assert.equal(L.escalationFactor(8), 8.72);
+  assert.ok(approx(L.escalationFactor(13), 15.93, 0.001));
+  assert.equal(L.escalationFactor(16), 20.86);
+  assert.equal(L.escalationFactor(20), 28.62);
+});
+test('escalationFactor : zone PNJ (>20) quadratique', () => {
+  // §8 : Force 25 → facteur 45.82
+  assert.ok(approx(L.escalationFactor(25), 45.82, 0.01));
+});

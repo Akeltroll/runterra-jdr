@@ -451,6 +451,20 @@
     return out;
   }
 
+  /* --- Escalade anti-aplatissement (refonte) ---
+     Facteur cumulé par caractéristique. Table §4.3 (mult/pt : 1.00, 1.18, 1.39,
+     1.64, 1.94 par tranche de 4). Au-delà de 20 (zone PNJ §8) : mult du point
+     (20+k) = 1.94 + 0.5*k → croissance quadratique. */
+  var ESC_CUMUL = [0, 1.00, 2.00, 3.00, 4.00, 5.18, 6.36, 7.54, 8.72, 10.11,
+    11.50, 12.90, 14.29, 15.93, 17.58, 19.22, 20.86, 22.80, 24.74, 26.68, 28.62];
+  function escalationFactor(points) {
+    points = Math.max(0, points | 0);
+    if (points <= 20) return ESC_CUMUL[points];
+    var f = ESC_CUMUL[20];
+    for (var k = 1; k <= points - 20; k++) f += 1.94 + 0.5 * k;
+    return f;
+  }
+
   /* XP & niveau : courbe officielle du MJ (info-mj/tableau_XP.png).
      XP requis pour passer du niveau L au L+1 = 180 + 100*L (lvl1→2 = 280, lvl17→18 = 1880).
      Niveau max = 18 (cap) ; au cap, xpToNext = Infinity et l'XP intra-niveau est figée à 0.
@@ -487,5 +501,6 @@
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
     xpToNext, applyXp, MAX_LEVEL,
+    escalationFactor,
   };
 });
