@@ -7,3 +7,6 @@ idée/
 *.obj
 *.glb
 *.fbx
+
+# Source de vérité du MJ (règles détaillées) — privé, dépôt public : ne pas committer
+info-mj/
