@@ -354,6 +354,65 @@ function SessionStartModal({ onStart, onVisit }) {
     </div>
   );
 }
+function SessionRewardsModal({ onDone, onCancel, onLoot }) {
+  const toast = useToast();
+  const [rows, setRows] = useState(() => {
+    const o = {}; CHARACTERS.forEach(c => { o[c.id] = { xp:'', plat:'', or:'', arg:'', cuiv:'' }; }); return o;
+  });
+  const setVal = (id, k, v) => setRows(r => ({ ...r, [id]: { ...r[id], [k]: v } }));
+  const num = (v) => Math.max(0, parseInt(v, 10) || 0);
+  const fld = { width:54, background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 6px', fontSize:12 };
+  const apply = async () => {
+    let totXp = 0, levelUps = 0;
+    for (const c of CHARACTERS) {
+      const r = rows[c.id]; const xp = num(r.xp);
+      const coins = { plat:num(r.plat), or:num(r.or), arg:num(r.arg), cuiv:num(r.cuiv) };
+      if (xp > 0) { const res = await addXp(c.id, xp); totXp += xp; levelUps += (res.levelsGained || 0); }
+      if (coins.plat || coins.or || coins.arg || coins.cuiv) await grantCoins(c.id, coins);
+    }
+    toast(`Séance clôturée — <b>${totXp}</b> XP distribué${levelUps ? `, <b>${levelUps}</b> montée(s) de niveau` : ''}`, 'buff');
+    onDone();
+  };
+  return (
+    <div className="modal-scrim" style={{ alignItems:'stretch', padding:24 }} onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} style={{ width:'min(720px,100%)', margin:'auto', maxHeight:'100%', overflow:'auto', background:'var(--bg-deep)', border:'1px solid var(--line-gold)', borderRadius:12, boxShadow:'var(--shadow-modal)' }}>
+        <div className="row" style={{ justifyContent:'space-between', padding:'16px 20px', borderBottom:'1px solid var(--line)' }}>
+          <h3 style={{ fontSize:18 }}>Clôture de séance — récompenses</h3>
+          <button className="btn btn-sm btn-ghost" onClick={onCancel}>✕</button>
+        </div>
+        <div style={{ padding:'12px 20px' }}>
+          <div className="row" style={{ fontSize:10, color:'var(--ink-faint)', textTransform:'uppercase', letterSpacing:'.08em', paddingBottom:8 }}>
+            <span style={{ flex:1 }}>Joueur</span>
+            <span style={{ width:60, textAlign:'center' }}>XP</span>
+            <span style={{ width:236, textAlign:'center' }}>Plat / Or / Arg / Cuiv</span>
+          </div>
+          {CHARACTERS.map(c => (
+            <div key={c.id} className="row" style={{ alignItems:'center', gap:8, padding:'7px 0', borderTop:'1px solid var(--line)' }}>
+              <span className="row gap-2" style={{ flex:1, alignItems:'center' }}>
+                <Avatar char={c} size={28} radius={6} />
+                <span style={{ fontSize:13, color:'var(--gold-pale)' }}>{c.name}</span>
+              </span>
+              <input type="number" min="0" value={rows[c.id].xp} onChange={e => setVal(c.id, 'xp', e.target.value)} placeholder="0" style={{ ...fld, width:56 }} />
+              <span className="row gap-1">
+                <input type="number" min="0" value={rows[c.id].plat} onChange={e => setVal(c.id, 'plat', e.target.value)} placeholder="0" style={fld} />
+                <input type="number" min="0" value={rows[c.id].or} onChange={e => setVal(c.id, 'or', e.target.value)} placeholder="0" style={fld} />
+                <input type="number" min="0" value={rows[c.id].arg} onChange={e => setVal(c.id, 'arg', e.target.value)} placeholder="0" style={fld} />
+                <input type="number" min="0" value={rows[c.id].cuiv} onChange={e => setVal(c.id, 'cuiv', e.target.value)} placeholder="0" style={fld} />
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="row" style={{ justifyContent:'space-between', alignItems:'center', padding:'14px 20px', borderTop:'1px solid var(--line)' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onLoot} title="Distribuer des objets via le coffre commun">Inventaire commun → (loot)</button>
+          <span className="row gap-2">
+            <button className="btn btn-ghost" onClick={onCancel}>Annuler</button>
+            <button className="btn btn-gold" onClick={apply}>Distribuer &amp; clôturer</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function MJPage({ go }) {
   const all = useAllCharStates();
