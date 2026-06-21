@@ -88,14 +88,16 @@ test('applyHealMods applique miracule/hemorragie', () => {
 });
 
 test('buildDefaultState convertit ratios en valeurs absolues', () => {
+  // base dérivée des caracs + niveau (moteur refondu), pas d'un champ stats figé
   const char = {
-    id:'rathael', hpCur:1.0, manaCur:205/265, shieldCur:99,
+    id:'rathael', hpCur:1.0, manaCur:0.5, shieldCur:99,
     fatigue:1, eau:3, buffs:['bravoure'],
-    stats:{ hp:495, mana:265 }, shieldMax:200,
+    attrs:{ force:4, hab:3, mental:4, magie:1 }, level:2, shieldMax:200,
   };
+  const base = L.computeStats(4, 3, 4, 1, 2);
   const s = L.buildDefaultState(char);
-  assert.equal(s.hpCur, 495);
-  assert.equal(s.manaCur, 205);
+  assert.equal(s.hpCur, base.hp);                       // ratio 1.0
+  assert.equal(s.manaCur, Math.round(0.5 * base.mana)); // ratio 0.5
   assert.equal(s.shield, 99);
   assert.equal(s.fatigue, 1);
   assert.equal(s.eau, 3);
@@ -502,4 +504,60 @@ test('applyXp : montée jusqu’au cap, surplus jeté', () => {
   assert.deepEqual(L.applyXp(17, 0, 99999), { level: 18, xp: 0, levelsGained: 1 });
   // au cap, plus aucune progression
   assert.deepEqual(L.applyXp(18, 0, 5000), { level: 18, xp: 0, levelsGained: 0 });
+});
+
+/* --- Refonte : escalade --- */
+const approx = (a, b, tol = 2) => Math.abs(a - b) <= tol;
+test('escalationFactor : table de référence §4.3', () => {
+  assert.equal(L.escalationFactor(0), 0);
+  assert.equal(L.escalationFactor(4), 4.00);
+  assert.equal(L.escalationFactor(8), 8.72);
+  assert.ok(approx(L.escalationFactor(13), 15.93, 0.001));
+  assert.equal(L.escalationFactor(16), 20.86);
+  assert.equal(L.escalationFactor(20), 28.62);
+});
+test('escalationFactor : zone PNJ (>20) quadratique', () => {
+  // §8 : Force 25 → facteur 45.82
+  assert.ok(approx(L.escalationFactor(25), 45.82, 0.01));
+});
+
+/* --- Refonte : computeStats (profils §9, niveau 18) --- */
+test('computeStats : PV des 5 profils types §9 (±2)', () => {
+  // (F,H,M,C) à 33 pts, niveau 18
+  assert.ok(approx(L.computeStats(13, 0, 20, 0, 18).hp, 2111)); // Tank
+  assert.ok(approx(L.computeStats(20, 0, 0, 13, 18).hp, 1481)); // Carry
+  assert.ok(approx(L.computeStats(0, 0, 13, 20, 18).hp, 1832)); // Mage
+  assert.ok(approx(L.computeStats(13, 20, 0, 0, 18).hp, 1009)); // Assassin
+  assert.ok(approx(L.computeStats(20, 13, 0, 0, 18).hp, 1262)); // Bruiser
+});
+test('computeStats : crit/dcrit linéaires', () => {
+  const s = L.computeStats(0, 20, 0, 0, 18);
+  assert.equal(s.crit, 205);   // 5 + 10*20
+  assert.equal(s.dcrit, 270);  // 150 + 6*20
+});
+test('computeStats : socle + bonus de départ au niveau 1, caracs nulles', () => {
+  const s = L.computeStats(0, 0, 0, 0, 1);
+  assert.equal(s.hp, 80);      // 50 universel + 30*1 socle
+  assert.equal(s.mana, 50);    // 50 universel
+  assert.equal(s.armure, 1);   // 1*level
+  assert.equal(s.resmag, 1);   // 1*level
+  assert.equal(s.ad, 20);      // fondu = max(0, 20 - 0)
+  assert.equal(s.ap, 20);      // fondu
+});
+test('computeStats : bonus Habileté plafonné à 5 points', () => {
+  const s = L.computeStats(0, 5, 0, 0, 1);
+  assert.equal(s.hp, 180);     // 80 + 20*min(5,5)
+  assert.equal(s.armure, 6);   // 1*level + 1*min(5,5)
+  assert.equal(s.resmag, 6);
+  // au-delà de 5, le bonus de départ ne grimpe plus
+  assert.equal(L.computeStats(0, 8, 0, 0, 1).hp, 180);
+});
+test('computeStats : pas de Sapience dans la base', () => {
+  assert.equal(L.computeStats(20, 20, 20, 20, 18).sapience, undefined);
+});
+test('charBaseStats : repli char.attrs / override state.attrs', () => {
+  const char = { attrs: { force: 4, hab: 3, mental: 4, magie: 1 }, level: 2 };
+  assert.deepEqual(L.charBaseStats(char, null), L.computeStats(4, 3, 4, 1, 2));
+  const st = { attrs: { force: 6, hab: 0, mental: 5, magie: 0 }, level: 5 };
+  assert.deepEqual(L.charBaseStats(char, st), L.computeStats(6, 0, 5, 0, 5));
 });

@@ -7,23 +7,8 @@
 const ceil = Math.ceil;
 const mn = Math.min, mx = Math.max;
 
-/* --- Moteur de stats (formules Excel exactes) ---
-   F=Force, H=Habileté, M=Mental, C=Magie/Cosmique
-   "normal" = part linéaire (attribut plafonné à 16)
-   "transcendant" = part quadratique au-delà de 16
-*/
-function computeStats(F, H, M, C) {
-  const hp     = 10 + ceil(mn(F,16)*75 + mn(C,16)*5 + mn(M,16)*45) + ceil(mx(F-16,0)**2*300 + mx(C-16,0)**2*25 + mx(M-16,0)**2*175);
-  const mana   = 10 + ceil(mn(H,16)*20 + mn(C,16)*75 + mn(M,16)*30) + ceil(mx(C-16,0)**2*300 + mx(H-16,0)**2*80 + mx(M-16,0)**2*120);
-  const ad     = ceil(mn(F,16)*20 + mn(H,16)*10 + mn(M,16)*5) + ceil(mx(F-16,0)**2*172.5 + mx(H-16,0)**2*86.25 + mx(M-16,0)**2*28.75);
-  const ap     = ceil(mn(H,16)*10 + mn(C,16)*20 + mn(M,16)*5) + ceil(mx(C-16,0)**2*172.5 + mx(H-16,0)**2*86.25 + mx(M-16,0)**2*28.75);
-  const armure = ceil(mn(F,16)*4.5 + mn(H,16)*1 + mn(M,16)*6) + ceil(mx(F-16,0)**2*14 + mx(C-16,0)**2*20 + mx(H-16,0)**2*2);
-  const resmag = ceil(mn(H,16)*1 + mn(C,16)*4.5 + mn(M,16)*6) + ceil(mx(C-16,0)**2*14 + mx(M-16,0)**2*20 + mx(H-16,0)**2*2);
-  const crit   = 5 + ceil(mn(H,20)*5);
-  const dcrit  = 150 + ceil(mn(F,16)*2 + mn(C,16)*2 + mn(H,16)*5) + ceil(mx(F-16,0)**2*(10/3) + mx(C-16,0)**2*(10/3) + mx(H-16,0)**2*(25/3));
-  const sapience = ceil(mn(H,16)*2.5);
-  return { hp, mana, ad, ap, armure, resmag, crit, dcrit, sapience };
-}
+/* Moteur de stats : voir computeStats(F,H,M,C,level) + charBaseStats dans game-logic.js
+   (refonte « système hypermétrique » — escalade, socle de niveau, bonus de départ). */
 
 /* --- Table de progression (niveaux 1 → 18) --- */
 const LEVELS = [
@@ -39,20 +24,20 @@ const LEVELS = [
   { lvl:10, gain:1, total:22, limit:14 },
   { lvl:11, gain:1, total:23, limit:15 },
   { lvl:12, gain:2, total:25, limit:16 },
-  { lvl:13, gain:1, total:26, limit:16 },
-  { lvl:14, gain:1, total:27, limit:16 },
-  { lvl:15, gain:2, total:29, limit:16 },
-  { lvl:16, gain:1, total:30, limit:16 },
-  { lvl:17, gain:1, total:31, limit:16 },
-  { lvl:18, gain:2, total:33, limit:16 },
+  { lvl:13, gain:1, total:26, limit:17 },
+  { lvl:14, gain:1, total:27, limit:18 },
+  { lvl:15, gain:2, total:29, limit:19 },
+  { lvl:16, gain:1, total:30, limit:20 },
+  { lvl:17, gain:1, total:31, limit:20 },
+  { lvl:18, gain:2, total:33, limit:20 },
 ];
 
 /* --- Attributs principaux et sous-stats dérivées (page Progression) --- */
 const ATTRIBUTES = [
-  { key:'force', name:'Force',          color:'var(--hp)',     sub:['+20 AD / pt', '+75 HP / pt', '+4-5 Armure / pt', '+2% D. Crit / pt'] },
-  { key:'hab',   name:'Habileté',       color:'var(--gold)',   sub:['+10 AD / pt', '+10 AP / pt', '+5% Crit / pt', '+2.5 Sapience / pt', '+1 Armure / pt'] },
-  { key:'mental',name:'Mental',         color:'var(--buff)',   sub:['+45 HP / pt', '+30 Mana / pt', '+5 AD/AP / pt', '+6 Armure / pt', '+6 Rés. Mag / pt'] },
-  { key:'magie', name:'Magie/Cosmique', color:'var(--silver)', sub:['+20 AP / pt', '+75 Mana / pt', '+5 HP / pt', '+2% D. Crit / pt', '+4-5 Rés. Mag / pt'] },
+  { key:'force', name:'Force',          color:'var(--hp)',     sub:['+20 AD / pt', '+20 PV / pt', '+4 Armure / pt', '+2 D.Crit / pt'] },
+  { key:'hab',   name:'Habileté',       color:'var(--gold)',   sub:['+8 AD / pt', '+8 AP / pt', '+10% Crit / pt', '+6 D.Crit / pt', 'Départ : +20 PV/+1 Arm/+1 RM (max 5 pts)'] },
+  { key:'mental',name:'Mental',         color:'var(--buff)',   sub:['+42 PV / pt', '+38 Mana / pt', '+3 AD/AP / pt', '+2% Crit / pt'] },
+  { key:'magie', name:'Magie/Cosmique', color:'var(--silver)', sub:['+20 AP / pt', '+20 PV / pt', '+17 Mana / pt', '+4 Rés. Mag / pt', '+2 D.Crit / pt'] },
 ];
 
 /* --- Les 16 buffs / débuffs réels --- */
@@ -100,9 +85,8 @@ function computeAttack({ weapon, stats, lethality, isCrit }) {
 
 /* --- 5 personnages (renommés depuis Erwan/Baptiste/JB/Steph/Fab) --- */
 function mkChar(o) {
-  const stats = computeStats(o.F, o.H, o.M, o.C);
   const modifiers = (window.DEFAULT_MODIFIERS && window.DEFAULT_MODIFIERS[o.id]) || {};
-  return { ...o, attrs:{ force:o.F, hab:o.H, mental:o.M, magie:o.C }, stats, modifiers };
+  return { ...o, attrs:{ force:o.F, hab:o.H, mental:o.M, magie:o.C }, modifiers };
 }
 
 /* Données fidèles aux feuilles : JB→Rathäel, Baptiste→Urskaar, Erwan→Smith,
@@ -421,6 +405,6 @@ const SKILLS = {
 };
 
 Object.assign(window, {
-  computeStats, computeAttack, CHARACTERS, BUFFS, WEAPONS,
+  computeAttack, CHARACTERS, BUFFS, WEAPONS,
   LEVELS, ATTRIBUTES, JOURNAL, RUNES, ITEM_CATALOG, SKILLS,
 });

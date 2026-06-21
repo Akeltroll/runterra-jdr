@@ -59,7 +59,8 @@ function SecondaryStats({ stats, variant }) {
   const items = [
     ['ad', stats.ad, false], ['ap', stats.ap, true], ['armure', stats.armure, false],
     ['resmag', stats.resmag, true], ['crit', stats.crit + '%', false], ['dcrit', stats.dcrit + '%', false],
-    ['sapience', stats.sapience, false],
+    // Sapience retirée du socle (refonte) : affichée seulement si une source (item/comp) en accorde.
+    ...(stats.sapience > 0 ? [['sapience', stats.sapience, false]] : []),
     ['omni', (stats.omni || 0) + '%', true],
     ['vol', (stats.vol || 0) + '%', false],
   ];
@@ -303,7 +304,7 @@ function SheetBody({ char, variant }) {
   const effLevel = (state.level != null ? state.level : char.level) || 1;
   const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel);
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});
-  const eff = computeEffective(char.stats, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
+  const eff = computeEffective(charBaseStats(char, state), state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   // Arme affichée = celle équipée dans le slot « Arme principale » (live), reliée à WEAPONS
   // par son nom ; sinon item brut synthétisé ; sinon repli sur l'arme par défaut du perso.
   const equippedId = state.equipment && state.equipment.armePrincipale;

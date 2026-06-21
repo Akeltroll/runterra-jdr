@@ -170,9 +170,10 @@ function CompetencesBody({ char, staff }) {
 
   const itemMods = sumItemMods(state.equipment, state.inventory);
   const passiveMods = sumPassiveMods(char.id, counters, level);
-  const eff = computeEffective(char.stats, state.modifiers, [], mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods));
+  const base = charBaseStats(char, state);
+  const eff = computeEffective(base, state.modifiers, [], mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods));
   const wType = weaponTypeOf(state, char);
-  const baseCtx = { counters, level, wType, hpMax: char.stats.hp };
+  const baseCtx = { counters, level, wType, hpMax: base.hp };
   const kitWithId = Object.assign({ _id: char.id }, kit);
 
   function cast(sk) {
@@ -191,7 +192,7 @@ function CompetencesBody({ char, staff }) {
     // Buff sur soi : snapshot des mods plats (% de la stat de base) → effet de combat orange.
     if (sk.selfBuff) {
       const flat = {};
-      Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (char.stats[k] || 0)); if (f) flat[k] = f; });
+      Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (base[k] || 0)); if (f) flat[k] = f; });
       setSkillBuff(sk.id, flat);
       if (flat.hp) {
         const newMax = (eff.hp || 0) + flat.hp;

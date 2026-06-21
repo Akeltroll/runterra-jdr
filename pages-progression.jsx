@@ -7,7 +7,8 @@ function ProgressionPage() {
   const char = CHARACTERS.find(c => c.id === charId);
   const { state } = useCharState(charId);
   const effLevel = (state && state.level != null ? state.level : char.level) || 1;
-  const a = char.attrs;
+  const a = (state && state.attrs) || char.attrs;
+  const base = charBaseStats(char, state);
   const totalUsed = a.force + a.hab + a.mental + a.magie;
   const lvlRow = LEVELS.find(l => l.lvl === char.level) || LEVELS[LEVELS.length - 1];
   const bonus = totalUsed - lvlRow.total; // ex. point bonus de création (>0 => affiché en gold)
@@ -73,7 +74,7 @@ function ProgressionPage() {
           <div className="panel">
             <div className="panel-head"><h3>Stats résultantes</h3><span className="overline">calculées</span></div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, padding:'16px' }}>
-              {[['hp',char.stats.hp],['mana',char.stats.mana],['ad',char.stats.ad],['ap',char.stats.ap],['armure',char.stats.armure],['resmag',char.stats.resmag],['crit',char.stats.crit+'%'],['dcrit',char.stats.dcrit+'%'],['sapience',char.stats.sapience]].map(([k,v]) => (
+              {[['hp',base.hp],['mana',base.mana],['ad',base.ad],['ap',base.ap],['armure',base.armure],['resmag',base.resmag],['crit',base.crit+'%'],['dcrit',base.dcrit+'%']].map(([k,v]) => (
                 <div key={k} className="col" style={{ alignItems:'center', padding:'12px 6px', background:'var(--bg-inset)', borderRadius:8, border:'1px solid var(--line)' }}>
                   <span className="mono" style={{ fontSize:19, fontWeight:700, color:(k==='ap'||k==='resmag')?'var(--silver)':'var(--gold-pale)' }}>{v}</span>
                   <span className="overline" style={{ fontSize:9, marginTop:3 }}>{STAT_GLYPH[k]}</span>

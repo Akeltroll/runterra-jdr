@@ -69,7 +69,7 @@ function useSharedTurn() {
       const lvl = (st.level != null ? st.level : c.level) || 1;
       const passiveMods = sumPassiveMods(c.id, st.counters || {}, lvl);
       // Max de base SANS skillBuffs (les buffs BUFFS n'affectent pas les PV max).
-      const baseMax = computeEffective(c.stats, st.modifiers, [],
+      const baseMax = computeEffective(charBaseStats(c, st), st.modifiers, [],
         mergeMods(mergeMods(itemMods, runeMods), passiveMods));
       const patch = { counters: null, cooldowns: null, skillBuffs: null };
       if (st.hpCur != null) patch.hpCur = Math.min(st.hpCur, baseMax.hp);

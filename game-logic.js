@@ -287,8 +287,8 @@
       inventory[id] = makeItem({ id, cat: it.cat, name: it.name, sub: it.sub, qty: it.qty, ic: it.ic, img: it.img, type: it.type });
     });
     return {
-      hpCur:   Math.round((char.hpCur || 0) * char.stats.hp),
-      manaCur: Math.round((char.manaCur || 0) * char.stats.mana),
+      hpCur:   Math.round((char.hpCur || 0) * charBaseStats(char, null).hp),
+      manaCur: Math.round((char.manaCur || 0) * charBaseStats(char, null).mana),
       shield:  char.shieldCur || 0,
       fatigue: char.fatigue || 0,
       eau:     char.eau || 0,
@@ -451,6 +451,51 @@
     return out;
   }
 
+  /* --- Escalade anti-aplatissement (refonte) ---
+     Facteur cumulé par caractéristique. Table §4.3 (mult/pt : 1.00, 1.18, 1.39,
+     1.64, 1.94 par tranche de 4). Au-delà de 20 (zone PNJ §8) : mult du point
+     (20+k) = 1.94 + 0.5*k → croissance quadratique. */
+  var ESC_CUMUL = [0, 1.00, 2.00, 3.00, 4.00, 5.18, 6.36, 7.54, 8.72, 10.11,
+    11.50, 12.90, 14.29, 15.93, 17.58, 19.22, 20.86, 22.80, 24.74, 26.68, 28.62];
+  function escalationFactor(points) {
+    points = Math.max(0, points | 0);
+    if (points <= 20) return ESC_CUMUL[points];
+    var f = ESC_CUMUL[20];
+    for (var k = 1; k <= points - 20; k++) f += 1.94 + 0.5 * k;
+    return f;
+  }
+
+  /* --- Moteur de stats refondu (info-mj/SPECIFICATION) ---
+     8 stats dérivées de 4 caracs + niveau. Magnitude escaladée, crit linéaire.
+     Sans Sapience (retirée du socle). */
+  function computeStats(F, H, M, C, level) {
+    F = Math.max(0, F | 0); H = Math.max(0, H | 0);
+    M = Math.max(0, M | 0); C = Math.max(0, C | 0);
+    level = Math.max(1, level | 0);
+    var eF = escalationFactor(F), eH = escalationFactor(H),
+        eM = escalationFactor(M), eC = escalationFactor(C);
+    var nH = Math.min(H, 5);                 // bonus de départ Habileté plafonné
+    var habPV = 20 * nH, habRes = nH;        // +20 PV, +1 Arm, +1 RM / pt (max 5)
+    var fondu = Math.max(0, 20 - 4 * (F + C)); // frappe de base des profils sans dégâts
+    return {
+      hp:     Math.round(50 + 30 * level + 20 * eF + 20 * eC + 42 * eM + habPV),
+      mana:   Math.round(50 + 17 * eF + 17 * eC + 38 * eM),
+      ad:     Math.round(20 * eF + 8 * eH + 3 * eM + fondu),
+      ap:     Math.round(20 * eC + 8 * eH + 3 * eM + fondu),
+      armure: Math.round(level + 4 * eF + habRes),
+      resmag: Math.round(level + 4 * eC + habRes),
+      crit:   5 + 10 * H + 2 * M,
+      dcrit:  150 + 2 * F + 2 * C + 6 * H,
+    };
+  }
+
+  /* Stats de base d'un perso, live : caracs/niveau effectifs (override state). */
+  function charBaseStats(char, state) {
+    var a = (state && state.attrs) || (char && char.attrs) || { force: 0, hab: 0, mental: 0, magie: 0 };
+    var level = (state && state.level != null ? state.level : (char && char.level)) || 1;
+    return computeStats(a.force, a.hab, a.mental, a.magie, level);
+  }
+
   /* XP & niveau : courbe officielle du MJ (info-mj/tableau_XP.png).
      XP requis pour passer du niveau L au L+1 = 180 + 100*L (lvl1→2 = 280, lvl17→18 = 1880).
      Niveau max = 18 (cap) ; au cap, xpToNext = Infinity et l'XP intra-niveau est figée à 0.
@@ -487,5 +532,6 @@
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
     xpToNext, applyXp, MAX_LEVEL,
+    escalationFactor, computeStats, charBaseStats,
   };
 });

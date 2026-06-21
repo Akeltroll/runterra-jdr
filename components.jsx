@@ -213,8 +213,9 @@ function AttackModal({ char, onClose }) {
   const weapon = WEAPONS.find(w => w.id === weaponId);
 
   const launch = () => {
-    const isCrit = Math.random() * 100 < char.stats.crit;
-    const r = computeAttack({ weapon, stats: char.stats, lethality, isCrit });
+    const base = charBaseStats(char, null);
+    const isCrit = Math.random() * 100 < base.crit;
+    const r = computeAttack({ weapon, stats: base, lethality, isCrit });
     setResult(r);
     toast(`<b>${char.name}</b> inflige <b>${r.dmg}</b> dégâts ${weapon.cat.toLowerCase()}s${isCrit ? ' — CRITIQUE !' : ''}`, isCrit ? 'buff' : 'gold');
   };
