@@ -584,3 +584,9 @@ test('rollCrit : espérance §6.3 (sanity, tolérance)', () => {
   const avg = sum / n;                       // attendu ≈ (200 + 25)/100 = 2.25
   assert.ok(Math.abs(avg - 2.25) < 0.1, `avg=${avg}`);
 });
+test('mitigateDamage : la léthalité réduit la résistance (sans passer sous 0)', () => {
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 0), 50);   // eff 120 → 50 %
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 120), 100); // eff 0 → aucune réduction
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 200), 100); // eff borné à 0
+  assert.equal(L.mitigateDamage(100, 'brut',     { armure: 120 }, 50), 100);  // brut ignore tout
+});

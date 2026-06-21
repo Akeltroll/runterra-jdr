@@ -115,8 +115,8 @@ function usePendingHits() {
   return { hits, addHit, removeHit };
 }
 /* Applique des dégâts (déjà ajustés par le MJ) à un ennemi : réduction armure/resmag puis pool HP. */
-function applyHitToEnemy(enemy, finalDmg, type) {
-  const dmg = mitigateDamage(Math.max(0, finalDmg | 0), type, { armure: enemy.armure || 0, resmag: enemy.resmag || 0 });
+function applyHitToEnemy(enemy, finalDmg, type, lethalite = 0) {
+  const dmg = mitigateDamage(Math.max(0, finalDmg | 0), type, { armure: enemy.armure || 0, resmag: enemy.resmag || 0 }, Math.max(0, lethalite | 0));
   const res = applyDamageToPools({ hpCur: enemy.hpCur || 0, shield: 0 }, dmg);
   window.RTDB.updatePath(`${ENEMIES}/${enemy.id}`, { hpCur: res.hpCur });
   return { applied: dmg, hpCur: res.hpCur };
