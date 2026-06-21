@@ -236,6 +236,26 @@ function CompetencesBody({ char, staff }) {
     }
   }
 
+  // Attaque de base : même flux que les comps (cible → attaque en attente MJ), sans mana ni cooldown.
+  const eqWeaponName = (() => {
+    const eqId = state.equipment && state.equipment.armePrincipale;
+    const it = (eqId && state.inventory) ? state.inventory[eqId] : null;
+    return (it && it.name) || (WEAPONS.find(w => w.id === char.weaponId) || {}).name || 'Arme';
+  })();
+  const basicDmg = (wType === 'Magique' ? (eff.ap || 0) : (eff.ad || 0));
+  function basicAttack() {
+    if (!targetId) { toast(`<b>${char.name}</b> — choisis une cible d'abord`, 'gold'); return; }
+    const cr = rollCrit(eff.crit || 0, eff.dcrit || 0);
+    const critDmg = Math.round(basicDmg * cr.multiplier);
+    addHit({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: 'Attaque de base',
+      type: (wType === 'Magique' ? 'magique' : 'physique'), computedDmg: basicDmg, critDmg,
+      didCrit: cr.didCrit, critMult: cr.multiplier, letha: eff.letha || 0, crit: eff.crit || 0, dcrit: eff.dcrit || 0, targetId });
+    const tgt = enemies.find(en => en.id === targetId);
+    const shown = cr.didCrit ? `${critDmg} — CRITIQUE !` : `${basicDmg}`;
+    pushLog(`<b>${char.name}</b> attaque <b>${tgt ? tgt.name : 'un ennemi'}</b> (${shown}) — en attente MJ`, cr.didCrit ? 'buff' : 'gold');
+    toast(`<b>${char.name}</b> attaque (${shown}) — envoyé au MJ`, 'buff');
+  }
+
   return (
     <div className="col gap-4" style={{ padding: 20 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
@@ -284,6 +304,18 @@ function CompetencesBody({ char, staff }) {
           </div>
         );
       })()}
+      <div className="panel" style={{ borderLeft: '3px solid var(--gold)' }}>
+        <div className="panel-head">
+          <h3>⚔ Attaque de base</h3>
+          <span className="overline">{eqWeaponName} · {wType === 'Magique' ? 'AP' : 'AD'}</span>
+        </div>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px' }}>
+          <span className="mono" style={{ fontSize: 22, color: 'var(--hp)', fontWeight: 700 }}>
+            {basicDmg}<span style={{ fontSize: 12, color: 'var(--faint)' }}> dégâts</span>
+          </span>
+          <button className="btn btn-gold" onClick={basicAttack}>Attaquer</button>
+        </div>
+      </div>
       <PassiveCard kit={kitWithId} eff={eff} counters={counters} level={level} color={color} setCounter={setCounter} />
       <div className="comp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
         {kit.actives.map((sk, i) => (
