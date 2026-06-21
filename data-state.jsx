@@ -155,6 +155,20 @@ async function addXp(charId, gain) {
   return res;
 }
 
+/* Don d'argent (orchestrateur, écriture staff) : AJOUTE le patch aux pièces du joueur
+   (récompense, pas un transfert depuis le coffre). Dénominations < 0 ignorées. */
+async function grantCoins(charId, patch) {
+  const p = charPath(charId);
+  const st = (await window.RTDB.getSnapshot(p)) || {};
+  const cur = st.coins || {};
+  const next = {};
+  for (const k of ['plat', 'or', 'arg', 'cuiv']) {
+    const add = Math.max(0, (patch && patch[k]) | 0);
+    if (add) next[k] = (cur[k] || 0) + add;
+  }
+  if (Object.keys(next).length) window.RTDB.updatePath(`${p}/coins`, next);
+}
+
 /* Snapshot live de tous les persos (vue MJ). */
 function useAllCharStates() {
   const [all, setAll] = useState(null);
@@ -259,5 +273,5 @@ Object.assign(window, {
   useSharedTurn, COMBAT_TURN,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   usePendingHits, applyHitToEnemy, PENDING_HITS,
-  pushLog, useCombatLog, COMBAT_LOG, addXp,
+  pushLog, useCombatLog, COMBAT_LOG, addXp, grantCoins,
 });

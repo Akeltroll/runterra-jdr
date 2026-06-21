@@ -451,14 +451,22 @@
     return out;
   }
 
-  /* XP & niveau : courbe générique (à remplacer plus tard) + application d'un gain.
+  /* XP & niveau : courbe officielle du MJ (info-mj/tableau_XP.png).
+     XP requis pour passer du niveau L au L+1 = 180 + 100*L (lvl1→2 = 280, lvl17→18 = 1880).
+     Niveau max = 18 (cap) ; au cap, xpToNext = Infinity et l'XP intra-niveau est figée à 0.
      xp = progression DANS le niveau courant ; le surplus reporte en cascade. */
-  function xpToNext(level) { return 100 * Math.max(1, level | 0); }
+  var MAX_LEVEL = 18;
+  function xpToNext(level) {
+    level = Math.max(1, level | 0);
+    if (level >= MAX_LEVEL) return Infinity;
+    return 180 + 100 * level;
+  }
   function applyXp(level, xp, gain) {
     level = Math.max(1, level | 0);
     xp = Math.max(0, xp | 0) + Math.max(0, gain | 0);
     let levelsGained = 0;
-    while (xp >= xpToNext(level)) { xp -= xpToNext(level); level += 1; levelsGained += 1; }
+    while (level < MAX_LEVEL && xp >= xpToNext(level)) { xp -= xpToNext(level); level += 1; levelsGained += 1; }
+    if (level >= MAX_LEVEL) xp = 0;
     return { level, xp, levelsGained };
   }
 
@@ -478,6 +486,6 @@
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
-    xpToNext, applyXp,
+    xpToNext, applyXp, MAX_LEVEL,
   };
 });

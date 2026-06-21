@@ -49,12 +49,13 @@ function XpBar({ level, xp }) {
   const lvl = Math.max(1, level | 0);
   const need = xpToNext(lvl);
   const cur = Math.max(0, xp | 0);
-  const pct = need > 0 ? Math.max(0, Math.min(100, (cur / need) * 100)) : 0;
+  const maxed = !isFinite(need);
+  const pct = maxed ? 100 : (need > 0 ? Math.max(0, Math.min(100, (cur / need) * 100)) : 0);
   return (
     <div className="col gap-1">
       <div className="row" style={{ justifyContent:'space-between', alignItems:'baseline' }}>
         <span className="overline">Niveau {lvl}</span>
-        <span className="mono faint" style={{ fontSize:11 }}>{cur} / {need} XP</span>
+        <span className="mono faint" style={{ fontSize:11 }}>{maxed ? 'MAX' : `${cur} / ${need} XP`}</span>
       </div>
       <div className="bar">
         <div className="fill" style={{ width: pct + '%', background:'var(--gold-bright)' }}></div>

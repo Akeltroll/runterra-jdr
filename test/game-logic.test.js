@@ -469,26 +469,37 @@ test('skillUnlocked : active n° i requiert niveau i+1', () => {
   assert.equal(L.skillUnlocked(3, 4), true);   // C4 niv 4
 });
 
-/* --- Task XP : courbe & application --- */
-test('xpToNext croît avec le niveau (formule générique)', () => {
-  assert.equal(L.xpToNext(1), 100);
-  assert.equal(L.xpToNext(2), 200);
-  assert.equal(L.xpToNext(5), 500);
+/* --- Task XP : courbe officielle du MJ (180 + 100*level), cap niveau 18 --- */
+test('xpToNext suit la table du MJ (180 + 100*level)', () => {
+  assert.equal(L.xpToNext(1), 280);
+  assert.equal(L.xpToNext(2), 380);
+  assert.equal(L.xpToNext(5), 680);
+  assert.equal(L.xpToNext(17), 1880);
+});
+test('xpToNext au cap (niveau 18) = Infinity', () => {
+  assert.equal(L.xpToNext(18), Infinity);
+  assert.equal(L.MAX_LEVEL, 18);
 });
 test('applyXp : gain sans montée de niveau', () => {
   assert.deepEqual(L.applyXp(2, 50, 100), { level: 2, xp: 150, levelsGained: 0 });
 });
 test('applyXp : gain pile au seuil → +1 niveau, xp remis à 0', () => {
-  assert.deepEqual(L.applyXp(2, 0, 200), { level: 3, xp: 0, levelsGained: 1 });
+  assert.deepEqual(L.applyXp(2, 0, 380), { level: 3, xp: 0, levelsGained: 1 });
 });
 test('applyXp : report du surplus sur le niveau suivant', () => {
-  // niv2 (seuil 200) : 150 + 100 = 250 → +1 niveau, reste 50
-  assert.deepEqual(L.applyXp(2, 150, 100), { level: 3, xp: 50, levelsGained: 1 });
+  // niv2 (seuil 380) : 150 + 300 = 450 → +1 niveau, reste 70
+  assert.deepEqual(L.applyXp(2, 150, 300), { level: 3, xp: 70, levelsGained: 1 });
 });
 test('applyXp : gros gain → montée multi-niveaux + report', () => {
-  // niv1→ seuils 100/200/300 : 650 → -100(n2) -200(n3) -300(n4), reste 50
-  assert.deepEqual(L.applyXp(1, 0, 650), { level: 4, xp: 50, levelsGained: 3 });
+  // niv1→ seuils 280/380/480 : 1190 → -280(n2) -380(n3) -480(n4), reste 50
+  assert.deepEqual(L.applyXp(1, 0, 1190), { level: 4, xp: 50, levelsGained: 3 });
 });
 test('applyXp : gain nul = no-op', () => {
   assert.deepEqual(L.applyXp(2, 30, 0), { level: 2, xp: 30, levelsGained: 0 });
+});
+test('applyXp : montée jusqu’au cap, surplus jeté', () => {
+  // depuis le niveau 17, un gros gain mène au cap 18 et fige l'XP à 0
+  assert.deepEqual(L.applyXp(17, 0, 99999), { level: 18, xp: 0, levelsGained: 1 });
+  // au cap, plus aucune progression
+  assert.deepEqual(L.applyXp(18, 0, 5000), { level: 18, xp: 0, levelsGained: 0 });
 });

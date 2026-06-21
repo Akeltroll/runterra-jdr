@@ -332,6 +332,88 @@ function PendingHitsPanel({ enemies }) {
   );
 }
 
+/* État de séance MJ-local (localStorage). v2 possible : partagé en Firebase. */
+const SESSION_KEY = 'runeterra_session';
+function useSession() {
+  const [active, setActive] = useState(() => { try { return localStorage.getItem(SESSION_KEY) === '1'; } catch (e) { return false; } });
+  const start = useCallback(() => { try { localStorage.setItem(SESSION_KEY, '1'); } catch (e) {} setActive(true); }, []);
+  const close = useCallback(() => { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} setActive(false); }, []);
+  return { active, start, close };
+}
+function SessionStartModal({ onStart, onVisit }) {
+  return (
+    <div className="modal-scrim" style={{ alignItems:'center' }}>
+      <div style={{ width:'min(420px,100%)', background:'var(--bg-deep)', border:'1px solid var(--line-gold)', borderRadius:12, boxShadow:'var(--shadow-modal)', padding:'24px' }}>
+        <h3 style={{ fontSize:20, marginBottom:6 }}>Ouverture de la table</h3>
+        <p className="faint" style={{ fontSize:13, marginBottom:18 }}>Démarrer une séance (pour distribuer XP &amp; récompenses à la clôture) ou simplement visiter le site ?</p>
+        <div className="col gap-2">
+          <button className="btn btn-gold" style={{ justifyContent:'center' }} onClick={onStart}>🎲 Début de séance</button>
+          <button className="btn btn-ghost" style={{ justifyContent:'center' }} onClick={onVisit}>Visite du site</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function SessionRewardsModal({ onDone, onCancel, onLoot }) {
+  const toast = useToast();
+  const [rows, setRows] = useState(() => {
+    const o = {}; CHARACTERS.forEach(c => { o[c.id] = { xp:'', plat:'', or:'', arg:'', cuiv:'' }; }); return o;
+  });
+  const setVal = (id, k, v) => setRows(r => ({ ...r, [id]: { ...r[id], [k]: v } }));
+  const num = (v) => Math.max(0, parseInt(v, 10) || 0);
+  const fld = { width:54, background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 6px', fontSize:12 };
+  const apply = async () => {
+    let totXp = 0, levelUps = 0;
+    for (const c of CHARACTERS) {
+      const r = rows[c.id]; const xp = num(r.xp);
+      const coins = { plat:num(r.plat), or:num(r.or), arg:num(r.arg), cuiv:num(r.cuiv) };
+      if (xp > 0) { const res = await addXp(c.id, xp); totXp += xp; levelUps += (res.levelsGained || 0); }
+      if (coins.plat || coins.or || coins.arg || coins.cuiv) await grantCoins(c.id, coins);
+    }
+    toast(`Séance clôturée — <b>${totXp}</b> XP distribué${levelUps ? `, <b>${levelUps}</b> montée(s) de niveau` : ''}`, 'buff');
+    onDone();
+  };
+  return (
+    <div className="modal-scrim" style={{ alignItems:'stretch', padding:24 }} onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} style={{ width:'min(720px,100%)', margin:'auto', maxHeight:'100%', overflow:'auto', background:'var(--bg-deep)', border:'1px solid var(--line-gold)', borderRadius:12, boxShadow:'var(--shadow-modal)' }}>
+        <div className="row" style={{ justifyContent:'space-between', padding:'16px 20px', borderBottom:'1px solid var(--line)' }}>
+          <h3 style={{ fontSize:18 }}>Clôture de séance — récompenses</h3>
+          <button className="btn btn-sm btn-ghost" onClick={onCancel}>✕</button>
+        </div>
+        <div style={{ padding:'12px 20px' }}>
+          <div className="row" style={{ fontSize:10, color:'var(--ink-faint)', textTransform:'uppercase', letterSpacing:'.08em', paddingBottom:8 }}>
+            <span style={{ flex:1 }}>Joueur</span>
+            <span style={{ width:60, textAlign:'center' }}>XP</span>
+            <span style={{ width:236, textAlign:'center' }}>Plat / Or / Arg / Cuiv</span>
+          </div>
+          {CHARACTERS.map(c => (
+            <div key={c.id} className="row" style={{ alignItems:'center', gap:8, padding:'7px 0', borderTop:'1px solid var(--line)' }}>
+              <span className="row gap-2" style={{ flex:1, alignItems:'center' }}>
+                <Avatar char={c} size={28} radius={6} />
+                <span style={{ fontSize:13, color:'var(--gold-pale)' }}>{c.name}</span>
+              </span>
+              <input type="number" min="0" value={rows[c.id].xp} onChange={e => setVal(c.id, 'xp', e.target.value)} placeholder="0" style={{ ...fld, width:56 }} />
+              <span className="row gap-1">
+                <input type="number" min="0" value={rows[c.id].plat} onChange={e => setVal(c.id, 'plat', e.target.value)} placeholder="0" style={fld} />
+                <input type="number" min="0" value={rows[c.id].or} onChange={e => setVal(c.id, 'or', e.target.value)} placeholder="0" style={fld} />
+                <input type="number" min="0" value={rows[c.id].arg} onChange={e => setVal(c.id, 'arg', e.target.value)} placeholder="0" style={fld} />
+                <input type="number" min="0" value={rows[c.id].cuiv} onChange={e => setVal(c.id, 'cuiv', e.target.value)} placeholder="0" style={fld} />
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="row" style={{ justifyContent:'space-between', alignItems:'center', padding:'14px 20px', borderTop:'1px solid var(--line)' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onLoot} title="Distribuer des objets via le coffre commun">Inventaire commun → (loot)</button>
+          <span className="row gap-2">
+            <button className="btn btn-ghost" onClick={onCancel}>Annuler</button>
+            <button className="btn btn-gold" onClick={apply}>Distribuer &amp; clôturer</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MJPage({ go }) {
   const all = useAllCharStates();
   const [selected, setSelected] = useState('rathael');
@@ -340,6 +422,9 @@ function MJPage({ go }) {
   const { turn, nextTurn, prevTurn, resetCombat } = useSharedTurn();
   const [attacker, setAttacker] = useState(null); // ennemi en cours d'attaque (Task 4)
   const stOf = (id) => (all && all[id] && all[id].state) || null;
+  const { active, start, close } = useSession();
+  const [decided, setDecided] = useState(false);
+  const [rewards, setRewards] = useState(false);
   return (
     <div style={{ display:'grid', gridTemplateColumns:'264px 1fr', height:'100%', minHeight:0 }}>
       {/* SIDEBAR */}
@@ -379,6 +464,12 @@ function MJPage({ go }) {
             <ExportImportPanel />
           </div>
         </div>
+        {active && (
+          <div className="row" style={{ justifyContent:'space-between', alignItems:'center', padding:'10px 24px', background:'var(--bg-inset)', borderBottom:'1px solid var(--line-gold)' }}>
+            <span className="mono" style={{ fontSize:13, color:'var(--gold-pale)' }}>🎲 Séance en cours</span>
+            <button className="btn btn-sm btn-gold" onClick={() => setRewards(true)}>Clôturer la séance</button>
+          </div>
+        )}
         <div style={{ flex:1, overflow:'auto', padding:24 }}>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:16, alignItems:'start', paddingBottom:8 }}>
             {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} turn={turn} onFull={() => setFull(c)} />)}
@@ -405,6 +496,8 @@ function MJPage({ go }) {
         </div>
       </main>
 
+      {!active && !decided && <SessionStartModal onStart={() => { start(); setDecided(true); }} onVisit={() => setDecided(true)} />}
+      {rewards && <SessionRewardsModal onLoot={() => go('inv')} onCancel={() => setRewards(false)} onDone={() => { setRewards(false); close(); }} />}
       {full && <FullScreenSheet char={full} onClose={() => setFull(null)} />}
       {attacker && <EnemyAttackModal enemy={attacker} stOf={stOf} onClose={() => setAttacker(null)} />}
     </div>
