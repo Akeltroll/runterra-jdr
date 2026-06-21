@@ -465,6 +465,37 @@
     return f;
   }
 
+  /* --- Moteur de stats refondu (info-mj/SPECIFICATION) ---
+     8 stats dérivées de 4 caracs + niveau. Magnitude escaladée, crit linéaire.
+     Sans Sapience (retirée du socle). */
+  function computeStats(F, H, M, C, level) {
+    F = Math.max(0, F | 0); H = Math.max(0, H | 0);
+    M = Math.max(0, M | 0); C = Math.max(0, C | 0);
+    level = Math.max(1, level | 0);
+    var eF = escalationFactor(F), eH = escalationFactor(H),
+        eM = escalationFactor(M), eC = escalationFactor(C);
+    var nH = Math.min(H, 5);                 // bonus de départ Habileté plafonné
+    var habPV = 20 * nH, habRes = nH;        // +20 PV, +1 Arm, +1 RM / pt (max 5)
+    var fondu = Math.max(0, 20 - 4 * (F + C)); // frappe de base des profils sans dégâts
+    return {
+      hp:     Math.round(50 + 30 * level + 20 * eF + 20 * eC + 42 * eM + habPV),
+      mana:   Math.round(50 + 17 * eF + 17 * eC + 38 * eM),
+      ad:     Math.round(20 * eF + 8 * eH + 3 * eM + fondu),
+      ap:     Math.round(20 * eC + 8 * eH + 3 * eM + fondu),
+      armure: Math.round(level + 4 * eF + habRes),
+      resmag: Math.round(level + 4 * eC + habRes),
+      crit:   5 + 10 * H + 2 * M,
+      dcrit:  150 + 2 * F + 2 * C + 6 * H,
+    };
+  }
+
+  /* Stats de base d'un perso, live : caracs/niveau effectifs (override state). */
+  function charBaseStats(char, state) {
+    var a = (state && state.attrs) || (char && char.attrs) || { force: 0, hab: 0, mental: 0, magie: 0 };
+    var level = (state && state.level != null ? state.level : (char && char.level)) || 1;
+    return computeStats(a.force, a.hab, a.mental, a.magie, level);
+  }
+
   /* XP & niveau : courbe officielle du MJ (info-mj/tableau_XP.png).
      XP requis pour passer du niveau L au L+1 = 180 + 100*L (lvl1→2 = 280, lvl17→18 = 1880).
      Niveau max = 18 (cap) ; au cap, xpToNext = Infinity et l'XP intra-niveau est figée à 0.
@@ -501,6 +532,6 @@
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
     xpToNext, applyXp, MAX_LEVEL,
-    escalationFactor,
+    escalationFactor, computeStats, charBaseStats,
   };
 });
