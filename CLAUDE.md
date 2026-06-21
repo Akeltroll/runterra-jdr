@@ -37,8 +37,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Design System, staff). Récap placé en avant-dernier (Admin reste dernier).
 - `game-logic.js` — **logique pure** (UMD : testable en Node + `window`). `clamp`,
   `clampGauge`, `DEFAULT_MODIFIERS`, `BUFF_STAT_MAP`, `computeEffective`,
-  `applyHealMods`, `buildDefaultState`. **XP** : `xpToNext(level)` (courbe générique `100*level`,
-  point unique à changer) + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade).
+  `applyHealMods`, `buildDefaultState`. **XP** : `xpToNext(level)` (courbe officielle du MJ
+  `180 + 100*level` = `info-mj/tableau_XP.png` ; **cap niveau 18** → `Infinity` au cap, `MAX_LEVEL=18`)
+  + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade, figée au cap).
   Combat (vue MJ) : `mitigateDamage`
   (armure/resmag, AR-120, brut sans réduction) + `applyDamageToPools`
   (bouclier puis HP, KO) — reproduit le moteur Excel.
@@ -65,7 +66,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `seedIfEmpty(role)` (réservé staff). Compétences : `setCounter`/`setCooldown`/**`setSkillBuff`** (sur
   `useCharState` ; `setSkillBuff(skillId, mods)` = buff sur soi, snapshot de mods plats).
   **XP** : orchestrateur `addXp(charId, gain)` (async, écriture staff : `getSnapshot`→`applyXp`→écrit
-  `{level, xp}`, `pushLog` au level-up, retourne `{level, xp, levelsGained}` pour le toast appelant).
+  `{level, xp}`, `pushLog` au level-up, retourne `{level, xp, levelsGained}` pour le toast appelant) ;
+  `grantCoins(charId, patch)` (don additif d'argent : `getSnapshot`→ajoute `{plat,or,arg,cuiv}`→écrit ; récompense de séance).
   `useSharedTurn` (tour partagé ; `resetCombat` **async** : efface counters/cooldowns/`skillBuffs`/`combat/log`
   ET **ramène PV/bouclier aux caps de base** via `computeEffective` sans skillBuffs). **Plateau partagé** :
   `useMJEnemies` (ennemis Firebase), `usePendingHits` (file d'attaques), orchestrateur `applyHitToEnemy`
@@ -404,18 +406,20 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   **B** (séance + récompenses). **A = FAIT et déployé (2026-06-21)** : `state/xp` (progression intra-niveau),
   `xpToNext`/`applyXp` (game-logic, testés), orchestrateur `addXp` (montée auto + report + `pushLog`),
   composant `XpBar` (fiche + Progression + cartes MJ), contrôle « +XP » ad-hoc côté MJ. Aucune règle RTDB.
-  Spec/plan : `docs/superpowers/{specs,plans}/2026-06-21-xp-niveau*`. **B = reste à brainstormer/faire**
-  (décisions ouvertes : séance partagée vs MJ-local ; modal début/visite ; clôture → panneau qui orchestre
-  `addXp` en lot + `moveItem`/`moveCoins`). Concept B : à l'ouverture de la vue MJ, une **modal** « Début séance / Visite du site ».
-  Si « Début séance » → un état de **séance en cours** (bandeau + bouton « Clôturer »). À la **clôture**,
-  une interface propose au MJ de : (1) **donner de l'XP** aux joueurs → chaque perso a une **barre d'XP**
-  qui alimente le **niveau** (réutilise `state/level` + le déblocage de comps déjà en place ; définir la
-  courbe XP/niveau — voir `LEVELS` dans data.jsx) ; (2) **distribuer items / stuff / potions / argent**
-  aux joueurs (réutilise `moveItem`/`moveCoins`/inventaires). **En plus** du système actuel (le MJ ajoute
-  déjà des items en live pendant la session). Découpage probable : (A) fondation **XP & niveau**
-  (`state/xp`, barre, courbe, montée → `state/level`) ; (B) **séance** (modal début/visite, état partagé,
-  clôture → panneau de récompenses qui orchestre A + transferts). Décisions à trancher au brainstorm :
-  courbe d'XP (table dédiée vs `LEVELS`), montée auto vs validée par le MJ, séance partagée vs MJ-local.
+  Spec/plan : `docs/superpowers/{specs,plans}/2026-06-21-xp-niveau*`. **B = FAIT et déployé (2026-06-21)** :
+  `useSession` (état de séance MJ-local `localStorage`), `SessionStartModal` (« Début de séance / Visite »
+  à l'ouverture de la vue MJ), bandeau « Séance en cours » + bouton « Clôturer », `SessionRewardsModal`
+  (tableau XP + pièces par joueur → `addXp` en lot + `grantCoins` ; bouton « loot » → onglet Inventaire
+  commun). `grantCoins(charId, patch)` = don additif d'argent (data-state). Aucune règle RTDB.
+  Spec/plan : `docs/superpowers/{specs,plans}/2026-06-21-seance-recompenses*`.
+  **Courbe XP officielle appliquée** (`info-mj/tableau_XP.png`) : `xpToNext = 180+100*level`, cap niveau 18.
+- **Refonte « système hypermétrique » (à venir, gros chantier)** — `info-mj/SPECIFICATION - Système refondu.md`
+  (livré MJ 2026-06-21). Remplace le modèle de stats par **4 caractéristiques** (Force/Magie/Habileté/Mental)
+  → 9 stats dérivées (matrice de poids, escalade anti-aplatissement, socle de niveau, bonus de départ,
+  surcrit par paliers, équipement en stats finales, zone PNJ quadratique). **Breaking change** sur le modèle
+  de perso + données Firebase → réécrit `computeStats`/`computeEffective`, fiche, MJ, Équipement, Runes.
+  Mérite son propre brainstorm + spec + plan (décisions MJ : répartition de départ des 5 persos, migration).
+  Note : mitigation `120/(120+res)` et table de points `LEVELS` collent déjà à la spec.
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
 - `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/
