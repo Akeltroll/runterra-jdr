@@ -19,7 +19,7 @@ function Avatar({ char, size = 42, radius = 9 }) {
 /* --- Glyphe de stat (abréviation mono, dev-friendly) --- */
 const STAT_GLYPH = {
   ad:'AD', ap:'AP', armure:'AR', resmag:'RM', crit:'%C', dcrit:'%D',
-  sapience:'SP', vol:'VV', omni:'OV', hp:'HP', mana:'MN', shield:'BO',
+  sapience:'SP', vol:'VV', omni:'OV', hp:'HP', mana:'MN', shield:'BO', letha:'LT',
 };
 
 /* --- Barre de ressource (HP / Mana / Bouclier) avec flash de perte --- */
@@ -77,6 +77,7 @@ function StatChip({ k, value, suffix='', magic=false }) {
 const STAT_LABEL = {
   ad:'Dégâts (AD)', ap:'Puissance (AP)', hp:'PV max', mana:'Mana max', armure:'Armure', resmag:'Rés. Magique',
   crit:'% Critique', dcrit:'% Dégâts Crit', sapience:'Sapience', vol:'% Vol de vie', omni:'% Omnivamp',
+  letha:'Léthalité',
 };
 
 /* --- Buff / Débuff badge (toggle + tooltip) --- */
@@ -602,6 +603,7 @@ const MOD_STATS = [
   { k:'sapience', label:'Sapience' },
   { k:'vol',      label:'Vol vie %', pct:true },
   { k:'omni',     label:'Omnivamp %', pct:true },
+  { k:'letha',    label:'Léthalité' },
 ];
 
 function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {

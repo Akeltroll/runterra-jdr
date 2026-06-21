@@ -59,7 +59,8 @@ function SecondaryStats({ stats, variant }) {
   const items = [
     ['ad', stats.ad, false], ['ap', stats.ap, true], ['armure', stats.armure, false],
     ['resmag', stats.resmag, true], ['crit', stats.crit + '%', false], ['dcrit', stats.dcrit + '%', false],
-    // Sapience retirée du socle (refonte) : affichée seulement si une source (item/comp) en accorde.
+    // Sapience/Léthalité hors socle (refonte) : affichées seulement si une source (item/mod/comp) en accorde.
+    ...(stats.letha > 0 ? [['letha', stats.letha, false]] : []),
     ...(stats.sapience > 0 ? [['sapience', stats.sapience, false]] : []),
     ['omni', (stats.omni || 0) + '%', true],
     ['vol', (stats.vol || 0) + '%', false],
@@ -112,7 +113,7 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
     setBuff(b.id, on);
     if (on) toast(`<b>${char.name}</b> — ${b.name} ${b.type === 'buff' ? 'activé' : 'subi'}`, b.type);
   };
-  const MOD_STATS =[['hp','HP'],['mana','Mana'],['ad','AD'],['ap','AP'],['armure','Armure'],['resmag','Rés.Mag'],['crit','%Crit'],['dcrit','%D.Crit'],['sapience','Sapience']];
+  const MOD_STATS =[['hp','HP'],['mana','Mana'],['ad','AD'],['ap','AP'],['armure','Armure'],['resmag','Rés.Mag'],['crit','%Crit'],['dcrit','%D.Crit'],['letha','Léthalité'],['sapience','Sapience']];
   return (
     <div className="col gap-5">
       <div className="panel">
@@ -129,6 +130,7 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
         </div>
       </div>
 
+      {canEdit && (
       <div className="panel">
         <div className="panel-head"><h3>Modificateurs</h3><span className="overline">ajustements MJ</span></div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, padding:'14px 16px' }}>
@@ -142,6 +144,7 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
           ))}
         </div>
       </div>
+      )}
 
       <div className="panel">
         <div className="panel-head"><h3>Inventaire</h3>
