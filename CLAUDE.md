@@ -35,6 +35,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Barre de nav avec champ `group` sur `PAGES` : `main` (barre), `more` (menu déroulant
   « ⋯ Plus » : Journal + Progression, staff), `footer` (lien discret bas de page :
   Design System, staff). Récap placé en avant-dernier (Admin reste dernier).
+  L'onglet `id:'competences'` a pour **libellé « Combat »** (id inchangé pour le routage).
 - `game-logic.js` — **logique pure** (UMD : testable en Node + `window`). `clamp`,
   `clampGauge`, `DEFAULT_MODIFIERS`, `BUFF_STAT_MAP`, `computeEffective`,
   `applyHealMods`, `buildDefaultState`. **Moteur de stats refondu** (système hypermétrique) :
@@ -87,7 +88,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `xp/xpToNext(level)` + label niveau), `BuffBadge`, toasts
   (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), **`CombatLog`** (journal de combat
   partagé lecture seule, lit `useCombatLog` ; prop `canClear` = bouton « Vider » staff), `LoginScreen`,
-  `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`, `AttackModal`,
+  `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`,
   `InvItemRow` + `InventoryPanel` (inventaire éditable réutilisable). L'éditeur
   `InvItemRow` permet de **téléverser une image** (`downscaleImageToDataURL`, max 128px,
   webp/png) stockée en **data URL** dans `item.img` — pas besoin d'un chemin `ATH/` ni
@@ -105,6 +106,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel, **inventaire perso
   temps réel** (migration unique via marqueur `invInit`). **Arme affichée = celle équipée**
   (slot `armePrincipale` de `state.equipment`, reliée à `WEAPONS` par nom ; repli `char.weaponId`).
+  **L'action d'attaque a été retirée de la fiche** (déplacée dans l'onglet Combat) : le panneau « Arme
+  équipée » reste en info (arme + dégâts estimés), sans bouton ni modale.
   Bourse **live** (`state.coins`, ordre cuivre→argent→or→platine). **HealPanel plafonne sur les
   stats EFFECTIVES** (`eff.hp`/`eff.mana`, incluent runes/items/mods) — pas les stats de base.
 - `pages-mj.jsx` — tableau de bord MJ temps réel (`mjLive(c, st)` fusionne règles+état).
@@ -167,9 +170,13 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   affiché dans la rune **fondamentale** (rectangle en 2 sous-sections). **Stepper points bonus MJ**
   (staff only, `setField('runeBonus')`) pour tester/gérer la montée de niveau. Visible des 3 rôles,
   sélecteur de perso pour le staff. Logique pure dans `game-logic.js`.
-- `pages-competences.jsx` — onglet **Compétences** (`CompetencesPage`) : cast au clic (mana − coût,
-  pose le cooldown, **affiche les dégâts** que le MJ saisit dans « Subir »). Carte **Passif** (stepper de
-  compteur + effet de stat en vert) + cartes **Actives** (mana, badge CD, dégâts live, « Lancer »). Données
+- `pages-competences.jsx` — onglet **Combat** (`CompetencesPage`, libellé de menu « Combat ») : cast au clic
+  (mana − coût, pose le cooldown). Carte **Attaque de base** (arme équipée → `eff.ad`/`eff.ap`, bouton
+  « Attaquer » → attaque en attente MJ, **sans mana ni cooldown**) + carte **Passif** (stepper de
+  compteur + effet de stat en vert) + cartes **Actives** (mana, badge CD, dégâts live, « Lancer »).
+  `cast(sk, ctx, dmg, nbHits)` **respecte les variables d'attaque** (1er coup/camouflé/cases/cibles) ; une comp
+  à **N cibles génère N attaques en attente** (un coup = une carte, chacune son `rollCrit`). **Garde « pas de
+  cible »** : toute action à dégâts sans cible → toast + abandon (avant mana/cooldown). Données
   `SKILLS` (data.jsx) → `dmg*` pures de `game-logic.js` (transcrites des scripts `.gs`, **le script prime**).
   Compteurs/cooldowns en `state/counters`+`state/cooldowns` (cooldown = **`readyAt`** = n° de tour de dispo) ;
   variables d'attaque (1er coup / furtif / cases / cibles) en état local de carte. **Persos câblés** :
