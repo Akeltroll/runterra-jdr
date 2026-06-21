@@ -145,6 +145,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
 }
 
 function CompetencesBody({ char, staff }) {
+  const toast = useToast();
   const { state, setField, setCounter, setCooldown, setSkillBuff } = useCharState(char.id);
   const { turn } = useSharedTurn();
   const { enemies } = useMJEnemies();

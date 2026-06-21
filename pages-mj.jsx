@@ -330,6 +330,7 @@ function PendingHitRow({ hit, enemies, onApply, onReject }) {
   );
 }
 function PendingHitsPanel({ enemies }) {
+  const toast = useToast();
   const { hits, removeHit } = usePendingHits();
   if (!hits.length) return null;
   const apply = (hit, enemy, finalDmg, type, letha) => {
