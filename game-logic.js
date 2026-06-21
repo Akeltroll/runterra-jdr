@@ -320,6 +320,27 @@
     return Math.ceil(dmg * (1 - reduction));
   }
 
+  /* --- Crit & surcrit par paliers (refonte §6.3) ---
+     %Crit peut dépasser 100 % : à 100 % le crit est garanti ; chaque tranche de 100 %
+     au-delà = un palier supplémentaire valant +50 % de Dégâts Crit. */
+  function critInfo(critPct) {
+    critPct = Math.max(0, Number(critPct) || 0);
+    if (critPct < 100) return { guaranteedTiers: 0, extraChancePct: critPct };
+    return { guaranteedTiers: Math.floor((critPct - 100) / 100), extraChancePct: (critPct - 100) % 100 };
+  }
+  function rollCrit(critPct, dcritBase, rng) {
+    critPct = Math.max(0, Number(critPct) || 0);
+    dcritBase = Number(dcritBase) || 0;
+    rng = rng || Math.random;
+    if (critPct < 100) {
+      if (rng() < critPct / 100) return { didCrit: true, tiers: 1, multiplier: dcritBase / 100 };
+      return { didCrit: false, tiers: 0, multiplier: 1 };
+    }
+    const frac = ((critPct - 100) % 100) / 100;
+    const tiersSupp = Math.floor((critPct - 100) / 100) + (rng() < frac ? 1 : 0);
+    return { didCrit: true, tiers: 1 + tiersSupp, multiplier: (dcritBase + 50 * tiersSupp) / 100 };
+  }
+
   // Applique des dégâts DÉJÀ mitigés : bouclier d'abord, puis HP. KO si HP atteint 0.
   function applyDamageToPools(pools, degats) {
     const hpCur = Math.max(0, Number((pools && pools.hpCur) || 0));
@@ -524,7 +545,7 @@
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,
-    mitigateDamage, applyDamageToPools,
+    mitigateDamage, applyDamageToPools, critInfo, rollCrit,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,

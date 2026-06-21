@@ -74,15 +74,6 @@ const WEAPONS = [
   { id:'hachette',     name:'Hachette',              cat:'Physique', type:'1H',     stat:'ad', ic:'🪓' },
 ];
 
-/* --- Calcul d'une attaque (dégâts pleins ; le système de mode de combat a été retiré) --- */
-function computeAttack({ weapon, stats, lethality, isCrit }) {
-  const power = weapon.stat === 'ap' ? stats.ap : stats.ad;
-  const base = power; // dégâts pleins
-  const dmg = isCrit ? Math.round(base * (stats.dcrit / 100)) : base;
-  const pen = lethality * 10; // léthalité = pénétration d'armure forfaitaire
-  return { power, base, dmg, crit: isCrit, pen };
-}
-
 /* --- 5 personnages (renommés depuis Erwan/Baptiste/JB/Steph/Fab) --- */
 function mkChar(o) {
   const modifiers = (window.DEFAULT_MODIFIERS && window.DEFAULT_MODIFIERS[o.id]) || {};
@@ -405,6 +396,6 @@ const SKILLS = {
 };
 
 Object.assign(window, {
-  computeAttack, CHARACTERS, BUFFS, WEAPONS,
+  CHARACTERS, BUFFS, WEAPONS,
   LEVELS, ATTRIBUTES, JOURNAL, RUNES, ITEM_CATALOG, SKILLS,
 });

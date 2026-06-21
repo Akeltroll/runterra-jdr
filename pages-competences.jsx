@@ -135,7 +135,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
             )}
             {heal != null && <span className="mono" style={{ fontSize: 12.5, color: 'var(--buff)' }}>soin allié {heal}</span>}
           </div>
-          <button className="btn btn-gold" onClick={onCast} disabled={!ready || !enoughMana}
+          <button className="btn btn-gold" onClick={() => onCast(ctx, dmg, needed.includes('nbTargets') ? Math.max(1, vars.nbTargets || 1) : 1)} disabled={!ready || !enoughMana}
             title={!enoughMana ? 'Pas assez de mana' : (!ready ? 'En cooldown' : '')}>Lancer</button>
         </div>
         {sk.note && <div className="faint" style={{ fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>{sk.note}</div>}
@@ -145,6 +145,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
 }
 
 function CompetencesBody({ char, staff }) {
+  const toast = useToast();
   const { state, setField, setCounter, setCooldown, setSkillBuff } = useCharState(char.id);
   const { turn } = useSharedTurn();
   const { enemies } = useMJEnemies();
@@ -176,11 +177,20 @@ function CompetencesBody({ char, staff }) {
   const baseCtx = { counters, level, wType, hpMax: base.hp };
   const kitWithId = Object.assign({ _id: char.id }, kit);
 
-  function cast(sk) {
+  function cast(sk, ctx, dmgArg, nbHits) {
+    ctx = ctx || baseCtx;
+    nbHits = Math.max(1, nbHits || 1);
     const cost = sk.mana || 0;
     const skIndex = kit.actives.indexOf(sk);
     if (!skillUnlocked(skIndex, level)) {
       toast(`<b>${char.name}</b> — ${sk.name} se débloque au niveau ${skIndex + 1}`, 'gold');
+      return;
+    }
+    // Dégâts/cible (réutilise le calcul de la carte ; repli si appel sans dmgArg).
+    const dmg = sk.dmg ? (dmgArg != null ? dmgArg : sk.dmg(eff, ctx)) : null;
+    // Garde « pas de cible » : une action à dégâts exige une cible (avant toute dépense).
+    if (dmg != null && !targetId) {
+      toast(`<b>${char.name}</b> — choisis une cible d'abord`, 'gold');
       return;
     }
     const manaCur = state.manaCur || 0;
@@ -203,27 +213,54 @@ function CompetencesBody({ char, staff }) {
     }
     // Bouclier au cast (one-shot, ajouté au pool).
     if (sk.shield) {
-      const sh = sk.shield(eff, baseCtx);
+      const sh = sk.shield(eff, ctx);
       if (sh) { setField('shield', (state.shield || 0) + sh); logParts.push(`+${sh} bouclier`); toast(`<b>${char.name}</b> gagne ${sh} bouclier`, 'gold'); }
     }
-    // Comp à dégâts + cible choisie → propose une attaque au MJ (il ajuste au d20 puis applique).
-    const dmg = sk.dmg ? sk.dmg(eff, baseCtx) : null; // dégâts unitaires (multi-cibles : le MJ duplique/ajuste)
+    // Comp à dégâts + cible → N attaques en attente (un coup = une carte ; chacune son crit).
     if (dmg != null && targetId) {
-      addHit({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
-        type: (wType === 'Magique' ? 'magique' : 'physique'), computedDmg: dmg, targetId });
+      let anyCrit = false;
+      for (let i = 0; i < nbHits; i++) {
+        const cr = rollCrit(eff.crit || 0, eff.dcrit || 0);
+        if (cr.didCrit) anyCrit = true;
+        addHit({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
+          type: (wType === 'Magique' ? 'magique' : 'physique'),
+          computedDmg: dmg, critDmg: Math.round(dmg * cr.multiplier), didCrit: cr.didCrit,
+          critMult: cr.multiplier, letha: eff.letha || 0, crit: eff.crit || 0, dcrit: eff.dcrit || 0, targetId });
+      }
       const tgt = enemies.find(en => en.id === targetId);
-      pushLog(`<b>${char.name}</b> vise <b>${tgt ? tgt.name : 'un ennemi'}</b> avec <b>${sk.name}</b> (${dmg}) — en attente MJ`, 'gold');
-      toast(`<b>${char.name}</b> vise un ennemi avec ${sk.name} (${dmg}) — envoyé au MJ`, 'buff');
+      const suffix = nbHits > 1 ? ` ×${nbHits}` : '';
+      pushLog(`<b>${char.name}</b> vise <b>${tgt ? tgt.name : 'un ennemi'}</b> avec <b>${sk.name}</b>${suffix} (${dmg}/coup${anyCrit ? ' — CRIT !' : ''}) — en attente MJ`, anyCrit ? 'buff' : 'gold');
+      toast(`<b>${char.name}</b> — ${sk.name} : ${nbHits} coup(s) envoyé(s) au MJ`, 'buff');
     } else {
       pushLog(`<b>${char.name}</b> lance <b>${sk.name}</b>${logParts.length ? ' — ' + logParts.join(', ') : ''}`, logParts.length ? 'buff' : 'gold');
       toast(`<b>${char.name}</b> lance ${sk.name}`, 'buff');
     }
   }
 
+  // Attaque de base : même flux que les comps (cible → attaque en attente MJ), sans mana ni cooldown.
+  const eqWeaponName = (() => {
+    const eqId = state.equipment && state.equipment.armePrincipale;
+    const it = (eqId && state.inventory) ? state.inventory[eqId] : null;
+    return (it && it.name) || (WEAPONS.find(w => w.id === char.weaponId) || {}).name || 'Arme';
+  })();
+  const basicDmg = (wType === 'Magique' ? (eff.ap || 0) : (eff.ad || 0));
+  function basicAttack() {
+    if (!targetId) { toast(`<b>${char.name}</b> — choisis une cible d'abord`, 'gold'); return; }
+    const cr = rollCrit(eff.crit || 0, eff.dcrit || 0);
+    const critDmg = Math.round(basicDmg * cr.multiplier);
+    addHit({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: 'Attaque de base',
+      type: (wType === 'Magique' ? 'magique' : 'physique'), computedDmg: basicDmg, critDmg,
+      didCrit: cr.didCrit, critMult: cr.multiplier, letha: eff.letha || 0, crit: eff.crit || 0, dcrit: eff.dcrit || 0, targetId });
+    const tgt = enemies.find(en => en.id === targetId);
+    const shown = cr.didCrit ? `${critDmg} — CRITIQUE !` : `${basicDmg}`;
+    pushLog(`<b>${char.name}</b> attaque <b>${tgt ? tgt.name : 'un ennemi'}</b> (${shown}) — en attente MJ`, cr.didCrit ? 'buff' : 'gold');
+    toast(`<b>${char.name}</b> attaque (${shown}) — envoyé au MJ`, 'buff');
+  }
+
   return (
     <div className="col gap-4" style={{ padding: 20 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <h2 style={{ fontSize: 20 }}>Compétences — {char.name}</h2>
+        <h2 style={{ fontSize: 20 }}>Combat — {char.name}</h2>
         <span className="row gap-2" style={{ alignItems: 'center' }}>
           {staff && (
             <span className="row gap-1" style={{ alignItems: 'center' }}>
@@ -268,12 +305,24 @@ function CompetencesBody({ char, staff }) {
           </div>
         );
       })()}
+      <div className="panel" style={{ borderLeft: '3px solid var(--gold)' }}>
+        <div className="panel-head">
+          <h3>⚔ Attaque de base</h3>
+          <span className="overline">{eqWeaponName} · {wType === 'Magique' ? 'AP' : 'AD'}</span>
+        </div>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px' }}>
+          <span className="mono" style={{ fontSize: 22, color: 'var(--hp)', fontWeight: 700 }}>
+            {basicDmg}<span style={{ fontSize: 12, color: 'var(--faint)' }}> dégâts</span>
+          </span>
+          <button className="btn btn-gold" onClick={basicAttack}>Attaquer</button>
+        </div>
+      </div>
       <PassiveCard kit={kitWithId} eff={eff} counters={counters} level={level} color={color} setCounter={setCounter} />
       <div className="comp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
         {kit.actives.map((sk, i) => (
           <ActiveCard key={sk.id} sk={sk} eff={eff} baseCtx={baseCtx} color={color}
             ready={cooldownReady(cooldowns[sk.id], turn)} readyAt={cooldowns[sk.id]} turn={turn}
-            manaCur={state.manaCur || 0} onCast={() => cast(sk)}
+            manaCur={state.manaCur || 0} onCast={(ctx, dmg, nbHits) => cast(sk, ctx, dmg, nbHits)}
             locked={!skillUnlocked(i, level)} minLevel={i + 1} />
         ))}
       </div>

@@ -174,8 +174,7 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
 }
 
 /* ---- Colonne 2 : combat & armes ---- */
-function CombatColumn({ char, weapon, eff, onAttack, hp, setHp, mana, setMana, shield, setShield, fatigue, eau, setField, activeBuffs }) {
-  const [lethality, setLethality] = useState(char.lethality);
+function CombatColumn({ char, weapon, eff, hp, setHp, mana, setMana, shield, setShield, fatigue, eau, setField, activeBuffs }) {
   const power = weapon.stat === 'ap' ? eff.ap : eff.ad;
   const estimate = power;
   return (
@@ -197,22 +196,11 @@ function CombatColumn({ char, weapon, eff, onAttack, hp, setHp, mana, setMana, s
               <div className="faint" style={{ fontSize:12 }}>{weapon.cat} · {weapon.type} · base {weapon.stat.toUpperCase()}</div>
             </div>
           </div>
-          {/* léthalité */}
-          <div className="row" style={{ justifyContent:'space-between', marginBottom:7 }}>
-            <span className="overline">Léthalité</span>
-            <span className="faint" style={{ fontSize:11 }}>{['Aucune','Physique','Magique','Phys. & Mag.'][lethality]}</span>
-          </div>
-          <div className="row gap-2" style={{ marginBottom:16 }}>
-            {[0,1,2,3].map(l => (
-              <button key={l} onClick={() => setLethality(l)} className={'btn btn-sm' + (l === lethality ? ' btn-gold' : ' btn-ghost')} style={{ flex:1, justifyContent:'center' }}>{l}</button>
-            ))}
-          </div>
           {/* dégâts estimés */}
           <div className="row" style={{ justifyContent:'space-between', padding:'12px 14px', background:'var(--bg-inset)', borderRadius:8, border:'1px solid var(--line)', marginBottom:14 }}>
             <span className="dim" style={{ fontSize:12 }}>Dégâts estimés</span>
             <span className="mono" style={{ fontSize:22, fontWeight:700, color:'var(--gold-bright)' }}>{estimate}</span>
           </div>
-          <button className="btn btn-gold btn-lg" style={{ width:'100%', justifyContent:'center' }} onClick={onAttack}>⚔ Lancer une attaque</button>
         </div>
       </div>
 
@@ -280,7 +268,6 @@ function HealPanel({ char, eff, hp, setHp, mana, setMana, shield, setShield, act
 
 /* ---- Corps de la fiche (3 colonnes) ---- */
 function SheetBody({ char, variant }) {
-  const [modal, setModal] = useState(false);
   const { role } = useAuthIdentity();
   const canEdit = isStaff(role);   // joueur = inventaire en lecture seule ; MJ/admin = édition
   const { state, setField, setBuff, setMod, setInvItem, removeInvItem } = useCharState(char.id);
@@ -335,14 +322,13 @@ function SheetBody({ char, variant }) {
           </div>
         </div>
         {/* COLONNE 2 — COMBAT */}
-        <CombatColumn char={char} weapon={equippedWeapon} eff={eff} onAttack={() => setModal(true)}
+        <CombatColumn char={char} weapon={equippedWeapon} eff={eff}
           hp={hp} setHp={setHp} mana={mana} setMana={setMana} shield={shield} setShield={setShield}
           fatigue={state.fatigue} eau={state.eau} setField={setField} activeBuffs={activeBuffs} />
         {/* COLONNE 3 — BUFFS + MODIFICATEURS + INVENTAIRE */}
         <BuffInvColumn char={char} activeBuffs={activeBuffs} setBuff={setBuff} setMod={setMod} modifiers={state.modifiers}
           inventory={state.inventory} coins={state.coins || char.coins} onSaveItem={setInvItem} onRemoveItem={removeInvItem} canEdit={canEdit} />
       </div>
-      {modal && <AttackModal char={char} onClose={() => setModal(false)} />}
     </div>
   );
 }

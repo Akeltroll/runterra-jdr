@@ -290,35 +290,51 @@ function EnemyAttackModal({ enemy, stOf, onClose }) {
   );
 }
 
-/* Une attaque en attente : dégâts pré-remplis éditables (le MJ ajuste à son d20) + type + appliquer/rejeter. */
+/* Une attaque en attente : crit roulé par l'app, dégâts pré-remplis éditables (le MJ ajuste à son d20
+   de toucher) + type + léthalité + appliquer/rejeter. */
 function PendingHitRow({ hit, enemies, onApply, onReject }) {
   const enemy = enemies.find(e => e.id === hit.targetId);
-  const [dmg, setDmg] = useState(String(hit.computedDmg || 0));
+  const rolled = hit.didCrit ? (hit.critDmg != null ? hit.critDmg : hit.computedDmg) : hit.computedDmg;
+  const [dmg, setDmg] = useState(String(rolled || 0));
   const [type, setType] = useState(hit.type || 'physique');
+  const [letha, setLetha] = useState(String(hit.letha || 0));
+  const info = critInfo(hit.crit || 0);
   return (
     <div className="panel" style={{ padding:'10px 14px', display:'flex', flexDirection:'column', gap:8 }}>
       <div className="row" style={{ justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
         <span style={{ fontSize:13 }}><b className="gold">{hit.attackerName}</b> · {hit.skillName} → <b>{enemy ? enemy.name : '— cible disparue —'}</b></span>
-        <span className="mono faint" style={{ fontSize:11 }}>calculé : {hit.computedDmg}</span>
+        {hit.didCrit
+          ? <span className="mono" style={{ fontSize:11, color:'var(--skillbuff)' }}>🎲 CRIT ×{(hit.critMult || 1).toFixed(2)}</span>
+          : <span className="mono faint" style={{ fontSize:11 }}>normal</span>}
+      </div>
+      <div className="row gap-2 wrap" style={{ fontSize:11, color:'var(--ink-faint)' }}>
+        <span>Base : <b>{hit.computedDmg}</b></span>
+        {hit.critDmg != null && <span>Crit : <b>{hit.critDmg}</b></span>}
+        <span>%Crit {hit.crit || 0}{info.guaranteedTiers ? ` · ${info.guaranteedTiers} palier(s) garanti(s)` : ''}{info.extraChancePct ? ` · +${info.extraChancePct}%` : ''}</span>
       </div>
       <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>
-        <input style={{ ...ENEMY_FLD, width:80 }} value={dmg} onChange={e => setDmg(e.target.value)} title="Dégâts (ajuste au d20)" />
+        <input style={{ ...ENEMY_FLD, width:80 }} value={dmg} onChange={e => setDmg(e.target.value)} title="Dégâts (ajuste au d20 de toucher)" />
+        <label className="row gap-1" style={{ alignItems:'center', fontSize:11 }} title="Léthalité (réduit AR/RM)">
+          <span className="faint">Léth.</span>
+          <input style={{ ...ENEMY_FLD, width:56 }} value={letha} onChange={e => setLetha(e.target.value)} />
+        </label>
         <div className="row gap-1">
           {['physique','magique','brut'].map(t => (
             <button key={t} className={'btn btn-sm ' + (type===t ? 'btn-gold' : 'btn-ghost')} onClick={() => setType(t)} style={{ textTransform:'capitalize' }}>{t}</button>
           ))}
         </div>
-        <button className="btn btn-sm btn-gold" disabled={!enemy} onClick={() => onApply(hit, enemy, Math.max(0, parseInt(dmg,10)||0), type)} style={{ marginLeft:'auto' }}>Appliquer</button>
+        <button className="btn btn-sm btn-gold" disabled={!enemy} onClick={() => onApply(hit, enemy, Math.max(0, parseInt(dmg,10)||0), type, Math.max(0, parseInt(letha,10)||0))} style={{ marginLeft:'auto' }}>Appliquer</button>
         <button className="btn btn-sm btn-ghost" onClick={() => onReject(hit.id)}>Rejeter</button>
       </div>
     </div>
   );
 }
 function PendingHitsPanel({ enemies }) {
+  const toast = useToast();
   const { hits, removeHit } = usePendingHits();
   if (!hits.length) return null;
-  const apply = (hit, enemy, finalDmg, type) => {
-    const r = applyHitToEnemy(enemy, finalDmg, type);
+  const apply = (hit, enemy, finalDmg, type, letha) => {
+    const r = applyHitToEnemy(enemy, finalDmg, type, letha || 0);
     toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
     pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
     removeHit(hit.id);

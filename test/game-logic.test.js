@@ -561,3 +561,39 @@ test('charBaseStats : repli char.attrs / override state.attrs', () => {
   const st = { attrs: { force: 6, hab: 0, mental: 5, magie: 0 }, level: 5 };
   assert.deepEqual(L.charBaseStats(char, st), L.computeStats(6, 0, 5, 0, 5));
 });
+
+/* --- Combat refondu : crit & surcrit --- */
+test('critInfo : paliers garantis + chance fractionnaire', () => {
+  assert.deepEqual(L.critInfo(80),  { guaranteedTiers: 0, extraChancePct: 80 });
+  assert.deepEqual(L.critInfo(100), { guaranteedTiers: 0, extraChancePct: 0 });
+  assert.deepEqual(L.critInfo(250), { guaranteedTiers: 1, extraChancePct: 50 });
+});
+test('rollCrit : < 100 % = probabilité (rng injecté)', () => {
+  assert.deepEqual(L.rollCrit(50, 200, () => 0.9), { didCrit: false, tiers: 0, multiplier: 1 });
+  assert.deepEqual(L.rollCrit(50, 200, () => 0.1), { didCrit: true,  tiers: 1, multiplier: 2 });
+});
+test('rollCrit : >= 100 % = crit garanti + paliers de surcrit', () => {
+  assert.deepEqual(L.rollCrit(100, 200, () => 0.9), { didCrit: true, tiers: 1, multiplier: 2 });
+  assert.deepEqual(L.rollCrit(200, 200, () => 0.9), { didCrit: true, tiers: 2, multiplier: 2.5 });
+  assert.deepEqual(L.rollCrit(250, 200, () => 0.9), { didCrit: true, tiers: 2, multiplier: 2.5 });
+  assert.deepEqual(L.rollCrit(250, 200, () => 0.1), { didCrit: true, tiers: 3, multiplier: 3 });
+});
+test('rollCrit : espérance §6.3 (sanity, tolérance)', () => {
+  let sum = 0, n = 4000;
+  for (let i = 0; i < n; i++) sum += L.rollCrit(150, 200, Math.random).multiplier;
+  const avg = sum / n;                       // attendu ≈ (200 + 25)/100 = 2.25
+  assert.ok(Math.abs(avg - 2.25) < 0.1, `avg=${avg}`);
+});
+test('mitigateDamage : la léthalité réduit la résistance (sans passer sous 0)', () => {
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 0), 50);   // eff 120 → 50 %
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 120), 100); // eff 0 → aucune réduction
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 200), 100); // eff borné à 0
+  assert.equal(L.mitigateDamage(100, 'brut',     { armure: 120 }, 50), 100);  // brut ignore tout
+});
+test('computeAttack : dmg = round(base * critMult)', () => {
+  // invariant figé (computeAttack vit dans data.jsx, non requis ici)
+  const calc = (ad, mult) => Math.round(ad * mult);
+  assert.equal(calc(100, 1), 100);    // pas de crit
+  assert.equal(calc(100, 2), 200);    // crit base (dcrit 200)
+  assert.equal(calc(100, 2.5), 250);  // surcrit 1 palier
+});

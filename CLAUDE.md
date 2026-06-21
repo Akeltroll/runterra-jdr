@@ -35,6 +35,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Barre de nav avec champ `group` sur `PAGES` : `main` (barre), `more` (menu déroulant
   « ⋯ Plus » : Journal + Progression, staff), `footer` (lien discret bas de page :
   Design System, staff). Récap placé en avant-dernier (Admin reste dernier).
+  L'onglet `id:'competences'` a pour **libellé « Combat »** (id inchangé pour le routage).
 - `game-logic.js` — **logique pure** (UMD : testable en Node + `window`). `clamp`,
   `clampGauge`, `DEFAULT_MODIFIERS`, `BUFF_STAT_MAP`, `computeEffective`,
   `applyHealMods`, `buildDefaultState`. **Moteur de stats refondu** (système hypermétrique) :
@@ -46,8 +47,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `180 + 100*level` = `info-mj/tableau_XP.png` ; **cap niveau 18** → `Infinity` au cap, `MAX_LEVEL=18`)
   + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade, figée au cap).
   Combat (vue MJ) : `mitigateDamage`
-  (armure/resmag, AR-120, brut sans réduction) + `applyDamageToPools`
-  (bouclier puis HP, KO) — reproduit le moteur Excel.
+  (armure/resmag, AR-120, **léthalité** réduit AR/RM sans passer sous 0, brut sans réduction) +
+  `applyDamageToPools` (bouclier puis HP, KO) — reproduit le moteur Excel. **Crit/surcrit (§6.3)** :
+  `critInfo(critPct)` (paliers garantis + chance fractionnaire, affichage) + `rollCrit(critPct,dcrit,rng)`
+  (≥100 % = crit garanti, +50 % Dég. Crit par palier ; `rng` injectable).
 - `auth.js` — logique d'auth pure (UMD) : `usernameToEmail`, `ROLES`, `isStaff`,
   `isAdmin`, `isPending`, `pagesForRole`, `canSeePage`, `defaultRoute`.
 - `firebase-config.js` — init Firebase + auth Email/Password + helpers `window.RTDB`
@@ -85,7 +88,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `xp/xpToNext(level)` + label niveau), `BuffBadge`, toasts
   (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), **`CombatLog`** (journal de combat
   partagé lecture seule, lit `useCombatLog` ; prop `canClear` = bouton « Vider » staff), `LoginScreen`,
-  `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`, `AttackModal`,
+  `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`,
   `InvItemRow` + `InventoryPanel` (inventaire éditable réutilisable). L'éditeur
   `InvItemRow` permet de **téléverser une image** (`downscaleImageToDataURL`, max 128px,
   webp/png) stockée en **data URL** dans `item.img` — pas besoin d'un chemin `ATH/` ni
@@ -103,6 +106,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel, **inventaire perso
   temps réel** (migration unique via marqueur `invInit`). **Arme affichée = celle équipée**
   (slot `armePrincipale` de `state.equipment`, reliée à `WEAPONS` par nom ; repli `char.weaponId`).
+  **L'action d'attaque a été retirée de la fiche** (déplacée dans l'onglet Combat) : le panneau « Arme
+  équipée » reste en info (arme + dégâts estimés), sans bouton ni modale.
   Bourse **live** (`state.coins`, ordre cuivre→argent→or→platine). **HealPanel plafonne sur les
   stats EFFECTIVES** (`eff.hp`/`eff.mana`, incluent runes/items/mods) — pas les stats de base.
 - `pages-mj.jsx` — tableau de bord MJ temps réel (`mjLive(c, st)` fusionne règles+état).
@@ -115,8 +120,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `EnemyAttackModal` (ennemi→joueur : `mitigateDamage`+`applyDamageToPools`, écrit `hpCur`/`shield`
   du joueur ciblé en Firebase, KO à 0). **Section « Attaques en attente »** (`PendingHitsPanel`,
   file `combat/pendingHits`) : un joueur cast une comp à dégâts → propose une attaque sur un ennemi
-  ciblé ; le MJ ajuste le nombre (son d20 Roll20) + le type, puis **Appliquer** (`applyHitToEnemy`)
-  ou **Rejeter**. Cartes : barre de bouclier
+  ciblé. **Le crit/surcrit est roulé par l'app au cast** (`rollCrit`) : la carte MJ affiche **base vs crit**
+  (+ badge 🎲 CRIT ×mult, profil `critInfo`), pré-remplit le champ avec le nombre roulé ; le MJ ajuste à son
+  d20 de toucher Roll20, règle le type **+ la léthalité** (réduit AR/RM), puis **Appliquer**
+  (`applyHitToEnemy(enemy,dmg,type,letha)`) ou **Rejeter**. Cartes : barre de bouclier
   **toujours affichée** (0/0 si vide) ; **pulsation du cadre** selon les PV (classe `mj-card-warn`
   orange < 50%, `mj-card-danger` rouge < 25% — keyframes CSS dans `runeterra.css`).
   **Compteur de tour PARTAGÉ** dans l'en-tête (`useSharedTurn`, Firebase `combat/turn` :
@@ -163,9 +170,13 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   affiché dans la rune **fondamentale** (rectangle en 2 sous-sections). **Stepper points bonus MJ**
   (staff only, `setField('runeBonus')`) pour tester/gérer la montée de niveau. Visible des 3 rôles,
   sélecteur de perso pour le staff. Logique pure dans `game-logic.js`.
-- `pages-competences.jsx` — onglet **Compétences** (`CompetencesPage`) : cast au clic (mana − coût,
-  pose le cooldown, **affiche les dégâts** que le MJ saisit dans « Subir »). Carte **Passif** (stepper de
-  compteur + effet de stat en vert) + cartes **Actives** (mana, badge CD, dégâts live, « Lancer »). Données
+- `pages-competences.jsx` — onglet **Combat** (`CompetencesPage`, libellé de menu « Combat ») : cast au clic
+  (mana − coût, pose le cooldown). Carte **Attaque de base** (arme équipée → `eff.ad`/`eff.ap`, bouton
+  « Attaquer » → attaque en attente MJ, **sans mana ni cooldown**) + carte **Passif** (stepper de
+  compteur + effet de stat en vert) + cartes **Actives** (mana, badge CD, dégâts live, « Lancer »).
+  `cast(sk, ctx, dmg, nbHits)` **respecte les variables d'attaque** (1er coup/camouflé/cases/cibles) ; une comp
+  à **N cibles génère N attaques en attente** (un coup = une carte, chacune son `rollCrit`). **Garde « pas de
+  cible »** : toute action à dégâts sans cible → toast + abandon (avant mana/cooldown). Données
   `SKILLS` (data.jsx) → `dmg*` pures de `game-logic.js` (transcrites des scripts `.gs`, **le script prime**).
   Compteurs/cooldowns en `state/counters`+`state/cooldowns` (cooldown = **`readyAt`** = n° de tour de dispo) ;
   variables d'attaque (1er coup / furtif / cases / cibles) en état local de carte. **Persos câblés** :
@@ -173,7 +184,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (Elias +AD/charge, plat) branché via `sumPassiveMods`→`computeEffective`. Visible des 3 rôles, sélecteur
   de perso pour le staff. Logique pure + testée dans `game-logic.js`. **Plateau partagé** : bandeau
   ennemis en lecture seule (`useMJEnemies`) + sélecteur de **cible** ; le cast d'une comp à dégâts
-  avec cible crée une attaque en attente (`usePendingHits.addHit`) que le MJ résout. **Buffs sur soi** :
+  avec cible **roule le crit/surcrit** (`rollCrit`) et **snapshot la léthalité** (`eff.letha`) dans
+  l'attaque en attente (`usePendingHits.addHit`) que le MJ résout. **Buffs sur soi** :
   une comp avec `selfBuff` (% de la stat de base) écrit `state/skillBuffs` (mods plats) → panneau
   **« Effets de combat actifs » en orange** (`--skillbuff`) + boost en temps réel via `sumSkillBuffs`→
   `computeEffective` ; un `selfBuff.hp` **soigne aussi** les PV au cast (la jauge se remplit) ; une comp
@@ -231,7 +243,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
 /campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
 /campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note } ; lecture inscrits, écriture staff
-/campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, targetId, ts } ; le MJ ajuste+applique
+/campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, crit, dcrit, targetId, ts } ; crit roulé au cast ; le MJ ajuste+applique
 /campaign/runeterra/combat/log/{id}   ← journal de combat PARTAGÉ { id, ts, text, kind:'gold'|'buff'|'debuff' } ; lecture+écriture tout inscrit ; ~30 derniers ; vidé par « ⟲ Combat »
 ```
 `type` = emplacement d'équipement (`EQUIP_TYPES` : helmet/chest/ring/weapon/accessory/…) ;
@@ -429,10 +441,14 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   + `escalationFactor` + `charBaseStats` (game-logic, testés §9), bascule de l'app en calcul **live** (fin du
   `char.stats` figé ; 9 fichiers migrés), modèle de données `state/attrs`+`attrsLocked` (lecture seule ici),
   caps `LEVELS` §3, libellés `ATTRIBUTES`, Sapience retirée du socle. Aucune règle RTDB. Spec/plan :
-  `docs/superpowers/{specs,plans}/2026-06-21-moteur-stats-refondu*`. **Reste** (sous-projets séparés) :
-  (1) **respec joueur** (UI : répartition des points, caps par niveau, confirmation → écrit `attrs`+`attrsLocked`) ;
-  (2) **équipement en stats finales** (armes 3 paliers + 18 armures §7) ; (3) **surcrit par paliers** (%Crit >100 % §6.3) ;
-  (4) **zone PNJ/divine** (escalade quadratique >20 §8 ; `escalationFactor` gère déjà >20).
+  `docs/superpowers/{specs,plans}/2026-06-21-moteur-stats-refondu*`.
+  **Combat (§6) = FAIT (2026-06-22, branche `feat/combat-refondu`)** : `critInfo`+`rollCrit` (surcrit par paliers,
+  testés), crit roulé au cast, **léthalité** branchée (`mitigateDamage`←`applyHitToEnemy`, snapshot au cast, éditable MJ),
+  attaque de base unifiée. Aucune règle RTDB. Spec/plan : `docs/superpowers/{specs,plans}/2026-06-22-combat-refondu*`.
+  **Reste** (sous-projets séparés) : (1) **respec joueur** (UI : répartition des points, caps par niveau →
+  écrit `attrs`+`attrsLocked`) ; (2) **équipement en stats finales** (armes 3 paliers + 18 armures §7) ;
+  (3) **zone PNJ/divine** (escalade quadratique >20 §8 ; `escalationFactor` gère déjà >20) ;
+  (4) crit/léthalité **ennemi→joueur** (les ennemis n'ont pas encore de stat crit/letha).
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
 - `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/
