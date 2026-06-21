@@ -204,77 +204,6 @@ function AnnoPin({ n, note, style }) {
   );
 }
 
-/* --- Modal d'attaque (sélecteur arme + mode + résultat dégâts) --- */
-function AttackModal({ char, onClose }) {
-  const toast = useToast();
-  const owned = (char.weaponIds && char.weaponIds.length) ? WEAPONS.filter(w => char.weaponIds.includes(w.id)) : WEAPONS;
-  const [weaponId, setWeaponId] = useState(char.weaponId);
-  const [lethality, setLethality] = useState(char.lethality);
-  const [result, setResult] = useState(null);
-  const weapon = WEAPONS.find(w => w.id === weaponId);
-
-  const launch = () => {
-    const base = charBaseStats(char, null);
-    const cr = rollCrit(base.crit || 0, base.dcrit || 0);
-    const r = computeAttack({ weapon, stats: base, lethality, critMult: cr.multiplier });
-    setResult(r);
-    toast(`<b>${char.name}</b> inflige <b>${r.dmg}</b> dégâts ${weapon.cat.toLowerCase()}s${cr.didCrit ? (cr.tiers > 1 ? ` — SURCRIT ×${cr.multiplier.toFixed(2)} !` : ' — CRITIQUE !') : ''}`, cr.didCrit ? 'buff' : 'gold');
-  };
-
-  return (
-    <div className="modal-scrim" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="panel-head">
-          <h3>Lancer une attaque — {char.name}</h3>
-          <button className="btn btn-sm btn-ghost" onClick={onClose}>Fermer ✕</button>
-        </div>
-        <div style={{ padding:'var(--sp-5)' }}>
-          {/* arme */}
-          <div className="overline" style={{ marginBottom:8 }}>Arme équipée</div>
-          <div className="row gap-2 wrap" style={{ marginBottom:18 }}>
-            {owned.map(w => (
-              <button key={w.id} onClick={() => setWeaponId(w.id)}
-                className={'btn btn-sm' + (w.id === weaponId ? ' btn-gold' : ' btn-ghost')}>
-                {w.name} <span className="faint mono" style={{ fontSize:10 }}>{w.type}</span>
-              </button>
-            ))}
-          </div>
-          {/* léthalité */}
-          <div className="overline" style={{ marginBottom:8 }}>Léthalité</div>
-          <div className="row gap-2" style={{ marginBottom:20 }}>
-            {[0,1,2,3].map(l => (
-              <button key={l} onClick={() => setLethality(l)}
-                className={'btn btn-sm' + (l === lethality ? ' btn-gold' : ' btn-ghost')} style={{ width:46, justifyContent:'center' }}>{l}</button>
-            ))}
-            <span className="faint" style={{ fontSize:11, alignSelf:'center' }}>
-              {['Aucune','Physique','Magique','Phys. & Mag.'][lethality]} · pén. {lethality*10}
-            </span>
-          </div>
-          {/* résultat */}
-          {result && (
-            <div className="panel" style={{ background:'var(--bg-inset)', padding:'var(--sp-5)', textAlign:'center', borderColor: result.crit ? 'var(--gold)' : 'var(--line)' }}>
-              <div className="overline">Dégâts infligés</div>
-              <div className="mono" style={{ fontSize:54, fontWeight:700, color: result.crit ? 'var(--gold-bright)' : 'var(--gold-pale)', lineHeight:1.1, margin:'4px 0' }}>
-                {result.dmg}
-              </div>
-              {result.crit && <div className="gold" style={{ fontFamily:'var(--font-display)', letterSpacing:'.1em' }}>COUP CRITIQUE</div>}
-              <hr className="gold-rule" style={{ margin:'14px 0' }} />
-              <div className="row gap-4" style={{ justifyContent:'center', flexWrap:'wrap', fontSize:12 }} >
-                <span className="dim">Base <b className="mono gold">{result.base}</b></span>
-                <span className="dim">{weapon.stat === 'ap' ? 'AP' : 'AD'} <b className="mono gold">{result.power}</b></span>
-                <span className="dim">Pén. <b className="mono gold">{result.pen}</b></span>
-              </div>
-            </div>
-          )}
-          <button className="btn btn-gold btn-lg" style={{ width:'100%', justifyContent:'center', marginTop:16 }} onClick={launch}>
-            ⚔ Lancer l'attaque
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* --- Écran de connexion (bloque tout tant qu'on n'est pas authentifié) --- */
 function LoginScreen({ onSubmit }) {
   const [u, setU] = useState('');
@@ -784,7 +713,7 @@ function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose }) {
 
 Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
-  ToastProvider, useToast, AnnoPin, AttackModal, STAT_GLYPH, STAT_LABEL,
+  ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
   InventoryGrid, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invThumbStyle,
   AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar,
