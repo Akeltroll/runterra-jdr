@@ -228,7 +228,7 @@ function CompetencesBody({ char, staff }) {
   return (
     <div className="col gap-4" style={{ padding: 20 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <h2 style={{ fontSize: 20 }}>Compétences — {char.name}</h2>
+        <h2 style={{ fontSize: 20 }}>Combat — {char.name}</h2>
         <span className="row gap-2" style={{ alignItems: 'center' }}>
           {staff && (
             <span className="row gap-1" style={{ alignItems: 'center' }}>
