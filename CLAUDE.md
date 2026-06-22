@@ -184,8 +184,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `SKILLS` (data.jsx) → `dmg*` pures de `game-logic.js` (transcrites des scripts `.gs`, **le script prime**).
   Compteurs/cooldowns en `state/counters`+`state/cooldowns` (cooldown = **`readyAt`** = n° de tour de dispo) ;
   variables d'attaque (1er coup / furtif / cases / cibles) en état local de carte. **Persos câblés** :
-  Elias/Smith/Urskaar/Jett ; **Rathael = carte « refonte MJ en cours »** (en pause). Passif calculable
-  (Elias +AD/charge, plat) branché via `sumPassiveMods`→`computeEffective`. Visible des 3 rôles, sélecteur
+  Elias/Smith/Urskaar/Jett + **Rathael (C1 Frappe Irritée + C2 Mur de Givre)** ; reste à faire : Rathael C3/C4,
+  Jett C3/C4. Passif calculable (Elias +AD/charge plat ; **Rathael +5%/charge Armure+RM de base** via compteur
+  Glaciation manuel — `sumPassiveMods(charId,counters,level,base)`, 4e param `base`) branché via
+  `sumPassiveMods`→`computeEffective`. `cast` gère **`selfBuffFlat`** (buff plat, ex. Mur de Givre +30 AR/RM) et
+  **`counterBump`** (incrément conditionnel de compteur au cast) ; l'`eff` de la page Combat inclut les `skillBuffs`
+  (aligné fiche/équip). Visible des 3 rôles, sélecteur
   de perso pour le staff. Logique pure + testée dans `game-logic.js`. **Plateau partagé** : bandeau
   ennemis en lecture seule (`useMJEnemies`) + sélecteur de **cible** ; le cast d'une comp à dégâts
   avec cible **roule le crit/surcrit** (`rollCrit`) et **snapshot la léthalité** (`eff.letha`) dans
@@ -332,8 +336,8 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 - **Compétences (actif/passif) + Plateau partagé + Buffs/Journal** — **mergé sur `main` et déployé**
   (règles `combat/log` republiées). (1) Onglet Compétences (`pages-competences.jsx`) : cast = mana − coût + cooldown +
   merger/déployer.** (1) Onglet Compétences (`pages-competences.jsx`) : cast = mana − coût + cooldown +
-  dégâts calculés. Persos câblés : **Elias, Smith, Urskaar, Jett** (formules des scripts `.gs`, le
-  script prime) ; **Rathael en pause** (refonte MJ). Tour **partagé** (`useSharedTurn`, `combat/turn`)
+  dégâts calculés. Persos câblés : **Elias, Smith, Urskaar, Jett, Rathael (C1+C2)** (formules des scripts `.gs`, le
+  script prime). Tour **partagé** (`useSharedTurn`, `combat/turn`)
   pilote les cooldowns (`readyAt`) ; « ⟲ Combat » reset tout. Passif Elias (+AD/charge) → `computeEffective`.
   (2) **Plateau partagé** : ennemis migrés en Firebase (`combat/enemies`, lecture inscrits/écriture staff,
   +armure/resmag) ; au cast d'une comp à dégâts le joueur **cible un ennemi** → attaque proposée
@@ -416,12 +420,12 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   monnaie vivante, paperdoll, `item.mods` branchés). Reste uniquement de la **saisie de contenu** :
   créer les **armures réelles** avec leur `type` + leurs `mods` (jusqu'ici seuls armes & accessoires
   ont un `type` câblé) — pas de dev, juste remplir `ITEM_CATALOG` / l'éditeur.
-- **Compétences** : **implémentées** (Elias/Smith/Urskaar/Jett) sur `feat/competences`, voir « État
-  actuel » — reste merge + republication RTDB. **À FAIRE plus tard** : (1) **Rathael** quand le MJ aura
-  livré son fix de design (trop de compteurs ; passif +5%/charge base vs effective) — son passif pct
-  nécessitera p.-ê. d'étendre `sumPassiveMods`/`computeEffective` au bucket % ; (2) comps manquantes
-  (Rathael C4, Jett C3/C4) à ajouter dans `SKILLS` + `game-logic.js` ; (3) Phase 2 : auto-application
-  des dégâts aux ennemis (aujourd'hui le MJ saisit le nombre dans « Subir »).
+- **Compétences** : **implémentées et déployées** (Elias/Smith/Urskaar/Jett + **Rathael C1+C2**). Le passif
+  Rathael (+5%/charge Armure+RM de base, compteur Glaciation manuel) calcule un mod plat depuis les stats de
+  base (`sumPassiveMods(...,base)`). **À FAIRE plus tard** : (1) comps manquantes (**Rathael C3/C4**, Jett C3/C4)
+  à ajouter dans `SKILLS` + `game-logic.js` ; (2) automatiser le cap 2 charges/tour + décroissance −2/tour et
+  l'état Âme fendue de Rathael (aujourd'hui narratif/manuel) ; (3) Phase 2 : auto-application des dégâts aux
+  ennemis (aujourd'hui le MJ saisit le nombre dans « Subir »).
 - **Arbre de runes** : **FAIT et déployé** (voir « État actuel »). Les 5 familles sont chiffrées
   (`RUNES`, data.jsx) et interactives. Reste seulement la validation MJ (capstone vs thématique,
   2 cellules tronquées).

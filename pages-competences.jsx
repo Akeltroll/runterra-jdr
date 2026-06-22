@@ -44,12 +44,12 @@ function CounterStepper({ label, value, max, color, onChange }) {
   );
 }
 
-function PassiveCard({ kit, eff, counters, level, color, setCounter }) {
+function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
   const p = kit.passive || {};
   const ctr = p.counter;
   const max = ctr ? (typeof ctr.max === 'function' ? ctr.max(level) : ctr.max) : 0;
   const cur = ctr ? (counters[ctr.key] || 0) : 0;
-  const bonus = sumPassiveMods(kit._id, counters, level); // { stat: n }
+  const bonus = sumPassiveMods(kit._id, counters, level, base); // { stat: n }
   return (
     <div className="panel" style={{ borderLeft: `3px solid ${color}` }}>
       <div className="panel-head"><h3>⟡ {p.name || 'Passif'}</h3><span className="overline">Passif</span></div>
@@ -170,9 +170,10 @@ function CompetencesBody({ char, staff }) {
   if (!kit) return <div className="panel" style={{ margin: 20, padding: 20 }}>Aucune compétence définie.</div>;
 
   const itemMods = sumItemMods(state.equipment, state.inventory);
-  const passiveMods = sumPassiveMods(char.id, counters, level);
   const base = charBaseStats(char, state);
-  const eff = computeEffective(base, state.modifiers, [], mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods));
+  const passiveMods = sumPassiveMods(char.id, counters, level, base);
+  const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});
+  const eff = computeEffective(base, state.modifiers, [], mergeMods(mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods), skillBuffMods));
   const wType = weaponTypeOf(state, char);
   const baseCtx = { counters, level, wType, hpMax: base.hp };
   const kitWithId = Object.assign({ _id: char.id }, kit);
@@ -199,10 +200,18 @@ function CompetencesBody({ char, staff }) {
     if (sk.kind === 'combat') setCooldown(sk.id, CD_LOCKED);
     else setCooldown(sk.id, nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));
     const logParts = []; // effets appliqués au lanceur, agrégés en une entrée de journal
-    // Buff sur soi : snapshot des mods plats (% de la stat de base) → effet de combat orange.
-    if (sk.selfBuff) {
+    // Compteur conditionnel (ex. Mur de Givre : +1 charge de Glaciation si déjà ≥ 1).
+    if (sk.counterBump) {
+      const cb = sk.counterBump;
+      const cur = counters[cb.key] || 0;
+      if (cur >= (cb.min || 0)) setCounter(cb.key, Math.min(cb.max != null ? cb.max : cur + cb.by, cur + cb.by));
+    }
+    // Buff sur soi : snapshot de mods plats → effet de combat orange. selfBuff = % de la stat
+    // de base ; selfBuffFlat = valeurs plates littérales (ex. Mur de Givre +30 Armure/RM).
+    if (sk.selfBuff || sk.selfBuffFlat) {
       const flat = {};
-      Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (base[k] || 0)); if (f) flat[k] = f; });
+      if (sk.selfBuff) Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (base[k] || 0)); if (f) flat[k] = (flat[k] || 0) + f; });
+      if (sk.selfBuffFlat) Object.keys(sk.selfBuffFlat).forEach(k => { const f = Math.round(sk.selfBuffFlat[k]); if (f) flat[k] = (flat[k] || 0) + f; });
       setSkillBuff(sk.id, flat);
       if (flat.hp) {
         const newMax = (eff.hp || 0) + flat.hp;
@@ -334,7 +343,7 @@ function CompetencesBody({ char, staff }) {
           <button className="btn btn-gold" onClick={basicAttack}>Attaquer</button>
         </div>
       </div>
-      <PassiveCard kit={kitWithId} eff={eff} counters={counters} level={level} color={color} setCounter={setCounter} />
+      <PassiveCard kit={kitWithId} eff={eff} base={base} counters={counters} level={level} color={color} setCounter={setCounter} />
       <div className="comp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
         {kit.actives.map((sk, i) => (
           <ActiveCard key={sk.id} sk={sk} eff={eff} baseCtx={baseCtx} color={color}

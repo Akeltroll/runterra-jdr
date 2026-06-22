@@ -590,6 +590,25 @@ test('mitigateDamage : la léthalité réduit la résistance (sans passer sous 0
   assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 200), 100); // eff borné à 0
   assert.equal(L.mitigateDamage(100, 'brut',     { armure: 120 }, 50), 100);  // brut ignore tout
 });
+test('dmgRathaelC1 : formule du script (0,6 AD + 0,6 (AR+RM)) × multiplicateur de charges', () => {
+  const eff = { ad: 100, armure: 50, resmag: 30 };
+  // base = 25 + floor(0,6*100) + floor(0,6*(50+30)) = 25 + 60 + 48 = 133
+  assert.equal(L.dmgRathaelC1(eff, 0), 133);              // ×1
+  assert.equal(L.dmgRathaelC1(eff, 5), Math.floor(133 * 2)); // ×2 (+100% à 5 charges)
+  assert.equal(L.dmgRathaelC1(eff, 2), Math.floor(133 * 1.4));
+});
+test('dmgRathaelC1 : charges plafonnées à 5 (pas de surplus)', () => {
+  const eff = { ad: 100, armure: 50, resmag: 30 };
+  assert.equal(L.dmgRathaelC1(eff, 9), L.dmgRathaelC1(eff, 5));
+});
+test('sumPassiveMods Rathael : +5%/charge des AR/RM de base (flat depuis base)', () => {
+  const base = { armure: 40, resmag: 20 };
+  assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 0 }, 2, base), {});
+  // 3 charges → +15% : armure floor(40*1.15)-40 = 46-40 = 6 ; resmag floor(20*1.15)-20 = 23-20 = 3
+  assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 3 }, 2, base), { armure: 6, resmag: 3 });
+  // sans base fourni → pas de bonus calculable
+  assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 3 }, 2), {});
+});
 test('enemyPublicView : caché (défaut) = nom seul, aucune barre', () => {
   assert.deepEqual(L.enemyPublicView({ hpCur: 70, hpMax: 100 }),
     { mode: 'hidden', ko: false, showBar: false, pct: null, text: '' });

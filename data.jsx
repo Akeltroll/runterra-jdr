@@ -335,8 +335,9 @@ const ITEM_CATALOG = [
 
 /* --- Compétences (actif/passif) par perso. Formules = fns pures de game-logic.js
    (résolues via window). dmg(eff, ctx) -> nombre ou null (utilitaire). kind :
-   'turn' = 1×/tour (cd 1), 'cd' = CD en tours, 'combat' = 1×/combat. Source :
-   info-mj/Codes App Script.md (le script prime). Rathael = en refonte MJ. --- */
+   'turn' = 1×/tour (cd 1), 'cd' = CD en tours (cd:0 = sans cooldown), 'combat' = 1×/combat.
+   selfBuff = % de la stat de base ; selfBuffFlat = mods plats littéraux. counterBump = incrément
+   conditionnel de compteur au cast. Source : info-mj/Codes App Script.md (le script prime). --- */
 const SKILLS = {
   lunick: { // Elias Crowe
     passive: { name: 'Instinct du Chasseur', counter: { key: 'chasseur', label: 'Charges', max: (lvl) => eliasMaxStacks(lvl) },
@@ -391,8 +392,23 @@ const SKILLS = {
         dmg: (eff) => dmgJettC2(eff), heal: (eff) => healJettC2(eff), note: 'Stun 2 tours + 50 + 50% AD aux ennemis. Soigne les alliés de 50 + 100% AP.' },
     ],
   },
-  rathael: { pending: true, passive: { name: 'Chair gelée, âme fendue' }, actives: [],
-    note: 'En cours de refonte par le MJ (trop de compteurs superposés). Compétences à venir.' },
+  rathael: {
+    passive: { name: 'Chair gelée, âme fendue', counter: { key: 'glaciation', label: 'Glaciation', max: 5 },
+      note: 'Gagne une charge de Glaciation en subissant des dégâts (max 2/tour, max 5 — le MJ ajuste le compteur). '
+        + '+5% Armure et Résistance magique de base par charge. À 5 charges → Âme fendue : régén 10% PV max/tour '
+        + '+ aura de 10% des PV manquants (rayon 1), Rathael devient sourd (géré en table).', statHint: 'armure' },
+    actives: [
+      { id: 'frappe_irritee', name: 'Frappe Irritée', mana: 10, cd: 0, kind: 'cd',
+        dmg: (eff, c) => dmgRathaelC1(eff, (c.counters && c.counters.glaciation) || 0),
+        note: '25 + 60% AD + 60% (Armure+RM), ×(1 + 20% par charge de Glaciation, max +100%). Sans CD. Peut critiquer. '
+          + 'En état Âme fendue : la cible est ralentie 1 tour.' },
+      { id: 'mur_de_givre', name: 'Mur de Givre', mana: 50, cd: 3, kind: 'cd',
+        dmg: () => null, selfBuffFlat: { armure: 30, resmag: 30 },
+        counterBump: { key: 'glaciation', by: 1, min: 1, max: 5 },
+        note: 'Inamovible ce tour, +30 Armure / +30 Résistance magique. Provoque un ennemi adjacent (le forçant à cibler '
+          + 'Rathael). Si ≥1 charge de Glaciation : +1 charge. En état Âme fendue : immobilise les ennemis adjacents.' },
+    ],
+  },
 };
 
 Object.assign(window, {

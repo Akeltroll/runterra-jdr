@@ -292,9 +292,10 @@ function SheetBody({ char, variant }) {
   const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES));
   const effLevel = (state.level != null ? state.level : char.level) || 1;
-  const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel);
+  const sheetBase = charBaseStats(char, state);
+  const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel, sheetBase);
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});
-  const eff = computeEffective(charBaseStats(char, state), state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
+  const eff = computeEffective(sheetBase, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   // Arme affichée = celle équipée dans le slot « Arme principale » (live), reliée à WEAPONS
   // par son nom ; sinon item brut synthétisé ; sinon repli sur l'arme par défaut du perso.
   const equippedId = state.equipment && state.equipment.armePrincipale;

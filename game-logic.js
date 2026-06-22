@@ -472,14 +472,36 @@
   function dmgJettC2(eff) { return Math.floor(50 + 0.5 * (eff.ad || 0)); }
   function healJettC2(eff) { return Math.floor(50 + 1.0 * (eff.ap || 0)); }
 
-  /* Passif calculable → mods plats (mergés dans computeEffective). Elias seul
-     pour l'instant ; Rathael (pct) en pause ; Jett/Smith/Urskaar = pas de bonus net. */
-  function sumPassiveMods(charId, counters, level) {
+  /* --- Rathael : Chair gelée, âme fendue (le SCRIPT prime sur la description) ---
+     C1 Frappe Irritée = (25 + 60% AD + 60% (Armure+RM)) × (1 + 0,20 × charges).
+     charges = compteur de Glaciation (0..5) ; +100% à 5 charges. */
+  function dmgRathaelC1(eff, charges) {
+    const ad = (eff && eff.ad) || 0;
+    const armure = (eff && eff.armure) || 0;
+    const rm = (eff && eff.resmag) || 0;
+    const base = 25 + Math.floor(ad * 0.6) + Math.floor((armure + rm) * 0.6);
+    const mult = 1 + 0.20 * Math.max(0, Math.min(5, charges | 0));
+    return Math.floor(base * mult);
+  }
+
+  /* Passif calculable → mods plats (mergés dans computeEffective).
+     Elias (AD/charge, plat) et Rathael (Armure/RM +5%/charge des stats de BASE). */
+  function sumPassiveMods(charId, counters, level, base) {
     counters = counters || {};
     if (charId === 'lunick') { // Elias — Instinct du Chasseur
       const stacks = Math.max(0, counters.chasseur | 0);
       if (!stacks) return {};
       return { ad: stacks * eliasPassiveAD(level) };
+    }
+    if (charId === 'rathael') { // Chair gelée — +5%/charge des AR/RM de BASE
+      const charges = Math.max(0, Math.min(5, counters.glaciation | 0));
+      if (!charges || !base) return {};
+      const out = {};
+      const bA = Math.floor((base.armure || 0) * (1 + 0.05 * charges)) - (base.armure || 0);
+      const bR = Math.floor((base.resmag || 0) * (1 + 0.05 * charges)) - (base.resmag || 0);
+      if (bA) out.armure = bA;
+      if (bR) out.resmag = bR;
+      return out;
     }
     return {};
   }
@@ -573,6 +595,7 @@
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
+    dmgRathaelC1,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
