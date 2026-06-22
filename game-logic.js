@@ -354,6 +354,21 @@
     return { hpCur: hpCur - d, shield, ko: false };
   }
 
+  /* --- Vol de vie / Sapience / Omnivamp ---
+     Soin rendu à l'attaquant = % des dégâts RÉELLEMENT infligés (post-mitigation).
+       omnivamp (omni)  : s'applique à TOUT dégât direct (physique, magique, brut) ;
+       vol de vie (vol) : s'ajoute pour un dégât physique ;
+       sapience         : s'ajoute pour un dégât magique.
+     S'applique aussi bien à l'attaque de base qu'aux compétences à dégât direct. */
+  function lifestealHeal(applied, type, stats) {
+    applied = Math.max(0, Number(applied) || 0);
+    stats = stats || {};
+    let pct = Math.max(0, Number(stats.omni) || 0);
+    if (type === 'physique') pct += Math.max(0, Number(stats.vol) || 0);
+    else if (type === 'magique') pct += Math.max(0, Number(stats.sapience) || 0);
+    return Math.round(applied * pct / 100);
+  }
+
   /* --- Visibilité des PV ennemis côté joueur ---
      Le MJ pilote par ennemi ce que les joueurs voient :
        reveal 'hidden' (défaut) : nom seul, aucune barre, aucun chiffre ;
@@ -663,7 +678,7 @@
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,
-    mitigateDamage, applyDamageToPools, critInfo, rollCrit, enemyPublicView,
+    mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, enemyPublicView,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,

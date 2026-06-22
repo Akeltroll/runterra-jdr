@@ -148,6 +148,19 @@ function applyHitToEnemy(enemy, finalDmg, type, lethalite = 0) {
   window.RTDB.updatePath(`${ENEMIES}/${enemy.id}`, { hpCur: res.hpCur });
   return { applied: dmg, hpCur: res.hpCur };
 }
+/* Soin de l'attaquant (vol de vie / sapience / omnivamp) : ajoute `amount` à ses PV,
+   plafonné à maxHp (snapshot au cast). Orchestrateur staff (lit l'état, écrit hpCur). */
+async function healCharacter(charId, amount, maxHp) {
+  amount = Math.max(0, amount | 0);
+  if (!charId || !amount) return { healed: 0, hpCur: null };
+  const st = (await window.RTDB.getSnapshot(charPath(charId))) || {};
+  const cur = Math.max(0, Number(st.hpCur) || 0);
+  const cap = Math.max(cur, Number(maxHp) || cur);   // ne jamais dépasser le max (ni baisser)
+  const next = Math.min(cur + amount, cap);
+  if (next === cur) return { healed: 0, hpCur: cur };
+  window.RTDB.updatePath(charPath(charId), { hpCur: next });
+  return { healed: next - cur, hpCur: next };
+}
 
 /* Journal de combat PARTAGÉ : file d'événements (dégâts résolus, KO…) que tout
    inscrit lit. Écriture tout inscrit (règle combat/log). ~30 derniers affichés.
@@ -299,6 +312,6 @@ Object.assign(window, {
   seedIfEmpty, charPath, CAMPAIGN, SHARED_INV, SHARED_COINS, moveItem, moveCoins,
   useSharedTurn, COMBAT_TURN,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
-  usePendingHits, applyHitToEnemy, PENDING_HITS,
+  usePendingHits, applyHitToEnemy, healCharacter, PENDING_HITS,
   pushLog, useCombatLog, COMBAT_LOG, addXp, grantCoins,
 });

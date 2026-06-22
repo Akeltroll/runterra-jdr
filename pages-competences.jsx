@@ -239,7 +239,8 @@ function CompetencesBody({ char, staff }) {
         addHit({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
           type: (wType === 'Magique' ? 'magique' : 'physique'),
           computedDmg: dmg, critDmg: Math.round(dmg * cr.multiplier), didCrit: cr.didCrit,
-          critMult: cr.multiplier, letha: eff.letha || 0, crit: eff.crit || 0, dcrit: eff.dcrit || 0, targetId });
+          critMult: cr.multiplier, letha: eff.letha || 0, crit: eff.crit || 0, dcrit: eff.dcrit || 0,
+          omni: eff.omni || 0, vol: eff.vol || 0, sapience: eff.sapience || 0, hpMax: eff.hp || 0, targetId });
       }
       const tgt = enemies.find(en => en.id === targetId);
       const suffix = nbHits > 1 ? ` ×${nbHits}` : '';
@@ -264,7 +265,8 @@ function CompetencesBody({ char, staff }) {
     const critDmg = Math.round(basicDmg * cr.multiplier);
     addHit({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: 'Attaque de base',
       type: (wType === 'Magique' ? 'magique' : 'physique'), computedDmg: basicDmg, critDmg,
-      didCrit: cr.didCrit, critMult: cr.multiplier, letha: eff.letha || 0, crit: eff.crit || 0, dcrit: eff.dcrit || 0, targetId });
+      didCrit: cr.didCrit, critMult: cr.multiplier, letha: eff.letha || 0, crit: eff.crit || 0, dcrit: eff.dcrit || 0,
+      omni: eff.omni || 0, vol: eff.vol || 0, sapience: eff.sapience || 0, hpMax: eff.hp || 0, targetId });
     const tgt = enemies.find(en => en.id === targetId);
     const shown = cr.didCrit ? `${critDmg} — CRITIQUE !` : `${basicDmg}`;
     pushLog(`<b>${char.name}</b> attaque <b>${tgt ? tgt.name : 'un ennemi'}</b> (${shown}) — en attente MJ`, cr.didCrit ? 'buff' : 'gold');
