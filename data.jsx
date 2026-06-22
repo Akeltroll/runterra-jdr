@@ -394,10 +394,11 @@ const SKILLS = {
   },
   rathael: {
     passive: { name: 'Chair gelée, âme fendue', counter: { key: 'glaciation', label: 'Glaciation', max: 5 },
-      note: 'Gagne automatiquement une charge de Glaciation quand il subit des dégâts d\'une attaque ennemie '
-        + '(max 2/tour, max 5). +5% Armure et Résistance magique de base par charge. À 5 charges → Âme fendue : '
-        + 'régén 10% PV max/tour + aura de 10% des PV manquants (rayon 1), Rathael devient sourd (géré en table). '
-        + 'Le stepper reste dispo pour ajuster à la main (ex. perte de −2 charges en fin de tour sans dégâts).', statHint: 'armure' },
+      note: 'Gagne automatiquement une charge de Glaciation à chaque attaque ennemie subie (max 5, tout '
+        + 'stackable en un tour). S\'il ne subit aucun dégât pendant un tour, il perd 3 charges en fin de tour '
+        + '(automatique). +5% Armure et Résistance magique de base par charge. À 5 charges → Âme fendue : régén '
+        + '10% PV max/tour + aura de 10% des PV manquants (rayon 1), Rathael devient sourd (géré en table). '
+        + 'Le stepper reste dispo pour ajuster à la main.', statHint: 'armure' },
     actives: [
       { id: 'frappe_irritee', name: 'Frappe Irritée', mana: 10, cd: 0, kind: 'cd',
         dmg: (eff, c) => dmgRathaelC1(eff, (c.counters && c.counters.glaciation) || 0),

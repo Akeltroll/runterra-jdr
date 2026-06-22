@@ -279,7 +279,7 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
       const gp = glaciationOnHit(st && st.counters, turn);
       if (gp) {
         window.RTDB.updatePath(`${charPath(c.id)}/counters`, gp);
-        pushLog(`<b>${c.name}</b> gagne une charge de Glaciation (${gp.glaciation}/5)`, 'buff');
+        if (gp.glaciation != null) pushLog(`<b>${c.name}</b> gagne une charge de Glaciation (${gp.glaciation}/5)`, 'buff');
       }
     }
     toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,

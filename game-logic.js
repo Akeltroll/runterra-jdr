@@ -484,17 +484,28 @@
     return Math.floor(base * mult);
   }
 
-  /* Passif Rathael : +1 charge de Glaciation quand il SUBIT des dégâts (max 2/tour, max 5 total).
-     Le quota par tour est suivi via glaciationTurnAt (n° de tour du dernier décompte) +
-     glaciationTurn (nombre gagné ce tour-là). Renvoie un patch counters, ou null si rien à faire. */
+  /* Passif Rathael : +1 charge de Glaciation à chaque coup subi (max 5, tout stackable en 1 tour).
+     Marque aussi glaciationHitTurn = n° du tour où il a été touché (pour la non-perte de fin de tour).
+     Renvoie un patch counters, ou null si rien à écrire. */
   function glaciationOnHit(counters, turn) {
     counters = counters || {};
     turn = Math.max(1, turn | 0);
     var charges = Math.max(0, Math.min(5, counters.glaciation | 0));
-    if (charges >= 5) return null;                       // déjà au max total
-    var perTurn = (counters.glaciationTurnAt === turn) ? Math.max(0, counters.glaciationTurn | 0) : 0;
-    if (perTurn >= 2) return null;                       // déjà 2 charges gagnées ce tour
-    return { glaciation: charges + 1, glaciationTurn: perTurn + 1, glaciationTurnAt: turn };
+    if (charges >= 5) {                                  // au max : on note quand même le coup du tour
+      return counters.glaciationHitTurn === turn ? null : { glaciationHitTurn: turn };
+    }
+    return { glaciation: charges + 1, glaciationHitTurn: turn };
+  }
+
+  /* Fin de tour : si Rathael n'a PAS subi de dégâts ce tour (glaciationHitTurn ≠ tour qui se termine),
+     il perd 3 charges de Glaciation (min 0). Renvoie un patch { glaciation } ou null. */
+  function glaciationDecay(counters, endingTurn) {
+    counters = counters || {};
+    endingTurn = Math.max(1, endingTurn | 0);
+    var charges = Math.max(0, Math.min(5, counters.glaciation | 0));
+    if (charges <= 0) return null;
+    if (counters.glaciationHitTurn === endingTurn) return null; // touché ce tour → pas de perte
+    return { glaciation: Math.max(0, charges - 3) };
   }
 
   /* Passif calculable → mods plats (mergés dans computeEffective).
@@ -608,7 +619,7 @@
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
-    dmgRathaelC1, glaciationOnHit,
+    dmgRathaelC1, glaciationOnHit, glaciationDecay,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,

@@ -79,7 +79,21 @@ function useSharedTurn() {
     }
     window.RTDB.setPath(COMBAT_LOG, null);
   }, []);
-  return { turn, nextTurn: () => persist(turn + 1), prevTurn: () => persist(turn - 1), resetCombat };
+  // Fin de tour : avance le tour, puis applique la perte de Glaciation de Rathael (-3 s'il
+  // n'a pas subi de dégâts ce tour-ci). Le tour qui se termine est `turn`.
+  const nextTurn = useCallback(async () => {
+    const ending = turn;
+    persist(ending + 1);
+    const p = charPath('rathael');
+    const st = (await window.RTDB.getSnapshot(p)) || {};
+    const dec = glaciationDecay(st.counters || {}, ending);
+    if (dec) {
+      const before = Math.max(0, (st.counters || {}).glaciation | 0);
+      window.RTDB.updatePath(`${p}/counters`, { glaciation: dec.glaciation || null });
+      pushLog(`<b>Rathäel</b> ne subit aucun dégât : Glaciation ${before} → ${dec.glaciation}`, 'debuff');
+    }
+  }, [turn]);
+  return { turn, nextTurn, prevTurn: () => persist(turn - 1), resetCombat };
 }
 
 /* Ennemis PARTAGÉS (Firebase). Lecture tout inscrit, écriture staff (règle combat/enemies).

@@ -609,19 +609,24 @@ test('sumPassiveMods Rathael : +5%/charge des AR/RM de base (flat depuis base)',
   // sans base fourni → pas de bonus calculable
   assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 3 }, 2), {});
 });
-test('glaciationOnHit : +1 charge par coup, plafond 2/tour et 5 total', () => {
-  // 1er coup du tour 1 : 0 → 1
-  assert.deepEqual(L.glaciationOnHit({}, 1), { glaciation: 1, glaciationTurn: 1, glaciationTurnAt: 1 });
-  // 2e coup du même tour : 1 → 2
-  assert.deepEqual(L.glaciationOnHit({ glaciation: 1, glaciationTurn: 1, glaciationTurnAt: 1 }, 1),
-    { glaciation: 2, glaciationTurn: 2, glaciationTurnAt: 1 });
-  // 3e coup du même tour : bloqué (max 2/tour)
-  assert.equal(L.glaciationOnHit({ glaciation: 2, glaciationTurn: 2, glaciationTurnAt: 1 }, 1), null);
-  // nouveau tour : le quota par tour repart de 0
-  assert.deepEqual(L.glaciationOnHit({ glaciation: 2, glaciationTurn: 2, glaciationTurnAt: 1 }, 2),
-    { glaciation: 3, glaciationTurn: 1, glaciationTurnAt: 2 });
-  // au max total (5) : plus rien
-  assert.equal(L.glaciationOnHit({ glaciation: 5, glaciationTurnAt: 3 }, 4), null);
+test('glaciationOnHit : +1 charge par coup (max 5, tout stackable en 1 tour) + marque le tour touché', () => {
+  assert.deepEqual(L.glaciationOnHit({}, 1), { glaciation: 1, glaciationHitTurn: 1 });
+  // plusieurs coups le même tour s'empilent (plus de cap 2/tour)
+  assert.deepEqual(L.glaciationOnHit({ glaciation: 1, glaciationHitTurn: 1 }, 1), { glaciation: 2, glaciationHitTurn: 1 });
+  assert.deepEqual(L.glaciationOnHit({ glaciation: 4, glaciationHitTurn: 1 }, 1), { glaciation: 5, glaciationHitTurn: 1 });
+  // au max (5) : pas de gain mais on marque le coup du tour (pour annuler la perte)
+  assert.deepEqual(L.glaciationOnHit({ glaciation: 5, glaciationHitTurn: 1 }, 2), { glaciationHitTurn: 2 });
+  // au max ET déjà touché ce tour : rien à écrire
+  assert.equal(L.glaciationOnHit({ glaciation: 5, glaciationHitTurn: 2 }, 2), null);
+});
+test('glaciationDecay : -3 charges en fin de tour sans dégâts subis', () => {
+  // pas touché ce tour (glaciationHitTurn ≠ 3) → -3
+  assert.deepEqual(L.glaciationDecay({ glaciation: 5, glaciationHitTurn: 2 }, 3), { glaciation: 2 });
+  assert.deepEqual(L.glaciationDecay({ glaciation: 2 }, 3), { glaciation: 0 });
+  // touché ce tour-ci → pas de perte
+  assert.equal(L.glaciationDecay({ glaciation: 5, glaciationHitTurn: 3 }, 3), null);
+  // déjà à 0 → rien
+  assert.equal(L.glaciationDecay({ glaciation: 0 }, 3), null);
 });
 test('enemyPublicView : caché (défaut) = nom seul, aucune barre', () => {
   assert.deepEqual(L.enemyPublicView({ hpCur: 70, hpMax: 100 }),
