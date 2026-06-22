@@ -26,9 +26,12 @@ function ProgressionPage({ lockedCharId }) {
     [charId, savedAttrs.force, savedAttrs.hab, savedAttrs.mental, savedAttrs.magie]);
 
   const view = canEdit ? draft : savedAttrs;          // valeurs affichées (brouillon si éditable)
+  // Plancher par caracs : un joueur ne peut JAMAIS descendre sous ses valeurs déjà confirmées
+  // (montée au level-up uniquement). Le staff garde la main totale (plancher 0).
+  const floorAttrs = staff ? {} : savedAttrs;
   const sum = attrSum(view);
   const remaining = budget - sum;
-  const valid = respecValid(view, budget, cap);
+  const valid = respecValid(view, budget, cap, floorAttrs);
   const dirty = view.force !== savedAttrs.force || view.hab !== savedAttrs.hab
     || view.mental !== savedAttrs.mental || view.magie !== savedAttrs.magie;
   const preview = computeStats(view.force, view.hab, view.mental, view.magie, effLevel);
@@ -38,7 +41,7 @@ function ProgressionPage({ lockedCharId }) {
   const bump = (key, delta) => {
     if (!canEdit) return;
     setDraft(d => {
-      const next = Math.max(0, Math.min(cap, (d[key] | 0) + delta));
+      const next = Math.max(floorAttrs[key] | 0, Math.min(cap, (d[key] | 0) + delta));
       if (delta > 0 && (budget - attrSum(d)) <= 0) return d; // plus de points dispo
       return Object.assign({}, d, { [key]: next });
     });
@@ -46,8 +49,8 @@ function ProgressionPage({ lockedCharId }) {
 
   const confirm = () => {
     if (!valid) return;
-    if (!staff && !window.confirm('Confirmer cette répartition ? La respec est définitive (le MJ pourra la rouvrir).')) return;
-    setAttrs(draft, staff ? locked : true);            // joueur => verrouille ; staff => garde l'état du verrou
+    if (!staff && !window.confirm('Confirmer cette répartition ? Les points placés deviennent définitifs : tu pourras en rajouter aux prochains niveaux, mais plus en retirer.')) return;
+    setAttrs(draft, staff ? locked : false);           // joueur => pas de verrou dur (le plancher protège) ; staff => garde l'état du verrou
     toast(`<b>${char.name}</b> — caractéristiques enregistrées`, 'buff');
   };
 
@@ -89,7 +92,12 @@ function ProgressionPage({ lockedCharId }) {
 
             {!canEdit && (
               <div className="faint" style={{ fontSize:12.5, padding:'10px 18px 0', lineHeight:1.5 }}>
-                🔒 Respec déjà effectuée — demande au MJ pour la rouvrir.
+                🔒 Verrouillé par le MJ — demande-lui pour modifier.
+              </div>
+            )}
+            {canEdit && !staff && attrSum(savedAttrs) > 0 && (
+              <div className="faint" style={{ fontSize:12, padding:'10px 18px 0', lineHeight:1.5 }}>
+                Tu peux ajouter des points, mais pas descendre sous tes valeurs déjà confirmées.
               </div>
             )}
 
@@ -98,7 +106,7 @@ function ProgressionPage({ lockedCharId }) {
                 const val = view[attr.key] | 0;
                 const pct = Math.min(100, (val / cap) * 100);
                 const canInc = canEdit && val < cap && remaining > 0;
-                const canDec = canEdit && val > 0;
+                const canDec = canEdit && val > (floorAttrs[attr.key] | 0);
                 return (
                   <div key={attr.key}>
                     <div className="row" style={{ justifyContent:'space-between', marginBottom:6, alignItems:'center' }}>

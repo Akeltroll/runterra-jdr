@@ -398,19 +398,43 @@ const SKILLS = {
     passive: { name: 'Chair gelée, âme fendue', counter: { key: 'glaciation', label: 'Glaciation', max: 5 },
       note: 'Gagne automatiquement une charge de Glaciation à chaque attaque ennemie subie (max 5, tout '
         + 'stackable en un tour). S\'il ne subit aucun dégât pendant un tour, il perd 3 charges en fin de tour '
-        + '(automatique). +5% Armure et Résistance magique de base par charge. À 5 charges → Âme fendue : régén '
+        + '(automatique). +10% Armure et Résistance magique de base par charge. À 5 charges → Âme fendue : régén '
         + '10% PV max/tour + aura de 10% des PV manquants (rayon 1), Rathael devient sourd (géré en table). '
         + 'Le stepper reste dispo pour ajuster à la main.', statHint: 'armure' },
     actives: [
-      { id: 'frappe_irritee', name: 'Frappe Irritée', mana: 10, cd: 0, kind: 'cd',
-        dmg: (eff, c) => dmgRathaelC1(eff, (c.counters && c.counters.glaciation) || 0),
-        note: '25 + 60% AD + 60% (Armure+RM), ×(1 + 20% par charge de Glaciation, max +100%). Sans CD. Peut critiquer. '
-          + 'En état Âme fendue : la cible est ralentie 1 tour.' },
+      { id: 'frappe_irritee', name: 'Frappe Irritée', mana: 20, cd: 0, kind: 'cd',
+        dmg: (eff, c) => dmgRathaelC1(eff, (c.counters && c.counters.glaciation) || 0, c.level),
+        note: '25 + (30% +5%/4 niv) AD + (40% +5%/2 niv) (Armure+RM), ×(1 + 20% par charge de Glaciation, max +100%). '
+          + 'Sans CD. Peut critiquer. En état Âme fendue : la cible est ralentie 1 tour.' },
       { id: 'mur_de_givre', name: 'Mur de Givre', mana: 50, cd: 3, kind: 'cd',
-        dmg: () => null, selfBuffFlat: { armure: 30, resmag: 30 },
+        dmg: () => null,
+        selfBuffFlat: (eff, c) => { const v = rathaelC2Buff(c.level); return { armure: v, resmag: v }; },
         counterBump: { key: 'glaciation', by: 1, min: 1, max: 5 },
-        note: 'Inamovible ce tour, +30 Armure / +30 Résistance magique. Provoque un ennemi adjacent (le forçant à cibler '
-          + 'Rathael). Si ≥1 charge de Glaciation : +1 charge. En état Âme fendue : immobilise les ennemis adjacents.' },
+        note: 'Inamovible ce tour, +Armure / +Résistance magique (15 +5/2 niv, soit 20 au niv 2). Provoque un ennemi '
+          + 'adjacent (le forçant à cibler Rathael). Si ≥1 charge de Glaciation : +1 charge. En état Âme fendue : '
+          + 'immobilise les ennemis adjacents.' },
+      { id: 'eclat_ame', name: "Éclat de l'âme", mana: 60, cd: 3, kind: 'cd',
+        dmg: (eff, c) => dmgRathaelC3(eff, (c.counters && c.counters.glaciation) || 0, c.level),
+        counterSet: { glaciation: 0 },
+        note: 'Explosion magique, rayon 3 cases. CONSOMME toutes les charges de Glaciation. Base = 50 + 60% AP + '
+          + '(50% +10%/2 niv) (Armure+RM) ; chaque charge ajoute +50% de la base (max +250%, soit ×3,5 à 5 charges). '
+          + 'Le MJ applique le nombre affiché aux ennemis proches et la MOITIÉ à ceux à 3 cases (via « Subir »). '
+          + 'En état Âme fendue (5 charges) : étourdit les cibles touchées jusqu\'à leur prochain tour.' },
+      { id: 'ailes_givre', name: 'Ailes de Givre', mana: 100, cd: 0, kind: 'combat',
+        dmg: () => null,
+        note: 'Transformation 3 tours (1×/combat). Rathael déploie une aile de glace, peut léviter, et émet une brume '
+          + 'noire (rayon 4) qui inflige à TOUTES les unités (alliées comprises) une combinaison de débuffs au choix '
+          + '(fixée au lancement) : ① Brisé & Érosion Magique (−50% Armure / −50% AP) ou ② Choc Magique & '
+          + 'Affaiblissement (−50% Rés. mag / −50% AD). Si la transformation devait finir mais qu\'il affecte encore '
+          + '≥2 unités en fin de tour, elle persiste. Aura/débuffs/persistance gérés en table.' },
+      { id: 'souverain_glacial', name: 'Souverain Glacial', mana: 100, cd: 0, kind: 'combat',
+        dmg: () => null,
+        selfBuffFlat: (eff, c) => { const hp = rathaelUltHpBonus((c.counters && c.counters.glaciation) || 0, c.hpMax || 0); return hp ? { hp } : {}; },
+        note: 'Ultime : version améliorée des Ailes de Givre (transformation 4 tours, 1×/combat). Chaque charge de '
+          + 'Glaciation accorde +20% de PV de BASE (avant équipement), max +100% — snapshot au lancement. Génère 2 '
+          + 'charges par attaque subie (au lieu de 1). Tu peux infliger 2% de tes PV max TOTAUX (avec équipement) en '
+          + 'dégâts bruts à toutes les unités de la zone, et te soigner de 10% des dégâts ainsi infligés (géré en '
+          + 'table via « Subir » + soin). Aura/débuffs/persistance gérés en table.' },
     ],
   },
 };

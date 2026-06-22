@@ -603,22 +603,51 @@ test('respecValid : somme = budget ET chaque caracs ∈ [0, cap]', () => {
   assert.equal(L.respecValid({ force: 4, hab: 3, mental: 4, magie: 0 }, 12, 6), false); // somme 11 ≠ 12
   assert.equal(L.respecValid({ force: 4, hab: 4, mental: 4, magie: 1 }, 12, 6), false); // somme 13 ≠ 12
 });
-test('dmgRathaelC1 : formule du script (0,6 AD + 0,6 (AR+RM)) × multiplicateur de charges', () => {
+test('respecValid : plancher par caracs (on ne peut pas descendre sous les valeurs confirmées)', () => {
+  const floor = { force: 4, hab: 3, mental: 4, magie: 1 }; // niveau 2 confirmé (somme 12)
+  // niveau 3 : budget 15, cap 7 ; on ajoute 3 points sur force (4→7) sans rien retirer
+  assert.equal(L.respecValid({ force: 7, hab: 3, mental: 4, magie: 1 }, 15, 7, floor), true);
+  // retirer 1 en force (4→3) sous le plancher → invalide même si la somme = budget
+  assert.equal(L.respecValid({ force: 3, hab: 4, mental: 4, magie: 4 }, 15, 7, floor), false);
+  // sans plancher (staff) : même répartition acceptée tant que somme/cap OK
+  assert.equal(L.respecValid({ force: 3, hab: 4, mental: 4, magie: 4 }, 15, 7), true);
+});
+test('dmgRathaelC1 (rééquilibrée) : ratios par niveau × multiplicateur de charges', () => {
   const eff = { ad: 100, armure: 50, resmag: 30 };
-  // base = 25 + floor(0,6*100) + floor(0,6*(50+30)) = 25 + 60 + 48 = 133
-  assert.equal(L.dmgRathaelC1(eff, 0), 133);              // ×1
-  assert.equal(L.dmgRathaelC1(eff, 5), Math.floor(133 * 2)); // ×2 (+100% à 5 charges)
-  assert.equal(L.dmgRathaelC1(eff, 2), Math.floor(133 * 1.4));
+  // niveau 2 : adRatio 0,30 ; arRatio 0,45 → base = 25 + floor(30) + floor(80*0,45=36) = 91
+  assert.equal(L.dmgRathaelC1(eff, 0, 2), 91);
+  assert.equal(L.dmgRathaelC1(eff, 5, 2), Math.floor(91 * 2));   // ×2 à 5 charges
+  assert.equal(L.dmgRathaelC1(eff, 2, 2), Math.floor(91 * 1.4));
+  // niveau 4 : adRatio 0,35 ; arRatio 0,50 → base = 25 + 35 + 40 = 100
+  assert.equal(L.dmgRathaelC1(eff, 0, 4), 100);
 });
 test('dmgRathaelC1 : charges plafonnées à 5 (pas de surplus)', () => {
   const eff = { ad: 100, armure: 50, resmag: 30 };
-  assert.equal(L.dmgRathaelC1(eff, 9), L.dmgRathaelC1(eff, 5));
+  assert.equal(L.dmgRathaelC1(eff, 9, 2), L.dmgRathaelC1(eff, 5, 2));
 });
-test('sumPassiveMods Rathael : +5%/charge des AR/RM de base (flat depuis base)', () => {
+test('rathaelC2Buff : 15 + 5/2 niveaux (floor)', () => {
+  assert.equal(L.rathaelC2Buff(2), 20);   // 15 + 5*1
+  assert.equal(L.rathaelC2Buff(4), 25);   // 15 + 5*2
+  assert.equal(L.rathaelC2Buff(1), 15);   // 15 + 5*0
+});
+test('dmgRathaelC3 : base AP + (AR+RM) scalée × charges (max ×3,5)', () => {
+  const eff = { ap: 100, armure: 50, resmag: 30 };
+  // niveau 2 : arRatio 0,60 → base = 50 + floor(60) + floor(80*0,60=48) = 158
+  assert.equal(L.dmgRathaelC3(eff, 0, 2), 158);
+  assert.equal(L.dmgRathaelC3(eff, 5, 2), Math.floor(158 * 3.5)); // +250% à 5 charges
+  assert.equal(L.dmgRathaelC3(eff, 9, 2), L.dmgRathaelC3(eff, 5, 2)); // plafond 5
+});
+test('rathaelUltHpBonus : 20% PV base/charge, plafonné à +100%', () => {
+  assert.equal(L.rathaelUltHpBonus(0, 100), 0);
+  assert.equal(L.rathaelUltHpBonus(3, 100), 60);   // 3*20% = 60
+  assert.equal(L.rathaelUltHpBonus(5, 100), 100);  // plafond +100%
+  assert.equal(L.rathaelUltHpBonus(9, 100), 100);  // charges plafonnées à 5
+});
+test('sumPassiveMods Rathael : +10%/charge des AR/RM de base (flat depuis base)', () => {
   const base = { armure: 40, resmag: 20 };
   assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 0 }, 2, base), {});
-  // 3 charges → +15% : armure floor(40*1.15)-40 = 46-40 = 6 ; resmag floor(20*1.15)-20 = 23-20 = 3
-  assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 3 }, 2, base), { armure: 6, resmag: 3 });
+  // 3 charges → +30% : armure floor(40*1.30)-40 = 52-40 = 12 ; resmag floor(20*1.30)-20 = 26-20 = 6
+  assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 3 }, 2, base), { armure: 12, resmag: 6 });
   // sans base fourni → pas de bonus calculable
   assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 3 }, 2), {});
 });

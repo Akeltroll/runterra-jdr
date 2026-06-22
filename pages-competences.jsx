@@ -206,12 +206,17 @@ function CompetencesBody({ char, staff }) {
       const cur = counters[cb.key] || 0;
       if (cur >= (cb.min || 0)) setCounter(cb.key, Math.min(cb.max != null ? cb.max : cur + cb.by, cur + cb.by));
     }
+    // Compteur fixé (ex. Éclat de l'âme : consomme toutes les charges → glaciation = 0).
+    // Après calcul des dégâts (capturés via dmgArg), donc la conso n'affecte pas le coup.
+    if (sk.counterSet) Object.keys(sk.counterSet).forEach(k => setCounter(k, sk.counterSet[k]));
     // Buff sur soi : snapshot de mods plats → effet de combat orange. selfBuff = % de la stat
-    // de base ; selfBuffFlat = valeurs plates littérales (ex. Mur de Givre +30 Armure/RM).
-    if (sk.selfBuff || sk.selfBuffFlat) {
+    // de base ; selfBuffFlat = valeurs plates littérales (objet) ou fonction (eff, ctx) → objet
+    // (ex. Mur de Givre = scaling par niveau, Souverain Glacial = PV par charge).
+    const sbf = typeof sk.selfBuffFlat === 'function' ? (sk.selfBuffFlat(eff, ctx) || {}) : sk.selfBuffFlat;
+    if (sk.selfBuff || sbf) {
       const flat = {};
       if (sk.selfBuff) Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (base[k] || 0)); if (f) flat[k] = (flat[k] || 0) + f; });
-      if (sk.selfBuffFlat) Object.keys(sk.selfBuffFlat).forEach(k => { const f = Math.round(sk.selfBuffFlat[k]); if (f) flat[k] = (flat[k] || 0) + f; });
+      if (sbf) Object.keys(sbf).forEach(k => { const f = Math.round(sbf[k]); if (f) flat[k] = (flat[k] || 0) + f; });
       setSkillBuff(sk.id, flat);
       if (flat.hp) {
         const newMax = (eff.hp || 0) + flat.hp;

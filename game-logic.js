@@ -473,15 +473,43 @@
   function healJettC2(eff) { return Math.floor(50 + 1.0 * (eff.ap || 0)); }
 
   /* --- Rathael : Chair gelée, âme fendue (le SCRIPT prime sur la description) ---
-     C1 Frappe Irritée = (25 + 60% AD + 60% (Armure+RM)) × (1 + 0,20 × charges).
-     charges = compteur de Glaciation (0..5) ; +100% à 5 charges. */
-  function dmgRathaelC1(eff, charges) {
+     C1 Frappe Irritée (rééquilibrée) =
+       25 + (30% + 5%/4 niv) AD + (40% + 5%/2 niv) (Armure+RM), × (1 + 0,20 × charges).
+     charges = compteur de Glaciation (0..5) ; +100% à 5 charges. Paliers = floor(niv/N). */
+  function dmgRathaelC1(eff, charges, level) {
     const ad = (eff && eff.ad) || 0;
     const armure = (eff && eff.armure) || 0;
     const rm = (eff && eff.resmag) || 0;
-    const base = 25 + Math.floor(ad * 0.6) + Math.floor((armure + rm) * 0.6);
+    const lv = Math.max(1, level | 0);
+    const adRatio = 0.30 + 0.05 * Math.floor(lv / 4);
+    const arRatio = 0.40 + 0.05 * Math.floor(lv / 2);
+    const base = 25 + Math.floor(ad * adRatio) + Math.floor((armure + rm) * arRatio);
     const mult = 1 + 0.20 * Math.max(0, Math.min(5, charges | 0));
     return Math.floor(base * mult);
+  }
+
+  /* C2 Mur de Givre : Armure/RM accordés = 15 + 5/2 niv (floor(niv/2)). Valeur unique pour AR et RM. */
+  function rathaelC2Buff(level) { return 15 + 5 * Math.floor(Math.max(1, level | 0) / 2); }
+
+  /* C3 Éclat de l'âme : dégâts magiques AoE qui consomment toutes les charges de Glaciation.
+     base = 50 + 60% AP + (50% + 10%/2 niv) (Armure+RM) ;
+     chaque charge ajoute +50% de la base (max +250% à 5 charges → ×3,5). */
+  function dmgRathaelC3(eff, charges, level) {
+    const ap = (eff && eff.ap) || 0;
+    const armure = (eff && eff.armure) || 0;
+    const rm = (eff && eff.resmag) || 0;
+    const lv = Math.max(1, level | 0);
+    const arRatio = 0.50 + 0.10 * Math.floor(lv / 2);
+    const base = 50 + Math.floor(ap * 0.60) + Math.floor((armure + rm) * arRatio);
+    const mult = 1 + 0.50 * Math.max(0, Math.min(5, charges | 0));
+    return Math.floor(base * mult);
+  }
+
+  /* Ultime Souverain Glacial : bonus de PV = 20% des PV de BASE par charge, plafonné à +100% (5 charges).
+     baseHp = PV de base (avant équipement/mods). Snapshot au cast. */
+  function rathaelUltHpBonus(charges, baseHp) {
+    const c = Math.max(0, Math.min(5, charges | 0));
+    return Math.floor(Math.min(c * 0.20, 1.0) * (baseHp || 0));
   }
 
   /* Passif Rathael : +1 charge de Glaciation à chaque coup subi (max 5, tout stackable en 1 tour).
@@ -509,7 +537,7 @@
   }
 
   /* Passif calculable → mods plats (mergés dans computeEffective).
-     Elias (AD/charge, plat) et Rathael (Armure/RM +5%/charge des stats de BASE). */
+     Elias (AD/charge, plat) et Rathael (Armure/RM +10%/charge des stats de BASE). */
   function sumPassiveMods(charId, counters, level, base) {
     counters = counters || {};
     if (charId === 'lunick') { // Elias — Instinct du Chasseur
@@ -517,12 +545,12 @@
       if (!stacks) return {};
       return { ad: stacks * eliasPassiveAD(level) };
     }
-    if (charId === 'rathael') { // Chair gelée — +5%/charge des AR/RM de BASE
+    if (charId === 'rathael') { // Chair gelée — +10%/charge des AR/RM de BASE
       const charges = Math.max(0, Math.min(5, counters.glaciation | 0));
       if (!charges || !base) return {};
       const out = {};
-      const bA = Math.floor((base.armure || 0) * (1 + 0.05 * charges)) - (base.armure || 0);
-      const bR = Math.floor((base.resmag || 0) * (1 + 0.05 * charges)) - (base.resmag || 0);
+      const bA = Math.floor((base.armure || 0) * (1 + 0.10 * charges)) - (base.armure || 0);
+      const bR = Math.floor((base.resmag || 0) * (1 + 0.10 * charges)) - (base.resmag || 0);
       if (bA) out.armure = bA;
       if (bR) out.resmag = bR;
       return out;
@@ -586,13 +614,16 @@
     attrs = attrs || {};
     return (attrs.force | 0) + (attrs.hab | 0) + (attrs.mental | 0) + (attrs.magie | 0);
   }
-  function respecValid(attrs, budget, cap) {
+  /* floor (optionnel) = plancher PAR caracs (ex. valeurs déjà confirmées) : on ne peut pas
+     descendre en dessous. Absent → plancher 0 (compat). */
+  function respecValid(attrs, budget, cap, floor) {
     attrs = attrs || {};
+    floor = floor || {};
     budget = budget | 0; cap = cap | 0;
     const keys = ['force', 'hab', 'mental', 'magie'];
     for (const k of keys) {
       const v = attrs[k] | 0;
-      if (v < 0 || v > cap) return false;
+      if (v < (floor[k] | 0) || v > cap) return false;
     }
     return attrSum(attrs) === budget;
   }
@@ -636,7 +667,7 @@
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
-    dmgRathaelC1, glaciationOnHit, glaciationDecay,
+    dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
