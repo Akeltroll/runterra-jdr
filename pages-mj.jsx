@@ -208,7 +208,8 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
           {field('Rés. magique', 'resmag')}
           {field('% Crit', 'crit')}
           {field('% Dég. Crit', 'dcrit')}
-          {field('Léthalité', 'letha')}
+          {field('Léth. AD', 'lethaAD')}
+          {field('Léth. AP', 'lethaAP')}
         </div>
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => onRemove(enemy.id)} style={{ marginRight:'auto', color:'var(--debuff-bright)' }}>Supprimer</button>
@@ -270,14 +271,16 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
   const critAtk = Math.round(baseAtk * cr.multiplier);
   const [amount, setAmount] = useState(String(cr.didCrit ? critAtk : baseAtk));
   const [type, setType] = useState('physique');
-  const [letha, setLetha] = useState(String(enemy.letha || 0));
+  const [lethaAD, setLethaAD] = useState(String(enemy.lethaAD != null ? enemy.lethaAD : (enemy.letha || 0)));
+  const [lethaAP, setLethaAP] = useState(String(enemy.lethaAP || 0));
   const [targetId, setTargetId] = useState(CHARACTERS[0] ? CHARACTERS[0].id : '');
   const info = critInfo(enemy.crit || 0);
   const reroll = () => { const n = rollCrit(enemy.crit || 0, enemy.dcrit || 200); setCr(n); setAmount(String(n.didCrit ? Math.round(baseAtk * n.multiplier) : baseAtk)); };
 
   const submit = () => {
     const raw = Math.max(0, parseInt(amount, 10) || 0);
-    const lethaNum = Math.max(0, parseInt(letha, 10) || 0);
+    // Léthalité selon le type : AD (armure) si physique, AP (rés. mag) si magique, rien en brut.
+    const lethaNum = Math.max(0, type === 'physique' ? (parseInt(lethaAD, 10) || 0) : type === 'magique' ? (parseInt(lethaAP, 10) || 0) : 0);
     const c = CHARACTERS.find(x => x.id === targetId);
     if (!c || raw <= 0) { onClose(); return; }
     const st = stOf(c.id);
@@ -318,9 +321,13 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
             <span className="overline">Dégâts</span>
             <input style={ENEMY_FLD} value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
           </label>
-          <label className="col" style={{ gap:4, width:96 }} title="Léthalité — réduit l'armure/résistance de la cible">
-            <span className="overline">Léthalité</span>
-            <input style={ENEMY_FLD} value={letha} onChange={e => setLetha(e.target.value)} />
+          <label className="col" style={{ gap:4, width:84 }} title="Léthalité AD — réduit l'armure (dégât physique)">
+            <span className="overline" style={{ color: type === 'physique' ? 'var(--gold-bright)' : undefined }}>Léth. AD</span>
+            <input style={ENEMY_FLD} value={lethaAD} onChange={e => setLethaAD(e.target.value)} />
+          </label>
+          <label className="col" style={{ gap:4, width:84 }} title="Léthalité AP — réduit la résistance magique (dégât magique)">
+            <span className="overline" style={{ color: type === 'magique' ? 'var(--gold-bright)' : undefined }}>Léth. AP</span>
+            <input style={ENEMY_FLD} value={lethaAP} onChange={e => setLethaAP(e.target.value)} />
           </label>
         </div>
         <div className="col" style={{ gap:4 }}>
