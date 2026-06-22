@@ -367,8 +367,9 @@ function PendingHitsPanel({ enemies }) {
     const r = applyHitToEnemy(enemy, finalDmg, type, letha || 0);
     toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
     pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
-    // Vol de vie / Sapience / Omnivamp : soin de l'attaquant sur les dégâts infligés (type final du MJ).
-    const heal = lifestealHeal(r.applied, type, { omni: hit.omni || 0, vol: hit.vol || 0, sapience: hit.sapience || 0 });
+    // Vol de vie / Sapience / Omnivamp : soin de l'attaquant sur les dégâts infligés.
+    // Séparation par source : attaque de base → vol/sapience ; compétence → omnivamp.
+    const heal = lifestealHeal(r.applied, type, { omni: hit.omni || 0, vol: hit.vol || 0, sapience: hit.sapience || 0 }, hit.skillId === 'basic');
     if (heal > 0) {
       const hr = await healCharacter(hit.attackerId, heal, hit.hpMax || 0);
       if (hr.healed > 0) {

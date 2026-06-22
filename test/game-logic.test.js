@@ -637,18 +637,22 @@ test('dmgRathaelC3 : base AP + (AR+RM) scalée × charges (max ×3,5)', () => {
   assert.equal(L.dmgRathaelC3(eff, 5, 2), Math.floor(158 * 3.5)); // +250% à 5 charges
   assert.equal(L.dmgRathaelC3(eff, 9, 2), L.dmgRathaelC3(eff, 5, 2)); // plafond 5
 });
-test('lifestealHeal : omni sur tout, vol sur physique, sapience sur magique', () => {
+test('lifestealHeal : séparation par source (attaque de base vs compétence)', () => {
   const s = { omni: 10, vol: 20, sapience: 30 };
-  // physique : omni + vol = 30% de 100 = 30
-  assert.equal(L.lifestealHeal(100, 'physique', s), 30);
-  // magique : omni + sapience = 40% de 100 = 40
-  assert.equal(L.lifestealHeal(100, 'magique', s), 40);
-  // brut : omni seul = 10
-  assert.equal(L.lifestealHeal(100, 'brut', s), 10);
-  // sans stat → 0 ; dégâts 0 → 0 ; arrondi
-  assert.equal(L.lifestealHeal(100, 'physique', {}), 0);
-  assert.equal(L.lifestealHeal(0, 'physique', s), 0);
-  assert.equal(L.lifestealHeal(55, 'physique', { vol: 25 }), 14); // round(13.75)
+  // Attaque de base (isBasic=true) : vol si physique, sapience si magique, jamais omni
+  assert.equal(L.lifestealHeal(100, 'physique', s, true), 20);  // vol
+  assert.equal(L.lifestealHeal(100, 'magique', s, true), 30);   // sapience
+  assert.equal(L.lifestealHeal(100, 'brut', s, true), 0);       // ni vol ni sapience
+  // Compétence (isBasic=false) : omnivamp seul, quel que soit le type
+  assert.equal(L.lifestealHeal(100, 'physique', s, false), 10);
+  assert.equal(L.lifestealHeal(100, 'magique', s, false), 10);
+  assert.equal(L.lifestealHeal(100, 'brut', s, false), 10);
+  // Exemple MJ : attaque de base AD, 10% vol, 100 phys mitigés à 50 → 5 HP
+  assert.equal(L.lifestealHeal(50, 'physique', { vol: 10 }, true), 5);
+  // bornes : sans stat → 0 ; dégâts 0 → 0 ; arrondi
+  assert.equal(L.lifestealHeal(100, 'physique', {}, true), 0);
+  assert.equal(L.lifestealHeal(0, 'physique', s, true), 0);
+  assert.equal(L.lifestealHeal(55, 'physique', { vol: 25 }, true), 14); // round(13.75)
 });
 test('rathaelUltHpBonus : 20% PV base/charge, plafonné à +100%', () => {
   assert.equal(L.rathaelUltHpBonus(0, 100), 0);

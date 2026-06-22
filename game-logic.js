@@ -356,17 +356,21 @@
 
   /* --- Vol de vie / Sapience / Omnivamp ---
      Soin rendu à l'attaquant = % des dégâts RÉELLEMENT infligés (post-mitigation).
-       omnivamp (omni)  : s'applique à TOUT dégât direct (physique, magique, brut) ;
-       vol de vie (vol) : s'ajoute pour un dégât physique ;
-       sapience         : s'ajoute pour un dégât magique.
-     S'applique aussi bien à l'attaque de base qu'aux compétences à dégât direct. */
-  function lifestealHeal(applied, type, stats) {
+     Séparation PAR SOURCE (ruling MJ) :
+       attaque de base (isBasic) : vol de vie si physique, sapience si magique (jamais omni) ;
+       compétence                : omnivamp seul, quel que soit le type (jamais vol/sapience). */
+  function lifestealHeal(applied, type, stats, isBasic) {
     applied = Math.max(0, Number(applied) || 0);
     stats = stats || {};
-    let pct = Math.max(0, Number(stats.omni) || 0);
-    if (type === 'physique') pct += Math.max(0, Number(stats.vol) || 0);
-    else if (type === 'magique') pct += Math.max(0, Number(stats.sapience) || 0);
-    return Math.round(applied * pct / 100);
+    let pct;
+    if (isBasic) {
+      pct = type === 'physique' ? (Number(stats.vol) || 0)
+          : type === 'magique'  ? (Number(stats.sapience) || 0)
+          : 0;
+    } else {
+      pct = Number(stats.omni) || 0;
+    }
+    return Math.round(applied * Math.max(0, pct) / 100);
   }
 
   /* --- Visibilité des PV ennemis côté joueur ---
