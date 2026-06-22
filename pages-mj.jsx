@@ -226,6 +226,27 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
         <ResourceBar kind="hp" cur={enemy.hpCur} max={enemy.hpMax} />
         {enemy.manaMax > 0 && <ResourceBar kind="mana" cur={enemy.manaCur} max={enemy.manaMax} />}
       </div>
+      <div className="col gap-2" style={{ padding:'0 14px 10px' }}>
+        <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>
+          <span className="overline" title="Ce que voient les joueurs">👁 Joueurs</span>
+          {[['hidden','Caché'],['bar','Barre'],['exact','Exact']].map(([m, lbl]) => (
+            <button key={m} className={'btn btn-sm ' + ((enemy.reveal || 'hidden') === m ? 'btn-gold' : 'btn-ghost')}
+              onClick={() => onUpdate(enemy.id, { reveal: m })} style={{ padding:'3px 9px', fontSize:11 }}>{lbl}</button>
+          ))}
+        </div>
+        {enemy.reveal === 'bar' && (
+          <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>
+            {[100, 75, 50, 25, 10].map(p => (
+              <button key={p} className={'btn btn-sm ' + ((enemy.revealPct != null ? enemy.revealPct : 100) === p ? 'btn-gold' : 'btn-ghost')}
+                onClick={() => onUpdate(enemy.id, { revealPct: p })} style={{ padding:'3px 7px', fontSize:11 }}>{p}%</button>
+            ))}
+            <input type="number" min="0" max="100"
+              value={enemy.revealPct != null ? enemy.revealPct : 100}
+              onChange={e => onUpdate(enemy.id, { revealPct: Math.max(0, Math.min(100, num(e.target.value))) })}
+              style={{ ...ENEMY_FLD, width:58 }} />
+          </div>
+        )}
+      </div>
       <div className="row gap-2" style={{ padding:'0 14px 14px', alignItems:'center' }}>
         <button className="btn btn-sm btn-gold" onClick={() => onAttack(enemy)} style={{ whiteSpace:'nowrap' }}>⚔ Attaque</button>
         <input placeholder="Subir…" value={subir}

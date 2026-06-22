@@ -354,6 +354,30 @@
     return { hpCur: hpCur - d, shield, ko: false };
   }
 
+  /* --- Visibilité des PV ennemis côté joueur ---
+     Le MJ pilote par ennemi ce que les joueurs voient :
+       reveal 'hidden' (défaut) : nom seul, aucune barre, aucun chiffre ;
+       reveal 'bar'             : barre FIGÉE au % choisi (revealPct), ne suit pas les vrais dégâts ;
+       reveal 'exact'           : barre live + PV chiffrés (vrais hpCur/hpMax).
+     KO (hpCur ≤ 0) : toujours signalé (la mort est observable), quel que soit le mode.
+     Renvoie de quoi rendre l'UI sans qu'elle connaisse les vrais PV en mode caché/barre. */
+  function enemyPublicView(enemy) {
+    const e = enemy || {};
+    const hpCur = Math.max(0, Number(e.hpCur) || 0);
+    const hpMax = Math.max(0, Number(e.hpMax) || 0);
+    const mode = e.reveal === 'bar' || e.reveal === 'exact' ? e.reveal : 'hidden';
+    if (hpMax > 0 && hpCur <= 0) return { mode, ko: true, showBar: false, pct: 0, text: 'KO' };
+    if (mode === 'exact') {
+      const pct = hpMax > 0 ? clamp((hpCur / hpMax) * 100, 0, 100) : 0;
+      return { mode, ko: false, showBar: true, pct, text: hpCur + '/' + hpMax + ' PV' };
+    }
+    if (mode === 'bar') {
+      const pct = clamp(Number(e.revealPct != null ? e.revealPct : 100), 0, 100);
+      return { mode, ko: false, showBar: true, pct, text: '' };
+    }
+    return { mode, ko: false, showBar: false, pct: null, text: '' };
+  }
+
   /* ============================================================
      COMPÉTENCES (actif/passif) — logique pure
      Source des formules : info-mj/Codes App Script.md (le script prime).
@@ -545,7 +569,7 @@
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,
-    mitigateDamage, applyDamageToPools, critInfo, rollCrit,
+    mitigateDamage, applyDamageToPools, critInfo, rollCrit, enemyPublicView,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,

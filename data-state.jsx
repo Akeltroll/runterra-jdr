@@ -88,7 +88,8 @@ let _enemySeq = 0;
 function newEnemyId() { return 'enemy_' + Date.now().toString(36) + '_' + (_enemySeq++); }
 function makeEnemy(name) {
   return { id: newEnemyId(), name: name || 'Ennemi', hpCur: 100, hpMax: 100,
-    manaCur: 0, manaMax: 0, atk: 10, armure: 0, resmag: 0, note: '' };
+    manaCur: 0, manaMax: 0, atk: 10, armure: 0, resmag: 0, note: '',
+    reveal: 'hidden', revealPct: 100 };
 }
 function useMJEnemies() {
   const [map, setMap] = useState(null);

@@ -590,6 +590,25 @@ test('mitigateDamage : la léthalité réduit la résistance (sans passer sous 0
   assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 200), 100); // eff borné à 0
   assert.equal(L.mitigateDamage(100, 'brut',     { armure: 120 }, 50), 100);  // brut ignore tout
 });
+test('enemyPublicView : caché (défaut) = nom seul, aucune barre', () => {
+  assert.deepEqual(L.enemyPublicView({ hpCur: 70, hpMax: 100 }),
+    { mode: 'hidden', ko: false, showBar: false, pct: null, text: '' });
+});
+test('enemyPublicView : barre figée au revealPct (ignore les vrais PV)', () => {
+  assert.deepEqual(L.enemyPublicView({ hpCur: 13, hpMax: 100, reveal: 'bar', revealPct: 50 }),
+    { mode: 'bar', ko: false, showBar: true, pct: 50, text: '' });
+  // revealPct borné 0–100
+  assert.equal(L.enemyPublicView({ hpCur: 13, hpMax: 100, reveal: 'bar', revealPct: 150 }).pct, 100);
+});
+test('enemyPublicView : exact = barre live + PV chiffrés', () => {
+  assert.deepEqual(L.enemyPublicView({ hpCur: 30, hpMax: 120, reveal: 'exact' }),
+    { mode: 'exact', ko: false, showBar: true, pct: 25, text: '30/120 PV' });
+});
+test('enemyPublicView : KO toujours signalé quel que soit le mode', () => {
+  assert.deepEqual(L.enemyPublicView({ hpCur: 0, hpMax: 100, reveal: 'hidden' }),
+    { mode: 'hidden', ko: true, showBar: false, pct: 0, text: 'KO' });
+  assert.equal(L.enemyPublicView({ hpCur: 0, hpMax: 100, reveal: 'exact' }).ko, true);
+});
 test('computeAttack : dmg = round(base * critMult)', () => {
   // invariant figé (computeAttack vit dans data.jsx, non requis ici)
   const calc = (ad, mult) => Math.round(ad * mult);

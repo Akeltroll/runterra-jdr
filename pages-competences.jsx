@@ -279,14 +279,31 @@ function CompetencesBody({ char, staff }) {
             <div>
               <div className="overline" style={{ marginBottom: 6 }}>Ennemis en jeu</div>
               <div className="row gap-3 wrap">
-                {enemies.map(e => <span key={e.id} className="mono" style={{ fontSize: 12, color: e.hpCur === 0 ? 'var(--faint)' : 'var(--ink)' }}>{e.name} · {e.hpCur}/{e.hpMax} PV</span>)}
+                {enemies.map(e => {
+                  const v = enemyPublicView(e);
+                  return (
+                    <span key={e.id} className="row gap-2" style={{ alignItems: 'center', fontSize: 12 }}>
+                      <span className="mono" style={{ color: v.ko ? 'var(--faint)' : 'var(--ink)' }}>{e.name}</span>
+                      {v.ko && <span className="mono" style={{ color: 'var(--faint)' }}>· KO</span>}
+                      {v.showBar && (
+                        <span style={{ display: 'inline-block', width: 64, height: 7, borderRadius: 99, background: 'var(--bg-inset)', border: '1px solid var(--line)', overflow: 'hidden', verticalAlign: 'middle' }}>
+                          <span style={{ display: 'block', height: '100%', width: v.pct + '%', background: 'var(--hp)' }} />
+                        </span>
+                      )}
+                      {v.text && <span className="mono faint">{v.text}</span>}
+                    </span>
+                  );
+                })}
               </div>
             </div>
             <label className="row gap-2" style={{ alignItems: 'center', fontSize: 12.5 }}>Cible
               <select value={targetId} onChange={e => setTargetId(e.target.value)}
                 style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '6px 9px', fontSize: 13 }}>
                 <option value="">— aucune —</option>
-                {enemies.filter(en => en.hpCur > 0).map(en => <option key={en.id} value={en.id}>{en.name} ({en.hpCur} PV)</option>)}
+                {enemies.filter(en => en.hpCur > 0).map(en => {
+                  const v = enemyPublicView(en);
+                  return <option key={en.id} value={en.id}>{en.name}{v.mode === 'exact' ? ` (${en.hpCur} PV)` : ''}</option>;
+                })}
               </select>
             </label>
           </div>
