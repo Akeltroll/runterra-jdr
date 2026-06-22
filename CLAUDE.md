@@ -277,6 +277,11 @@ Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDe
     username, role (joueur|mj|admin), charId (si joueur)
 ```
 
+**Cache-busting (IMPORTANT à chaque déploiement de code) :** les scripts/CSS locaux d'`index.html`
+portent un jeton `?v=…` (et `window.APPV`). **Bumper ce jeton à chaque push de code** (search-replace
+de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CDN sert l'ancienne version
+(zéro-build, pas de hash automatique). Sans ça, les joueurs voient l'ancien code malgré le déploiement.
+
 **Check-list de déploiement (bascule anonyme → comptes) :**
 1. Pousser le code sur `main` (GitHub Pages).
 2. Console → Authentication : créer les comptes joueurs (`pseudo@runeterra.local` + mdp).
