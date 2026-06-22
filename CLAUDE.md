@@ -119,9 +119,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (inventaire éditable, upload d'image inclus). Grille **responsive** (plus de scroll
   horizontal). **Section Ennemis** (désormais **partagés en Firebase** `combat/enemies`, lecture
   inscrits/écriture staff) : `useMJEnemies` (migré localStorage→Firebase, API inchangée),
-  `EnemyCard` (HP/mana/**armure/resmag** édition inline, « Subir » = dégâts joueurs→ennemi ; **contrôle 👁 Joueurs**
+  `EnemyCard` (HP/mana/**armure/resmag/crit/dcrit/léthalité** édition inline, « Subir » = dégâts joueurs→ennemi ; **contrôle 👁 Joueurs**
   Caché/Barre/Exact + presets % en mode Barre → écrit `reveal`/`revealPct`),
-  `EnemyAttackModal` (ennemi→joueur : `mitigateDamage`+`applyDamageToPools`, écrit `hpCur`/`shield`
+  `EnemyAttackModal` (ennemi→joueur : **`rollCrit`** au lancement [base vs crit + badge 🎲, bouton « relancer »],
+  champ **léthalité** éditable → `mitigateDamage`(+léthalité)+`applyDamageToPools`, écrit `hpCur`/`shield`
   du joueur ciblé en Firebase, KO à 0). **Section « Attaques en attente »** (`PendingHitsPanel`,
   file `combat/pendingHits`) : un joueur cast une comp à dégâts → propose une attaque sur un ennemi
   ciblé. **Le crit/surcrit est roulé par l'app au cast** (`rollCrit`) : la carte MJ affiche **base vs crit**
@@ -260,7 +261,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     { id, cat, name, sub, qty, ic, img, type, mods }
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
 /campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
-/campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, reveal, revealPct } ; lecture inscrits, écriture staff
+/campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, crit, dcrit, letha, reveal, revealPct } ; lecture inscrits, écriture staff
+                                              crit (%) + dcrit (% dég. crit, défaut 200) + letha (léthalité) = crit/léthalité ennemi→joueur (rollCrit au lancement de l'attaque, mitigateDamage avec léthalité)
                                               reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
 /campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, crit, dcrit, targetId, ts } ; crit roulé au cast ; le MJ ajuste+applique
 /campaign/runeterra/combat/log/{id}   ← journal de combat PARTAGÉ { id, ts, text, kind:'gold'|'buff'|'debuff' } ; lecture+écriture tout inscrit ; ~30 derniers ; vidé par « ⟲ Combat »
@@ -468,7 +470,11 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   caps `LEVELS.limit`, verrou unique joueur + (dé)verrouillage staff ; `setAttrs`/`setAttrsLocked`,
   `attrSum`/`respecValid` testés). **Reste** (sous-projets séparés) : (1) **équipement en stats finales**
   (armes 3 paliers + 18 armures §7) ; (2) **zone PNJ/divine** (escalade quadratique >20 §8 ;
-  `escalationFactor` gère déjà >20) ; (3) crit/léthalité **ennemi→joueur** (les ennemis n'ont pas encore de stat crit/letha).
+  `escalationFactor` gère déjà >20). **Crit/léthalité ennemi→joueur = FAIT (2026-06-22)** : `makeEnemy`
+  +`crit`/`dcrit`/`letha`, édition inline `EnemyCard`, `EnemyAttackModal` roule le crit (`rollCrit`) + applique
+  la léthalité (`mitigateDamage`). Aussi livré ce jour : **vol de vie/sapience/omnivamp** (soin de l'attaquant à
+  la résolution MJ, séparation par source : attaque de base→vol/sapience, comp→omnivamp ; `lifestealHeal` testé,
+  orchestrateur `healCharacter`). Aucune règle RTDB.
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
 - `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/

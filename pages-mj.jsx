@@ -206,6 +206,9 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
           {field("Dégât d'attaque", 'atk')}
           {field('Armure', 'armure')}
           {field('Rés. magique', 'resmag')}
+          {field('% Crit', 'crit')}
+          {field('% Dég. Crit', 'dcrit')}
+          {field('Léthalité', 'letha')}
         </div>
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => onRemove(enemy.id)} style={{ marginRight:'auto', color:'var(--debuff-bright)' }}>Supprimer</button>
@@ -261,17 +264,25 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
 
 function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
   const toast = useToast();
-  const [amount, setAmount] = useState(String(enemy.atk || 0));
+  const baseAtk = Math.max(0, enemy.atk || 0);
+  // Crit roulé par l'app à l'ouverture (mirroir du flux joueur). Le MJ ajuste le montant si besoin.
+  const [cr, setCr] = useState(() => rollCrit(enemy.crit || 0, enemy.dcrit || 200));
+  const critAtk = Math.round(baseAtk * cr.multiplier);
+  const [amount, setAmount] = useState(String(cr.didCrit ? critAtk : baseAtk));
   const [type, setType] = useState('physique');
+  const [letha, setLetha] = useState(String(enemy.letha || 0));
   const [targetId, setTargetId] = useState(CHARACTERS[0] ? CHARACTERS[0].id : '');
+  const info = critInfo(enemy.crit || 0);
+  const reroll = () => { const n = rollCrit(enemy.crit || 0, enemy.dcrit || 200); setCr(n); setAmount(String(n.didCrit ? Math.round(baseAtk * n.multiplier) : baseAtk)); };
 
   const submit = () => {
     const raw = Math.max(0, parseInt(amount, 10) || 0);
+    const lethaNum = Math.max(0, parseInt(letha, 10) || 0);
     const c = CHARACTERS.find(x => x.id === targetId);
     if (!c || raw <= 0) { onClose(); return; }
     const st = stOf(c.id);
     const L = mjLive(c, st);
-    const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag });
+    const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag }, lethaNum);
     const res = applyDamageToPools({ hpCur: L.hp, shield: L.shield }, degats);
     window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
     // Passif Rathael — Chair gelée : +1 charge de Glaciation quand il subit des dégâts (max 2/tour, max 5).
@@ -282,9 +293,11 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
         if (gp.glaciation != null) pushLog(`<b>${c.name}</b> gagne une charge de Glaciation (${gp.glaciation}/5)`, 'buff');
       }
     }
-    toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
+    const critTag = cr.didCrit ? ' 🎲 CRIT' : '';
+    const lethaTag = lethaNum > 0 ? `, léth. ${lethaNum}` : '';
+    toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}${critTag}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
       res.ko ? 'debuff' : 'gold');
-    pushLog(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`, res.ko ? 'debuff' : 'gold');
+    pushLog(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}${critTag}${lethaTag}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`, res.ko ? 'debuff' : 'gold');
     onClose();
   };
 
@@ -292,10 +305,24 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
     <div className="modal-scrim" onClick={onClose}>
       <div className="panel" onClick={e => e.stopPropagation()} style={{ width:'min(420px,100%)', padding:18, display:'flex', flexDirection:'column', gap:14 }}>
         <h3 style={{ fontSize:17 }}>Attaque — {enemy.name}</h3>
-        <label className="col" style={{ gap:4 }}>
-          <span className="overline">Dégâts</span>
-          <input style={ENEMY_FLD} value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
-        </label>
+        <div className="row gap-2 wrap" style={{ alignItems:'center', fontSize:11, color:'var(--ink-faint)' }}>
+          <span>Base : <b>{baseAtk}</b></span>
+          {cr.didCrit
+            ? <span className="mono" style={{ color:'var(--skillbuff)' }}>🎲 CRIT ×{cr.multiplier.toFixed(2)} → <b>{critAtk}</b></span>
+            : <span className="mono faint">pas de crit</span>}
+          <span className="faint">%Crit {enemy.crit || 0}{info.guaranteedTiers ? ` · ${info.guaranteedTiers} palier(s) garanti(s)` : ''}{info.extraChancePct ? ` · +${info.extraChancePct}%` : ''}</span>
+          <button className="btn btn-sm btn-ghost" onClick={reroll} title="Relancer le jet de crit" style={{ padding:'2px 8px', fontSize:11 }}>🎲 relancer</button>
+        </div>
+        <div className="row gap-2" style={{ alignItems:'flex-end' }}>
+          <label className="col" style={{ gap:4, flex:1 }}>
+            <span className="overline">Dégâts</span>
+            <input style={ENEMY_FLD} value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
+          </label>
+          <label className="col" style={{ gap:4, width:96 }} title="Léthalité — réduit l'armure/résistance de la cible">
+            <span className="overline">Léthalité</span>
+            <input style={ENEMY_FLD} value={letha} onChange={e => setLetha(e.target.value)} />
+          </label>
+        </div>
         <div className="col" style={{ gap:4 }}>
           <span className="overline">Type</span>
           <div className="row gap-2">
