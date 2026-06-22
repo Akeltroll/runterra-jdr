@@ -113,7 +113,7 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
     setBuff(b.id, on);
     if (on) toast(`<b>${char.name}</b> — ${b.name} ${b.type === 'buff' ? 'activé' : 'subi'}`, b.type);
   };
-  const MOD_STATS =[['hp','HP'],['mana','Mana'],['ad','AD'],['ap','AP'],['armure','Armure'],['resmag','Rés.Mag'],['crit','%Crit'],['dcrit','%D.Crit'],['letha','Léthalité'],['sapience','Sapience']];
+  const MOD_STATS =[['hp','HP'],['mana','Mana'],['ad','AD'],['ap','AP'],['armure','Armure'],['resmag','Rés.Mag'],['crit','%Crit'],['dcrit','%D.Crit'],['letha','Léthalité'],['sapience','Sapience'],['vol','Vol vie%'],['omni','Omnivamp%']];
   return (
     <div className="col gap-5">
       <div className="panel">
