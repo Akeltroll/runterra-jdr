@@ -11,6 +11,8 @@ const mn = Math.min, mx = Math.max;
    (refonte « système hypermétrique » — escalade, socle de niveau, bonus de départ). */
 
 /* --- Table de progression (niveaux 1 → 18) --- */
+/* Point bonus de création (au-dessus du total de niveau). Budget de respec = LEVELS.total + CREATION_BONUS. */
+const CREATION_BONUS = 1;
 const LEVELS = [
   { lvl:1,  gain:'10 (départ)', total:10, limit:5  },
   { lvl:2,  gain:1, total:11, limit:6  },
@@ -415,5 +417,5 @@ const SKILLS = {
 
 Object.assign(window, {
   CHARACTERS, BUFFS, WEAPONS,
-  LEVELS, ATTRIBUTES, JOURNAL, RUNES, ITEM_CATALOG, SKILLS,
+  LEVELS, CREATION_BONUS, ATTRIBUTES, JOURNAL, RUNES, ITEM_CATALOG, SKILLS,
 });

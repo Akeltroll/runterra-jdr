@@ -208,7 +208,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `pages-journal.jsx` — onglet **Journal** (`JournalPage`, staff) : **flux d'événements live** du `combat/log`
   partagé (`useCombatLog`), filtres par `kind` (tous/actions/buffs/KO) + horodatage + « Vider » (purge partagée).
   Remplace l'ancien mockup statique. Lecture seule, alimenté par `pushLog`.
-- `pages-lobby/progression/ds.jsx` — pages secondaires (mockup, données surtout statiques).
+- `pages-progression.jsx` — onglet **Progression** (`ProgressionPage`) : XP + **respec** (répartition des 4
+  caracs) + table des paliers 1→18. Visible des **joueurs** (`prog` ajouté à `PAGE_ACCESS.joueur`, en barre
+  principale via `groupByRole:{joueur:'main'}` ; `lockedCharId` = perso du joueur ; staff = sélecteur libre +
+  case « Verrouillé »). Steppers par caracs (brouillon local → « Confirmer »), budget = `LEVELS.total +
+  CREATION_BONUS`, cap = `LEVELS.limit`, plancher 0 ; **aperçu live** des stats résultantes (`computeStats`).
+  **Verrou** : un joueur respec **une fois** → `setAttrs(draft,true)` (écrit `attrs`+`attrsLocked`) ; le staff
+  édite librement + (dé)verrouille (`setAttrsLocked`). Logique pure `attrSum`/`respecValid` (game-logic, testées).
+- `pages-lobby/ds.jsx` — pages secondaires (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
   joueur = sa fiche seule, staff = tout ; `sharedInventory` = R/W pour tout participant
@@ -244,8 +251,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     runes:     { selected:{[nodeId]:true}, choices:{[nodeId]:'ad'|'ap'} }   ← arbre de runes (page Runes)
     runeBonus: 0   ← points de rune bonus accordés par le MJ (test / montée de niveau) ; budget = level + runeBonus
     level:     2   ← niveau effectif (entier ≥ 1, stepper staff onglet Compétences) ; défaut = char.level ; pilote déblocage des comps + passif + budget runes + STATS (socle moteur refondu)
-    attrs:       { force, hab, mental, magie }   ← override de caracs (respec) ; ABSENT par défaut → repli char.attrs ; lu par charBaseStats
-    attrsLocked: true   ← verrou après respec joueur unique (UI à venir) ; le staff peut éditer/déverrouiller
+    attrs:       { force, hab, mental, magie }   ← caracs (respec, onglet Progression) ; ABSENT par défaut → repli char.attrs ; lu par charBaseStats ; écrit par setAttrs
+    attrsLocked: true   ← verrou après respec joueur unique ; le staff peut éditer/déverrouiller (setAttrsLocked)
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
     skillBuffs: { [skillId]: { [stat]: n } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; effacés par « ⟲ Combat »
@@ -457,10 +464,11 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   **Combat (§6) = FAIT (2026-06-22, branche `feat/combat-refondu`)** : `critInfo`+`rollCrit` (surcrit par paliers,
   testés), crit roulé au cast, **léthalité** branchée (`mitigateDamage`←`applyHitToEnemy`, snapshot au cast, éditable MJ),
   attaque de base unifiée. Aucune règle RTDB. Spec/plan : `docs/superpowers/{specs,plans}/2026-06-22-combat-refondu*`.
-  **Reste** (sous-projets séparés) : (1) **respec joueur** (UI : répartition des points, caps par niveau →
-  écrit `attrs`+`attrsLocked`) ; (2) **équipement en stats finales** (armes 3 paliers + 18 armures §7) ;
-  (3) **zone PNJ/divine** (escalade quadratique >20 §8 ; `escalationFactor` gère déjà >20) ;
-  (4) crit/léthalité **ennemi→joueur** (les ennemis n'ont pas encore de stat crit/letha).
+  **Respec joueur = FAIT et déployé** (onglet Progression, voir plus haut : budget `LEVELS.total+CREATION_BONUS`,
+  caps `LEVELS.limit`, verrou unique joueur + (dé)verrouillage staff ; `setAttrs`/`setAttrsLocked`,
+  `attrSum`/`respecValid` testés). **Reste** (sous-projets séparés) : (1) **équipement en stats finales**
+  (armes 3 paliers + 18 armures §7) ; (2) **zone PNJ/divine** (escalade quadratique >20 §8 ;
+  `escalationFactor` gère déjà >20) ; (3) crit/léthalité **ennemi→joueur** (les ennemis n'ont pas encore de stat crit/letha).
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
 - `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/

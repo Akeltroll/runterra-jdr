@@ -141,7 +141,8 @@ const PAGES = [
   { id:'admin',   label:'Admin',        render:() => <AdminPage /> },
   // secondaires : regroupés dans le menu « ⋯ Plus » (staff)
   { id:'journal', label:'Journal',      group:'more', render:() => <JournalPage /> },
-  { id:'prog',    label:'Progression',  group:'more', render:() => <ProgressionPage /> },
+  { id:'prog',    label:'Progression',  group:'more', groupByRole:{ joueur:'main' },
+    render:(auth) => <ProgressionPage lockedCharId={auth.role === 'joueur' ? auth.charId : null} /> },
   // référence/dev : lien discret en footer (staff)
   { id:'ds',      label:'Design System',group:'footer', render:() => <DesignSystemPage /> },
 ];
@@ -172,9 +173,11 @@ function App() {
 
   // Navigation filtrée par rôle, puis répartie par groupe.
   const allowed = PAGES.filter(p => canSeePage(p.id, auth.role));
-  const mainPages   = allowed.filter(p => (p.group || 'main') === 'main');
-  const morePages   = allowed.filter(p => p.group === 'more');
-  const footerPages = allowed.filter(p => p.group === 'footer');
+  // Groupe effectif d'une page : surcharge possible par rôle (ex. Progression = barre pour les joueurs).
+  const groupOf = (p) => (p.groupByRole && p.groupByRole[auth.role]) || p.group || 'main';
+  const mainPages   = allowed.filter(p => groupOf(p) === 'main');
+  const morePages   = allowed.filter(p => groupOf(p) === 'more');
+  const footerPages = allowed.filter(p => groupOf(p) === 'footer');
   const fallback = defaultRoute(auth.role);
   const activeId = allowed.some(p => p.id === route) ? route : fallback;
   const cur = allowed.find(p => p.id === activeId) || allowed[0];

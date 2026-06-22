@@ -580,6 +580,23 @@
     };
   }
 
+  /* --- Respec : répartition des 4 caractéristiques (logique pure) ---
+     budget = points répartissables (LEVELS.total + bonus de création) ; cap = plafond par caracs. */
+  function attrSum(attrs) {
+    attrs = attrs || {};
+    return (attrs.force | 0) + (attrs.hab | 0) + (attrs.mental | 0) + (attrs.magie | 0);
+  }
+  function respecValid(attrs, budget, cap) {
+    attrs = attrs || {};
+    budget = budget | 0; cap = cap | 0;
+    const keys = ['force', 'hab', 'mental', 'magie'];
+    for (const k of keys) {
+      const v = attrs[k] | 0;
+      if (v < 0 || v > cap) return false;
+    }
+    return attrSum(attrs) === budget;
+  }
+
   /* Stats de base d'un perso, live : caracs/niveau effectifs (override state). */
   function charBaseStats(char, state) {
     var a = (state && state.attrs) || (char && char.attrs) || { force: 0, hab: 0, mental: 0, magie: 0 };
@@ -624,6 +641,6 @@
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
     xpToNext, applyXp, MAX_LEVEL,
-    escalationFactor, computeStats, charBaseStats,
+    escalationFactor, computeStats, charBaseStats, attrSum, respecValid,
   };
 });

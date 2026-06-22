@@ -29,7 +29,7 @@
 
   /* Pages visibles selon le rôle (ids alignés sur PAGES dans index.html). */
   const PAGE_ACCESS = {
-    joueur: ['sheet', 'equip', 'inv', 'recap', 'runes', 'competences'],
+    joueur: ['sheet', 'equip', 'inv', 'recap', 'runes', 'competences', 'prog'],
     mj:     ['lobby', 'mj', 'sheet', 'equip', 'journal', 'prog', 'ds', 'inv', 'recap', 'runes', 'competences'],
     admin:  ['lobby', 'mj', 'sheet', 'equip', 'journal', 'prog', 'ds', 'inv', 'recap', 'runes', 'competences', 'admin'],
   };

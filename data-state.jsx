@@ -45,8 +45,19 @@ function useCharState(charId) {
   // Buff sur soi : snapshot des mods plats d'une compétence (effacé par « ⟲ Combat »).
   const setSkillBuff = useCallback((skillId, mods) =>
     window.RTDB.updatePath(`${charPath(charId)}/skillBuffs`, { [skillId]: mods || null }), [charId]);
+  // Respec : écrit les 4 caracs + le verrou atomiquement (sanitisé en entiers ≥ 0).
+  const setAttrs = useCallback((attrs, locked) => {
+    const a = attrs || {};
+    const clean = {
+      force: Math.max(0, a.force | 0), hab: Math.max(0, a.hab | 0),
+      mental: Math.max(0, a.mental | 0), magie: Math.max(0, a.magie | 0),
+    };
+    return window.RTDB.updatePath(charPath(charId), { attrs: clean, attrsLocked: locked ? true : null });
+  }, [charId]);
+  const setAttrsLocked = useCallback((locked) =>
+    window.RTDB.updatePath(charPath(charId), { attrsLocked: locked ? true : null }), [charId]);
   return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment, setCoin,
-    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff };
+    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked };
 }
 
 /* Compteur de tour PARTAGÉ (combat). Écriture staff (règle RTDB combat/turn).

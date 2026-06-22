@@ -39,7 +39,7 @@ test('canSeePage filtre selon le rôle', () => {
   assert.equal(A.canSeePage('mj', 'mj'), true);
   assert.equal(A.canSeePage('admin', 'mj'), false);
   assert.equal(A.canSeePage('admin', 'admin'), true);
-  assert.deepEqual(A.pagesForRole('joueur'), ['sheet', 'equip', 'inv', 'recap', 'runes', 'competences']);
+  assert.deepEqual(A.pagesForRole('joueur'), ['sheet', 'equip', 'inv', 'recap', 'runes', 'competences', 'prog']);
 });
 
 test("la page inv (inventaire commun) est visible par tous les roles", () => {

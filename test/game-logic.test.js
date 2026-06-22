@@ -590,6 +590,19 @@ test('mitigateDamage : la léthalité réduit la résistance (sans passer sous 0
   assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 200), 100); // eff borné à 0
   assert.equal(L.mitigateDamage(100, 'brut',     { armure: 120 }, 50), 100);  // brut ignore tout
 });
+test('attrSum : somme des 4 caractéristiques (entiers, tolère les clés absentes)', () => {
+  assert.equal(L.attrSum({ force: 4, hab: 3, mental: 4, magie: 1 }), 12);
+  assert.equal(L.attrSum({ force: 5 }), 5);
+  assert.equal(L.attrSum(null), 0);
+});
+test('respecValid : somme = budget ET chaque caracs ∈ [0, cap]', () => {
+  // niveau 2 : budget 12, cap 6
+  assert.equal(L.respecValid({ force: 6, hab: 6, mental: 0, magie: 0 }, 12, 6), true);
+  assert.equal(L.respecValid({ force: 4, hab: 3, mental: 4, magie: 1 }, 12, 6), true);
+  assert.equal(L.respecValid({ force: 7, hab: 5, mental: 0, magie: 0 }, 12, 6), false); // 7 > cap
+  assert.equal(L.respecValid({ force: 4, hab: 3, mental: 4, magie: 0 }, 12, 6), false); // somme 11 ≠ 12
+  assert.equal(L.respecValid({ force: 4, hab: 4, mental: 4, magie: 1 }, 12, 6), false); // somme 13 ≠ 12
+});
 test('dmgRathaelC1 : formule du script (0,6 AD + 0,6 (AR+RM)) × multiplicateur de charges', () => {
   const eff = { ad: 100, armure: 50, resmag: 30 };
   // base = 25 + floor(0,6*100) + floor(0,6*(50+30)) = 25 + 60 + 48 = 133
