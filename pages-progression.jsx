@@ -12,6 +12,7 @@ function ProgressionPage() {
   const totalUsed = a.force + a.hab + a.mental + a.magie;
   const lvlRow = LEVELS.find(l => l.lvl === char.level) || LEVELS[LEVELS.length - 1];
   const bonus = totalUsed - lvlRow.total; // ex. point bonus de création (>0 => affiché en gold)
+  const selStyle = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'6px 9px', fontSize:13 };
 
   return (
     <div style={{ padding:'24px', height:'100%', overflow:'auto' }}>
