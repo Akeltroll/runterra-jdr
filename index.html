@@ -106,6 +106,28 @@
 
 <!-- Shell -->
 <script type="text/babel">
+/* Garde-fou : isole un plantage de page pour éviter l'écran blanc total.
+   La topbar reste hors du boundary → on peut toujours changer d'onglet.
+   key={activeId} → un boundary neuf par route (l'erreur se réinitialise à la navigation). */
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('Plantage de page :', error, info); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div style={{ padding:32, maxWidth:640, margin:'40px auto' }}>
+        <div className="panel" style={{ padding:24 }}>
+          <h2 style={{ color:'var(--debuff-bright)', marginBottom:10 }}>Cette page a planté</h2>
+          <p className="dim" style={{ marginBottom:14 }}>Une erreur a interrompu l'affichage de cette page. Le reste de l'application reste accessible : change d'onglet, ou recharge.</p>
+          <pre className="mono" style={{ fontSize:11, whiteSpace:'pre-wrap', color:'var(--faint)', marginBottom:16, maxHeight:160, overflow:'auto' }}>{String((this.state.error && this.state.error.stack) || this.state.error)}</pre>
+          <button className="btn btn-gold" onClick={() => location.reload()}>Recharger</button>
+        </div>
+      </div>
+    );
+  }
+}
+
 /* group: 'main' (barre principale, défaut) | 'more' (menu « ⋯ Plus ») | 'footer' (lien discret bas de page). */
 const PAGES = [
   { id:'lobby',   label:'Accueil',      render:() => <LobbyPage go={setRoute} /> },
@@ -187,7 +209,7 @@ function App() {
         </nav>
         <SignOutButton username={auth.username} role={auth.role} onSignOut={() => window.RTDB.signOut()} />
       </div>
-      <div className="page hex-bg">{cur.render(auth)}</div>
+      <div className="page hex-bg"><ErrorBoundary key={activeId}>{cur.render(auth)}</ErrorBoundary></div>
       {footerPages.length > 0 && (
         <footer style={{ display:'flex', justifyContent:'center', gap:14, padding:'10px 16px', borderTop:'1px solid var(--line)', background:'var(--bg-inset)' }}>
           {footerPages.map(p => (
