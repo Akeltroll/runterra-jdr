@@ -186,10 +186,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   variables d'attaque (1er coup / furtif / cases / cibles) en état local de carte. **Persos câblés** :
   Elias/Smith/Urskaar/Jett + **Rathael (C1 Frappe Irritée + C2 Mur de Givre)** ; reste à faire : Rathael C3/C4,
   Jett C3/C4. Passif calculable (Elias +AD/charge plat ; **Rathael +5%/charge Armure+RM de base** via compteur
-  Glaciation manuel — `sumPassiveMods(charId,counters,level,base)`, 4e param `base`) branché via
-  `sumPassiveMods`→`computeEffective`. `cast` gère **`selfBuffFlat`** (buff plat, ex. Mur de Givre +30 AR/RM) et
-  **`counterBump`** (incrément conditionnel de compteur au cast) ; l'`eff` de la page Combat inclut les `skillBuffs`
-  (aligné fiche/équip). Visible des 3 rôles, sélecteur
+  Glaciation — `sumPassiveMods(charId,counters,level,base)`, 4e param `base`) branché via
+  `sumPassiveMods`→`computeEffective`. **Glaciation auto-incrémenté** quand Rathael subit une attaque ennemie
+  (`glaciationOnHit(counters,turn)`, max 2/tour + max 5, appelé dans `EnemyAttackModal.submit` ; clés internes
+  `glaciationTurn`/`glaciationTurnAt`) ; le stepper reste un override manuel. `cast` gère **`selfBuffFlat`** (buff
+  plat, ex. Mur de Givre +30 AR/RM) et **`counterBump`** (incrément conditionnel de compteur au cast) ; l'`eff` de
+  la page Combat inclut les `skillBuffs` (aligné fiche/équip). Visible des 3 rôles, sélecteur
   de perso pour le staff. Logique pure + testée dans `game-logic.js`. **Plateau partagé** : bandeau
   ennemis en lecture seule (`useMJEnemies`) + sélecteur de **cible** ; le cast d'une comp à dégâts
   avec cible **roule le crit/surcrit** (`rollCrit`) et **snapshot la léthalité** (`eff.letha`) dans

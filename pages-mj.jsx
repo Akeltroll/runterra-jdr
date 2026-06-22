@@ -259,7 +259,7 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
   );
 }
 
-function EnemyAttackModal({ enemy, stOf, onClose }) {
+function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
   const toast = useToast();
   const [amount, setAmount] = useState(String(enemy.atk || 0));
   const [type, setType] = useState('physique');
@@ -269,10 +269,19 @@ function EnemyAttackModal({ enemy, stOf, onClose }) {
     const raw = Math.max(0, parseInt(amount, 10) || 0);
     const c = CHARACTERS.find(x => x.id === targetId);
     if (!c || raw <= 0) { onClose(); return; }
-    const L = mjLive(c, stOf(c.id));
+    const st = stOf(c.id);
+    const L = mjLive(c, st);
     const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag });
     const res = applyDamageToPools({ hpCur: L.hp, shield: L.shield }, degats);
     window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
+    // Passif Rathael — Chair gelée : +1 charge de Glaciation quand il subit des dégâts (max 2/tour, max 5).
+    if (c.id === 'rathael' && degats > 0) {
+      const gp = glaciationOnHit(st && st.counters, turn);
+      if (gp) {
+        window.RTDB.updatePath(`${charPath(c.id)}/counters`, gp);
+        pushLog(`<b>${c.name}</b> gagne une charge de Glaciation (${gp.glaciation}/5)`, 'buff');
+      }
+    }
     toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
       res.ko ? 'debuff' : 'gold');
     pushLog(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`, res.ko ? 'debuff' : 'gold');
@@ -537,7 +546,7 @@ function MJPage({ go }) {
       {!active && !decided && <SessionStartModal onStart={() => { start(); setDecided(true); }} onVisit={() => setDecided(true)} />}
       {rewards && <SessionRewardsModal onLoot={() => go('inv')} onCancel={() => setRewards(false)} onDone={() => { setRewards(false); close(); }} />}
       {full && <FullScreenSheet char={full} onClose={() => setFull(null)} />}
-      {attacker && <EnemyAttackModal enemy={attacker} stOf={stOf} onClose={() => setAttacker(null)} />}
+      {attacker && <EnemyAttackModal enemy={attacker} stOf={stOf} turn={turn} onClose={() => setAttacker(null)} />}
     </div>
   );
 }

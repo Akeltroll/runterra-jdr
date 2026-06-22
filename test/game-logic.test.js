@@ -609,6 +609,20 @@ test('sumPassiveMods Rathael : +5%/charge des AR/RM de base (flat depuis base)',
   // sans base fourni → pas de bonus calculable
   assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 3 }, 2), {});
 });
+test('glaciationOnHit : +1 charge par coup, plafond 2/tour et 5 total', () => {
+  // 1er coup du tour 1 : 0 → 1
+  assert.deepEqual(L.glaciationOnHit({}, 1), { glaciation: 1, glaciationTurn: 1, glaciationTurnAt: 1 });
+  // 2e coup du même tour : 1 → 2
+  assert.deepEqual(L.glaciationOnHit({ glaciation: 1, glaciationTurn: 1, glaciationTurnAt: 1 }, 1),
+    { glaciation: 2, glaciationTurn: 2, glaciationTurnAt: 1 });
+  // 3e coup du même tour : bloqué (max 2/tour)
+  assert.equal(L.glaciationOnHit({ glaciation: 2, glaciationTurn: 2, glaciationTurnAt: 1 }, 1), null);
+  // nouveau tour : le quota par tour repart de 0
+  assert.deepEqual(L.glaciationOnHit({ glaciation: 2, glaciationTurn: 2, glaciationTurnAt: 1 }, 2),
+    { glaciation: 3, glaciationTurn: 1, glaciationTurnAt: 2 });
+  // au max total (5) : plus rien
+  assert.equal(L.glaciationOnHit({ glaciation: 5, glaciationTurnAt: 3 }, 4), null);
+});
 test('enemyPublicView : caché (défaut) = nom seul, aucune barre', () => {
   assert.deepEqual(L.enemyPublicView({ hpCur: 70, hpMax: 100 }),
     { mode: 'hidden', ko: false, showBar: false, pct: null, text: '' });

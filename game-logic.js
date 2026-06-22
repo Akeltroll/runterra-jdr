@@ -484,6 +484,19 @@
     return Math.floor(base * mult);
   }
 
+  /* Passif Rathael : +1 charge de Glaciation quand il SUBIT des dégâts (max 2/tour, max 5 total).
+     Le quota par tour est suivi via glaciationTurnAt (n° de tour du dernier décompte) +
+     glaciationTurn (nombre gagné ce tour-là). Renvoie un patch counters, ou null si rien à faire. */
+  function glaciationOnHit(counters, turn) {
+    counters = counters || {};
+    turn = Math.max(1, turn | 0);
+    var charges = Math.max(0, Math.min(5, counters.glaciation | 0));
+    if (charges >= 5) return null;                       // déjà au max total
+    var perTurn = (counters.glaciationTurnAt === turn) ? Math.max(0, counters.glaciationTurn | 0) : 0;
+    if (perTurn >= 2) return null;                       // déjà 2 charges gagnées ce tour
+    return { glaciation: charges + 1, glaciationTurn: perTurn + 1, glaciationTurnAt: turn };
+  }
+
   /* Passif calculable → mods plats (mergés dans computeEffective).
      Elias (AD/charge, plat) et Rathael (Armure/RM +5%/charge des stats de BASE). */
   function sumPassiveMods(charId, counters, level, base) {
@@ -595,7 +608,7 @@
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
-    dmgRathaelC1,
+    dmgRathaelC1, glaciationOnHit,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
