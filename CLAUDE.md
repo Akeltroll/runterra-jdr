@@ -48,7 +48,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade, figée au cap).
   Combat (vue MJ) : `mitigateDamage`
   (armure/resmag, AR-120, **léthalité** réduit AR/RM sans passer sous 0, brut sans réduction) +
-  `applyDamageToPools` (bouclier puis HP, KO) — reproduit le moteur Excel. **Crit/surcrit (§6.3)** :
+  `applyDamageToPools` (bouclier puis HP, KO) — reproduit le moteur Excel. **Visibilité PV ennemis** :
+  `enemyPublicView(enemy)` (pure, testée) = ce que voient les joueurs selon `enemy.reveal` ('hidden'=nom seul /
+  'bar'=barre figée à `revealPct`, ne suit pas les vrais dégâts / 'exact'=barre live + PV chiffrés) ; KO toujours signalé.
+  **Crit/surcrit (§6.3)** :
   `critInfo(critPct)` (paliers garantis + chance fractionnaire, affichage) + `rollCrit(critPct,dcrit,rng)`
   (≥100 % = crit garanti, +50 % Dég. Crit par palier ; `rng` injectable).
 - `auth.js` — logique d'auth pure (UMD) : `usernameToEmail`, `ROLES`, `isStaff`,
@@ -116,7 +119,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (inventaire éditable, upload d'image inclus). Grille **responsive** (plus de scroll
   horizontal). **Section Ennemis** (désormais **partagés en Firebase** `combat/enemies`, lecture
   inscrits/écriture staff) : `useMJEnemies` (migré localStorage→Firebase, API inchangée),
-  `EnemyCard` (HP/mana/**armure/resmag** édition inline, « Subir » = dégâts joueurs→ennemi),
+  `EnemyCard` (HP/mana/**armure/resmag** édition inline, « Subir » = dégâts joueurs→ennemi ; **contrôle 👁 Joueurs**
+  Caché/Barre/Exact + presets % en mode Barre → écrit `reveal`/`revealPct`),
   `EnemyAttackModal` (ennemi→joueur : `mitigateDamage`+`applyDamageToPools`, écrit `hpCur`/`shield`
   du joueur ciblé en Firebase, KO à 0). **Section « Attaques en attente »** (`PendingHitsPanel`,
   file `combat/pendingHits`) : un joueur cast une comp à dégâts → propose une attaque sur un ennemi
@@ -242,7 +246,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     { id, cat, name, sub, qty, ic, img, type, mods }
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
 /campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
-/campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note } ; lecture inscrits, écriture staff
+/campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, reveal, revealPct } ; lecture inscrits, écriture staff
+                                              reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
 /campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, crit, dcrit, targetId, ts } ; crit roulé au cast ; le MJ ajuste+applique
 /campaign/runeterra/combat/log/{id}   ← journal de combat PARTAGÉ { id, ts, text, kind:'gold'|'buff'|'debuff' } ; lecture+écriture tout inscrit ; ~30 derniers ; vidé par « ⟲ Combat »
 ```
