@@ -271,6 +271,7 @@ function SheetBody({ char, variant }) {
   const { role } = useAuthIdentity();
   const canEdit = isStaff(role);   // joueur = inventaire en lecture seule ; MJ/admin = édition
   const { state, setField, setBuff, setMod, setInvItem, removeInvItem } = useCharState(char.id);
+  const { turn } = useSharedTurn();
   useEffect(() => {
     // migration unique (marqueur invInit) : amorce l'inventaire si absent, une seule
     // fois — évite de re-remplir les objets par défaut si le joueur vide son inventaire.
@@ -294,7 +295,7 @@ function SheetBody({ char, variant }) {
   const effLevel = (state.level != null ? state.level : char.level) || 1;
   const sheetBase = charBaseStats(char, state);
   const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel, sheetBase);
-  const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});
+  const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);
   const eff = computeEffective(sheetBase, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   // Arme affichée = celle équipée dans le slot « Arme principale » (live), reliée à WEAPONS
   // par son nom ; sinon item brut synthétisé ; sinon repli sur l'arme par défaut du perso.

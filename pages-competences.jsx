@@ -172,7 +172,7 @@ function CompetencesBody({ char, staff }) {
   const itemMods = sumItemMods(state.equipment, state.inventory);
   const base = charBaseStats(char, state);
   const passiveMods = sumPassiveMods(char.id, counters, level, base);
-  const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});
+  const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);
   const eff = computeEffective(base, state.modifiers, [], mergeMods(mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods), skillBuffMods));
   const wType = weaponTypeOf(state, char);
   const baseCtx = { counters, level, wType, hpMax: base.hp };
@@ -326,7 +326,7 @@ function CompetencesBody({ char, staff }) {
         </div>
       )}
       {(() => {
-        const sb = sumSkillBuffs(state.skillBuffs || {});
+        const sb = sumSkillBuffs(state.skillBuffs || {}, turn);
         const keys = Object.keys(sb);
         if (!keys.length) return null;
         return (
