@@ -42,9 +42,11 @@ function useCharState(charId) {
     window.RTDB.updatePath(`${charPath(charId)}/counters`, { [key]: Math.max(0, value | 0) || null }), [charId]);
   const setCooldown = useCallback((skillId, readyAt) =>
     window.RTDB.updatePath(`${charPath(charId)}/cooldowns`, { [skillId]: readyAt || null }), [charId]);
-  // Buff sur soi : snapshot des mods plats d'une compétence (effacé par « ⟲ Combat »).
-  const setSkillBuff = useCallback((skillId, mods) =>
-    window.RTDB.updatePath(`${charPath(charId)}/skillBuffs`, { [skillId]: mods || null }), [charId]);
+  // Buff sur soi : snapshot des mods plats d'une compétence + durée optionnelle
+  // (until = n° de tour de fin ; null = permanent jusqu'au « ⟲ Combat »). Effacé par « ⟲ Combat ».
+  const setSkillBuff = useCallback((skillId, mods, until) =>
+    window.RTDB.updatePath(`${charPath(charId)}/skillBuffs`,
+      { [skillId]: mods ? { mods, until: until != null ? until : null } : null }), [charId]);
   // Respec : écrit les 4 caracs + le verrou atomiquement (sanitisé en entiers ≥ 0).
   const setAttrs = useCallback((attrs, locked) => {
     const a = attrs || {};

@@ -71,7 +71,7 @@ function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
 }
 
 function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast, locked, minLevel }) {
-  const [vars, setVars] = useState({ firstHit: false, furtif: false, side: 'droite', moved: 0, nbTargets: 1 });
+  const [vars, setVars] = useState({ firstHit: false, furtif: false, side: 'droite', moved: 0, nbTargets: 1, duration: (sk.duration ? sk.duration.min : 1) });
   if (locked) {
     return (
       <div className="panel" style={{ borderLeft: '3px solid var(--line-strong)', opacity: 0.5 }}>
@@ -106,7 +106,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
       </div>
       <div style={{ padding: '10px 14px' }}>
         {/* Contrôles de variables d'attaque */}
-        {needed.length > 0 && (
+        {(needed.length > 0 || sk.duration) && (
           <div className="row gap-3" style={{ flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
             {needed.includes('firstHit') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={vars.firstHit} onChange={e => setVars(s => ({ ...s, firstHit: e.target.checked }))} /> 1er coup (+25%)</label>}
             {needed.includes('furtif') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={vars.furtif} onChange={e => setVars(s => ({ ...s, furtif: e.target.checked }))} /> Camouflé (×1,5)</label>}
@@ -119,6 +119,13 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
             )}
             {needed.includes('moved') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Cases <input type="number" min="0" value={vars.moved} onChange={e => setVars(s => ({ ...s, moved: Math.max(0, e.target.value | 0) }))} style={{ width: 56, background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }} /></label>}
             {needed.includes('nbTargets') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Cibles <input type="number" min="1" value={vars.nbTargets} onChange={e => setVars(s => ({ ...s, nbTargets: Math.max(1, e.target.value | 0) }))} style={{ width: 56, background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }} /></label>}
+            {sk.duration && (
+              <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Durée
+                <select value={vars.duration} onChange={e => setVars(s => ({ ...s, duration: Math.max(sk.duration.min, Math.min(sk.duration.max, e.target.value | 0)) }))} style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }}>
+                  {Array.from({ length: sk.duration.max - sk.duration.min + 1 }, (_, i) => sk.duration.min + i).map(n => <option key={n} value={n}>{n} tour{n > 1 ? 's' : ''}</option>)}
+                </select>
+              </label>
+            )}
           </div>
         )}
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -217,12 +224,19 @@ function CompetencesBody({ char, staff }) {
       const flat = {};
       if (sk.selfBuff) Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (base[k] || 0)); if (f) flat[k] = (flat[k] || 0) + f; });
       if (sbf) Object.keys(sbf).forEach(k => { const f = Math.round(sbf[k]); if (f) flat[k] = (flat[k] || 0) + f; });
-      setSkillBuff(sk.id, flat);
+      // Durée optionnelle : until = tour de fin (turn + durée − 1). Sans sk.duration → permanent (null).
+      let until = null, durTxt = '';
+      if (sk.duration) {
+        const d = Math.max(sk.duration.min, Math.min(sk.duration.max, (ctx.duration | 0) || sk.duration.min));
+        until = turn + (d - 1);
+        durTxt = ` (${d} tour${d > 1 ? 's' : ''})`;
+      }
+      setSkillBuff(sk.id, flat, until);
       if (flat.hp) {
         const newMax = (eff.hp || 0) + flat.hp;
         setField('hpCur', Math.min((state.hpCur || 0) + flat.hp, newMax));
       }
-      logParts.push(flat.hp ? `+${flat.hp} PV` : 'effet de combat');
+      logParts.push((flat.hp ? `+${flat.hp} PV` : 'effet de combat') + durTxt);
       toast(`<b>${char.name}</b> — ${sk.name} actif (effet de combat)`, 'gold');
     }
     // Bouclier au cast (one-shot, ajouté au pool).
