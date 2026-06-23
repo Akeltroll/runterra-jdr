@@ -76,7 +76,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `useSharedInventory` (inventaire commun), `useSharedCoins` (monnaie commune), `useAuthIdentity`
   (identité + `/users/{uid}`, auto-inscription), `useAllUsers`, `setUserAssignment`,
   `seedIfEmpty(role)` (réservé staff). Compétences : `setCounter`/`setCooldown`/**`setSkillBuff`** (sur
-  `useCharState` ; `setSkillBuff(skillId, mods)` = buff sur soi, snapshot de mods plats).
+  `useCharState` ; `setSkillBuff(skillId, mods, until)` = buff sur soi, snapshot de mods plats +
+  durée optionnelle (`until` = n° de tour de fin ; null = permanent jusqu'au ⟲ Combat).
   **XP** : orchestrateur `addXp(charId, gain)` (async, écriture staff : `getSnapshot`→`applyXp`→écrit
   `{level, xp}`, `pushLog` au level-up, retourne `{level, xp, levelsGained}` pour le toast appelant) ;
   `grantCoins(charId, patch)` (don additif d'argent : `getSnapshot`→ajoute `{plat,or,arg,cuiv}`→écrit ; récompense de séance).
@@ -192,8 +193,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (`glaciationOnHit(counters,turn)`, +1/coup, max 5, tout stackable en 1 tour ; appelé dans `EnemyAttackModal.submit` ;
   marque `glaciationHitTurn`). **Perte auto −3** en fin de tour s'il n'a pas été touché (`glaciationDecay(counters,
   endingTurn)`, dans `useSharedTurn.nextTurn`). Le stepper reste un override manuel. `cast` gère **`selfBuffFlat`** (buff
-  plat, ex. Mur de Givre +30 AR/RM) et **`counterBump`** (incrément conditionnel de compteur au cast) ; l'`eff` de
-  la page Combat inclut les `skillBuffs` (aligné fiche/équip). Visible des 3 rôles, sélecteur
+  plat, ex. Mur de Givre +20 AR/RM au niv 2) et **`counterBump`** (incrément conditionnel de compteur au cast) ;
+  l'`eff` de la page Combat inclut les `skillBuffs` (aligné fiche/équip). **Durée de buff** : une comp avec
+  `duration:{min,max}` (ex. Mur de Givre 1/2 tours) affiche un sélecteur sur sa carte ; `cast` snapshote
+  `until = turn + (durée−1)` dans le buff → auto-expiration (filtrée par `sumSkillBuffs(buffs, turn)`, sans purge).
+  Visible des 3 rôles, sélecteur
   de perso pour le staff. Logique pure + testée dans `game-logic.js`. **Plateau partagé** : bandeau
   ennemis en lecture seule (`useMJEnemies`) + sélecteur de **cible** ; le cast d'une comp à dégâts
   avec cible **roule le crit/surcrit** (`rollCrit`) et **snapshot la léthalité** (`eff.letha`) dans
@@ -256,7 +260,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     attrsLocked: true   ← verrou après respec joueur unique ; le staff peut éditer/déverrouiller (setAttrsLocked)
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
-    skillBuffs: { [skillId]: { [stat]: n } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; effacés par « ⟲ Combat »
+    skillBuffs: { [skillId]: { mods:{ [stat]: n }, until:<n° de tour>|null } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; until = tour de fin (auto-expiration via sumSkillBuffs(buffs,turn), ex. Mur de Givre 1/2 tours), null = permanent ; ancienne forme plate { [stat]:n } encore lue (compat) ; effacés par « ⟲ Combat »
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
     { id, cat, name, sub, qty, ic, img, type, mods }
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
