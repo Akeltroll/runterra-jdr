@@ -577,14 +577,23 @@
     return {};
   }
 
-  /* Buffs sur soi (compétences) : somme des mods plats snapshotés au cast,
-     toutes compétences confondues. Mergé dans computeEffective (couche items). */
-  function sumSkillBuffs(skillBuffs) {
+  /* Buffs sur soi (compétences) : somme des mods plats snapshotés au cast.
+     Forme d'une entrée : ancienne plate { [stat]: n } (compat), ou nouvelle
+     { mods:{ [stat]: n }, until:<n° de tour>|null } (avec durée).
+     currentTurn (optionnel) : si fourni, un buff dont until != null && currentTurn > until
+     est expiré → ignoré. Sans currentTurn, aucun filtrage temporel.
+     Mergé dans computeEffective (couche items). */
+  function sumSkillBuffs(skillBuffs, currentTurn) {
     skillBuffs = skillBuffs || {};
+    const hasTurn = Number.isFinite(currentTurn);
     const out = {};
     for (const id of Object.keys(skillBuffs)) {
-      const m = skillBuffs[id] || {};
-      for (const k of Object.keys(m)) { const v = Number(m[k]) || 0; if (v) out[k] = (out[k] || 0) + v; }
+      const e = skillBuffs[id] || {};
+      const isNew = e && typeof e === 'object' && e.mods && typeof e.mods === 'object';
+      const mods = isNew ? e.mods : e;
+      const until = isNew ? e.until : null;
+      if (hasTurn && until != null && currentTurn > until) continue; // expiré
+      for (const k of Object.keys(mods)) { const v = Number(mods[k]) || 0; if (v) out[k] = (out[k] || 0) + v; }
     }
     return out;
   }

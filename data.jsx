@@ -408,11 +408,12 @@ const SKILLS = {
           + 'Sans CD. Peut critiquer. En état Âme fendue : la cible est ralentie 1 tour.' },
       { id: 'mur_de_givre', name: 'Mur de Givre', mana: 50, cd: 3, kind: 'cd',
         dmg: () => null,
+        duration: { min: 1, max: 2 },
         selfBuffFlat: (eff, c) => { const v = rathaelC2Buff(c.level); return { armure: v, resmag: v }; },
         counterBump: { key: 'glaciation', by: 1, min: 1, max: 5 },
-        note: 'Inamovible ce tour, +Armure / +Résistance magique (15 +5/2 niv, soit 20 au niv 2). Provoque un ennemi '
-          + 'adjacent (le forçant à cibler Rathael). Si ≥1 charge de Glaciation : +1 charge. En état Âme fendue : '
-          + 'immobilise les ennemis adjacents.' },
+        note: 'PE = Pendant l\'Effet (choisis 1 ou 2 tours au lancement). PE : inamovible, +Armure / +Résistance '
+          + 'magique (15 +5/2 niv, soit 20 au niv 2) ; un ennemi adjacent est provoqué (forcé de cibler Rathael) ; '
+          + 'en état Âme fendue, immobilise les ennemis adjacents. Si ≥1 charge de Glaciation : +1 charge.' },
       { id: 'eclat_ame', name: "Éclat de l'âme", mana: 60, cd: 3, kind: 'cd',
         dmg: (eff, c) => dmgRathaelC3(eff, (c.counters && c.counters.glaciation) || 0, c.level),
         counterSet: { glaciation: 0 },

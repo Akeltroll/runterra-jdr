@@ -75,6 +75,7 @@ function parseConsumableEffect(it) {
 /* ---- Corps de la page pour un perso donné ---- */
 function EquipBody({ char }) {
   const { state, setEquipment, setField, setInvItem, removeInvItem } = useCharState(char.id);
+  const { turn } = useSharedTurn();
   const { role } = useAuthIdentity();
   const staff = isStaff(role);   // joueur : équiper/utiliser/transférer seulement ; édition réservée au MJ/admin
   const { items: sharedItems } = useSharedInventory();
@@ -156,7 +157,7 @@ function EquipBody({ char }) {
   const equipBase = charBaseStats(char, state);
   const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel, equipBase);
   const bonuses = mergeMods(mergeMods(sumItemMods(equipment, itemsById), runeMods), passiveMods);  // items + runes + passif -> vert
-  const skillBuffMods = sumSkillBuffs(state.skillBuffs || {});  // buffs de compétence -> orange
+  const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);  // buffs de compétence -> orange
   const eff = computeEffective(equipBase, state.modifiers, activeBuffs, mergeMods(bonuses, skillBuffMods));
   const sval = (k, base, pct) => (pct ? (base || 0).toFixed(1) + '%' : invFmt(base || 0));
   const scol = (k) => (skillBuffMods[k] ? 'var(--skillbuff)' : (bonuses[k] ? '#9fd07a' : '#e9dcc4'));

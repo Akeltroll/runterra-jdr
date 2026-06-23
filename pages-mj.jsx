@@ -10,7 +10,7 @@ const ENEMY_FLD = { background:'var(--bg-inset)', color:'var(--ink)', border:'1p
 /* Compteur de tour : migré en `useSharedTurn` (Firebase, partagé) — voir data-state.jsx. */
 
 /* Fusionne la définition du perso (règles) avec son état live (Firebase). */
-function mjLive(c, st) {
+function mjLive(c, st, turn) {
   const buffs = st ? Object.keys(st.buffs || {}) : (c.buffs || []);
   const itemMods = st ? sumItemMods(st.equipment, st.inventory) : {};
   const runesSt  = (st && st.runes) || {};
@@ -19,7 +19,7 @@ function mjLive(c, st) {
   const effLevel = (st && st.level != null ? st.level : c.level) || 1;
   const base = charBaseStats(c, st);
   const passiveMods = st ? sumPassiveMods(c.id, st.counters || {}, effLevel, base) : {};
-  const skillBuffMods = st ? sumSkillBuffs(st.skillBuffs || {}) : {};
+  const skillBuffMods = st ? sumSkillBuffs(st.skillBuffs || {}, turn) : {};
   const eff = computeEffective(base, st ? st.modifiers : c.modifiers, buffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   const hp = st ? st.hpCur : Math.round(c.hpCur * base.hp);
   const mana = st ? st.manaCur : Math.round(c.manaCur * base.mana);
@@ -67,7 +67,7 @@ function MJSidebarRow({ c, st, active, onClick }) {
 }
 
 function MJCompactCard({ c, st, turn, onFull }) {
-  const L = mjLive(c, st);
+  const L = mjLive(c, st, turn);
   const toast = useToast();
   const [xpIn, setXpIn] = useState('');
   const effLevel = (st && st.level != null ? st.level : c.level) || 1;
@@ -284,7 +284,7 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
     const c = CHARACTERS.find(x => x.id === targetId);
     if (!c || raw <= 0) { onClose(); return; }
     const st = stOf(c.id);
-    const L = mjLive(c, st);
+    const L = mjLive(c, st, turn);
     const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag }, lethaNum);
     const res = applyDamageToPools({ hpCur: L.hp, shield: L.shield }, degats);
     window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
