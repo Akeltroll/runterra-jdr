@@ -461,6 +461,16 @@ test('sumSkillBuffs somme les mods plats par compétence', () => {
   assert.deepEqual(L.sumSkillBuffs(null), {});
 });
 
+test('sumSkillBuffs : nouvelle forme {mods,until} + filtrage par tour', () => {
+  const buffs = { mur_de_givre: { mods: { armure: 20, resmag: 20 }, until: 3 } };
+  assert.deepEqual(L.sumSkillBuffs(buffs, 3), { armure: 20, resmag: 20 }); // tour <= until : actif
+  assert.deepEqual(L.sumSkillBuffs(buffs, 4), {});                          // tour > until : expiré
+  assert.deepEqual(L.sumSkillBuffs(buffs), { armure: 20, resmag: 20 });     // sans tour : pas de filtre
+  assert.deepEqual(L.sumSkillBuffs({ x: { mods: { ad: 5 }, until: null } }, 99), { ad: 5 }); // until null = permanent
+  // mélange ancienne (plate) + nouvelle forme, filtrage actif
+  assert.deepEqual(L.sumSkillBuffs({ a: { ad: 10 }, b: { mods: { ad: 5 }, until: 2 } }, 1), { ad: 15 });
+});
+
 /* --- Déblocage par niveau : skillUnlocked --- */
 test('skillUnlocked : active n° i requiert niveau i+1', () => {
   assert.equal(L.skillUnlocked(0, 1), true);   // C1 niv 1
