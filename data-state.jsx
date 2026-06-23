@@ -229,6 +229,29 @@ function useSharedInventory() {
   return { items, setItem, removeItem }; // items = { id: item } | null
 }
 
+/* Catalogue d'objets de base PARTAGÉ (éditable par le staff depuis le picker).
+   Lecture tout inscrit, écriture staff. Amorçage unique depuis ITEM_CATALOG. */
+const CATALOG = `${CAMPAIGN}/catalog`;
+const CATALOG_INIT = `${CAMPAIGN}/catalogInit`;
+function useItemCatalog(canSeed) {
+  const [map, setMap] = useState(null);             // null = en chargement ; {} = vide chargé
+  const [inited, setInited] = useState(undefined);  // undefined = inconnu
+  useEffect(() => window.RTDB.subscribePath(CATALOG, (v) => setMap(v || {})), []);
+  useEffect(() => window.RTDB.subscribePath(CATALOG_INIT, (v) => setInited(!!v)), []);
+  // Amorçage unique : staff + jamais amorcé + vide → sème depuis ITEM_CATALOG.
+  useEffect(() => {
+    if (!canSeed) return;
+    if (inited === undefined || map === null) return;     // pas encore chargé
+    if (inited || Object.keys(map).length) return;        // déjà amorcé / non vide
+    window.RTDB.updatePath(CATALOG, buildCatalogSeed(window.ITEM_CATALOG || []));
+    window.RTDB.setPath(CATALOG_INIT, true);
+  }, [canSeed, inited, map]);
+  const catalog = catalogArray(map, !!inited, window.ITEM_CATALOG || []);
+  const setCatalogItem    = useCallback((id, item) => window.RTDB.updatePath(CATALOG, { [id]: item }), []);
+  const removeCatalogItem = useCallback((id)        => window.RTDB.updatePath(CATALOG, { [id]: null }), []);
+  return { catalog, seeded: !!inited, setCatalogItem, removeCatalogItem };
+}
+
 /* Monnaie partagée (coffre commun). */
 const SHARED_COINS = `${CAMPAIGN}/sharedCoins`;
 function useSharedCoins() {
@@ -310,7 +333,7 @@ function setUserAssignment(uid, role, charId) {
 }
 
 Object.assign(window, {
-  useCharState, useAllCharStates, useSharedInventory, useSharedCoins,
+  useCharState, useAllCharStates, useSharedInventory, useSharedCoins, useItemCatalog, CATALOG,
   useAuthIdentity, useAllUsers, setUserAssignment,
   seedIfEmpty, charPath, CAMPAIGN, SHARED_INV, SHARED_COINS, moveItem, moveCoins,
   useSharedTurn, COMBAT_TURN,
