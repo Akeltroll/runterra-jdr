@@ -29,6 +29,18 @@
             ".validate": "newData.isNumber() && newData.val() >= 0"
           }
         },
+        "catalog": {
+          ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+          "$itemId": {
+            ".validate": "newData.hasChildren(['id', 'name', 'cat'])"
+          }
+        },
+        "catalogInit": {
+          ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+          ".validate": "newData.isBoolean()"
+        },
         "combat": {
           ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
           "turn": {
