@@ -16,23 +16,20 @@
    `wnone` (dans grid-template-areas) reste une case vide de remplissage. */
 const EQUIP_SLOTS = {
   casque:         { label:'Casque',          accepts:['helmet'],                    area:'casque'   },
-  epaules:        { label:'Épaules',         accepts:['shoulders'],                 area:'epaules'  },
-  cuirasse:       { label:'Cuirasse',        accepts:['chest'],                     area:'cuirasse' },
-  gants:          { label:'Gants',           accepts:['gloves'],                    area:'gants'    },
+  armure:         { label:'Armure',          accepts:['shoulders','chest','gloves','pants'], area:'armure' },
   armePrincipale: { label:'Arme principale', accepts:['weapon'],                    area:'armeP'    },
   armeSecondaire: { label:'Arme secondaire', accepts:['offhand','shield','weapon'], area:'armeS'    },
   amulette:       { label:'Amulette',        accepts:['amulet'],                    area:'amulette' },
   anneau1:        { label:'Anneau 1',        accepts:['ring'],                      area:'anneau1'  },
   anneau2:        { label:'Anneau 2',        accepts:['ring'],                      area:'anneau2'  },
   ceinture:       { label:'Ceinture',        accepts:['belt'],                      area:'ceinture' },
-  pantalon:       { label:'Pantalon',        accepts:['pants'],                     area:'pantalon' },
   accessoire1:    { label:'Accessoire 1',    accepts:['accessory'],                 area:'acc1'     },
   accessoire2:    { label:'Accessoire 2',    accepts:['accessory'],                 area:'acc2'     },
   accessoire3:    { label:'Accessoire 3',    accepts:['accessory'],                 area:'acc3'     },
   bottes:         { label:'Bottes',          accepts:['boots'],                     area:'bottes'   },
 };
 const EQUIP_GRID_AREAS =
-  "'casque armeP armeP amulette' 'epaules armeP armeP anneau1' 'cuirasse armeP armeP anneau2' 'gants armeS armeS ceinture' 'acc1 armeS armeS pantalon' 'acc2 acc3 wnone bottes'";
+  "'casque armeP armeP amulette' 'armure armeP armeP anneau1' 'armure armeP armeP anneau2' 'armure armeS armeS ceinture' 'acc1 armeS armeS bottes' 'acc2 acc3 wnone wnone'";
 
 /* Portrait réel par perso (id interne -> fichier ATH/Perso). */
 const EQUIP_PORTRAITS = {
@@ -109,6 +106,23 @@ function EquipBody({ char }) {
         ? state.coins : buildDefaultState(char).coins;
       window.RTDB.updatePath(charPath(char.id), { coins, coinsInit: true });
     }
+  }, [state, char.id]);
+
+  // Migration unique : fusion des 4 anciens slots d'armure en un seul `armure`.
+  // Sans nettoyage, les clés obsolètes resteraient sommées par sumItemMods (bonus fantômes).
+  useEffect(() => {
+    if (!state || state.armureInit !== undefined) return;
+    const eq = state.equipment || {};
+    const OLD = ['epaules', 'cuirasse', 'gants', 'pantalon'];
+    const hasOld = OLD.some(k => eq[k]);
+    const patch = {};
+    if (hasOld && !eq.armure) {
+      const firstFilled = OLD.find(k => eq[k]);
+      if (firstFilled) patch.armure = eq[firstFilled];
+    }
+    OLD.forEach(k => { if (eq[k] !== undefined) patch[k] = null; });
+    if (Object.keys(patch).length) setEquipment(patch);
+    window.RTDB.updatePath(charPath(char.id), { armureInit: true });
   }, [state, char.id]);
 
   if (!state) return <div style={{ padding:40 }} className="dim">Chargement…</div>;
