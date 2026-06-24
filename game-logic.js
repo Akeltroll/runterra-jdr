@@ -170,6 +170,28 @@
     return { patch: fillStacks(items, entry, qty) };
   }
 
+  /* Amorçage du catalogue partagé : transforme la liste ITEM_CATALOG (sans id)
+     en map { id: {id,cat,name,sub,ic,img,type,mods} } prête pour Firebase. */
+  function buildCatalogSeed(entries) {
+    entries = entries || [];
+    var out = {};
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i] || {};
+      var id = newItemId();
+      out[id] = { id: id, cat: e.cat || 'Butin', name: e.name || 'Objet', sub: e.sub || '',
+        ic: e.ic || '', img: e.img || '', type: e.type || '', mods: e.mods || {} };
+    }
+    return out;
+  }
+
+  /* Catalogue exposé à l'UI : si amorcé (inited) → liste live triée (cat puis nom) ;
+     sinon repli sur le catalogue en dur (chargement / pré-amorçage). */
+  function catalogArray(map, inited, fallback) {
+    if (!inited) return (fallback || []).slice();
+    return Object.keys(map || {}).map(function (k) { return map[k]; })
+      .sort(function (a, b) { return ((a.cat || '') + (a.name || '')).localeCompare((b.cat || '') + (b.name || '')); });
+  }
+
   /* --- Liste des types d'emplacements d'équipement --- */
   var EQUIP_TYPES = [
     { value:'helmet',    label:'Casque' },
@@ -687,7 +709,7 @@
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,
     applyHealMods, buildDefaultState, makeItem, newItemId,
     EQUIP_TYPES, planItemTransfer,
-    STACK_MAX, fillStacks, planItemAdd,
+    STACK_MAX, fillStacks, planItemAdd, buildCatalogSeed, catalogArray,
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,

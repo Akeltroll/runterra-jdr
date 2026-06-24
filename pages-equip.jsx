@@ -452,7 +452,7 @@ function EquipBody({ char }) {
         </div>
       )}
       {catalog && (
-        <ItemCatalogPicker
+        <ItemCatalogPicker staff={staff}
           onPick={(entry, n) => {
             const { patch } = planItemAdd(inventoryForGrid, entry, n);
             Object.entries(patch).forEach(([id, it]) => setInvItem(id, it));

@@ -723,3 +723,29 @@ test('computeAttack : dmg = round(base * critMult)', () => {
   assert.equal(calc(100, 2), 200);    // crit base (dcrit 200)
   assert.equal(calc(100, 2.5), 250);  // surcrit 1 palier
 });
+
+/* --- Catalogue d'objets partagé : buildCatalogSeed / catalogArray --- */
+test('buildCatalogSeed : map {id:item}, ids uniques, champs préservés + défauts', () => {
+  const src = [{ cat: 'Consommables', name: 'Potion', sub: 'soin', ic: '🧪', img: 'a.webp', type: '', mods: { hp: 5 } },
+               { cat: 'Butin', name: 'Carte' }];
+  const map = L.buildCatalogSeed(src);
+  const keys = Object.keys(map);
+  assert.equal(keys.length, 2);
+  assert.equal(new Set(keys).size, 2);                 // ids uniques
+  assert.equal(map[keys[0]].id, keys[0]);              // id = clé
+  const pot = Object.values(map).find(e => e.name === 'Potion');
+  assert.equal(typeof pot.id, 'string');
+  assert.equal(pot.cat, 'Consommables');
+  assert.deepEqual(pot.mods, { hp: 5 });
+  const carte = Object.values(map).find(e => e.name === 'Carte');
+  assert.deepEqual(carte.mods, {});                    // défauts appliqués
+  assert.equal(carte.sub, '');
+});
+
+test('catalogArray : repli si non amorcé, live trié si amorcé', () => {
+  const fb = [{ cat: 'Butin', name: 'X' }];
+  assert.deepEqual(L.catalogArray({}, false, fb), fb);  // non amorcé -> repli
+  assert.deepEqual(L.catalogArray({}, true, fb), []);   // amorcé vide -> vide (pas de repli)
+  const map = { i2: { id: 'i2', cat: 'Butin', name: 'Bbb' }, i1: { id: 'i1', cat: 'Butin', name: 'Aaa' } };
+  assert.deepEqual(L.catalogArray(map, true, fb).map(e => e.name), ['Aaa', 'Bbb']); // trié cat+nom
+});
