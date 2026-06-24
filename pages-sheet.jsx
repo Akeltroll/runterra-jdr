@@ -160,7 +160,7 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
         </div>
       </div>
       {catCat && (
-        <ItemCatalogPicker initialFilter={catCat}
+        <ItemCatalogPicker initialFilter={catCat} staff={canEdit}
           onPick={(entry, n) => {
             const { patch } = planItemAdd(inventory, entry, n);
             Object.entries(patch).forEach(([id, it]) => onSaveItem(id, it));

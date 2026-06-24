@@ -658,10 +658,14 @@ function InventoryPanel({ items, editable, onSave, onRemove, onAdd }) {
 /* --- Catalogue d'items : modal de sélection rapide (staff) ---
    Clic sur une entrée -> AmountStepper -> onPick(entry, qty).
    Le scrim est sous le zIndex de l'AmountStepper (200) pour qu'il s'affiche par-dessus. */
-function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose }) {
+function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose, staff }) {
   const [filter, setFilter] = useState(initialFilter || 'all');
-  const [picked, setPicked] = useState(null);   // { entry, x, y }
-  const list = (window.ITEM_CATALOG || []).filter(e => filter === 'all' || e.cat === filter);
+  const [picked, setPicked] = useState(null);    // { entry, x, y }
+  const [editing, setEditing] = useState(null);  // item édité (modal réutilisant InvItemRow)
+  const { catalog, seeded, setCatalogItem, removeCatalogItem } = useItemCatalog(!!staff);
+  const manage = !!staff && seeded;              // édition dispo une fois le catalogue amorcé
+  const miniBtn = { background:'var(--bg-deep)', border:'1px solid var(--line)', borderRadius:5, padding:'0 5px', fontSize:11, lineHeight:1.6, cursor:'pointer', color:'var(--ink)' };
+  const list = catalog.filter(e => filter === 'all' || e.cat === filter);
   return (
     <div className="modal-scrim" onClick={onClose}
       style={{ display:'flex', alignItems:'center', justifyContent:'center', zIndex:190 }}>
@@ -681,11 +685,18 @@ function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose }) {
         <div style={{ flex:'1 1 auto', overflowY:'auto', minHeight:0, display:'grid',
           gridTemplateColumns:'repeat(auto-fill,minmax(92px,1fr))', gap:8 }}>
           {list.map((entry, i) => (
-            <div key={i} onClick={(e) => setPicked({ entry, x:e.clientX, y:e.clientY })}
+            <div key={entry.id || i} onClick={(e) => setPicked({ entry, x:e.clientX, y:e.clientY })}
               title={entry.sub || entry.name}
-              style={{ cursor:'pointer', borderRadius:8, border:'1px solid var(--line)', padding:8,
+              style={{ position:'relative', cursor:'pointer', borderRadius:8, border:'1px solid var(--line)', padding:8,
                 display:'flex', flexDirection:'column', alignItems:'center', gap:6, textAlign:'center',
                 background:'var(--bg-inset)' }}>
+              {manage && entry.id && (
+                <div className="row gap-1" style={{ position:'absolute', top:2, right:2 }}>
+                  <button title="Éditer" style={miniBtn} onClick={(ev) => { ev.stopPropagation(); setEditing(entry); }}>✎</button>
+                  <button title="Supprimer du catalogue" style={{ ...miniBtn, color:'var(--debuff-bright,#e0463f)' }}
+                    onClick={(ev) => { ev.stopPropagation(); if (window.confirm(`Supprimer « ${entry.name} » du catalogue de base ?`)) removeCatalogItem(entry.id); }}>🗑</button>
+                </div>
+              )}
               <span style={{ width:44, height:44, display:'grid', placeItems:'center', fontSize:24, overflow:'hidden' }}>
                 {entry.img
                   ? <img src={entry.img} alt="" style={{ width:'100%', height:'100%', objectFit:'contain' }} />
@@ -696,8 +707,16 @@ function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose }) {
           ))}
         </div>
         <div className="row" style={{ justifyContent:'space-between', alignItems:'center',
-          marginTop:12, paddingTop:12, borderTop:'1px solid var(--line)' }}>
-          <button className="btn btn-sm btn-ghost" onClick={onCustom}>+ Objet personnalisé</button>
+          marginTop:12, paddingTop:12, borderTop:'1px solid var(--line)', gap:8, flexWrap:'wrap' }}>
+          <span className="row gap-2">
+            <button className="btn btn-sm btn-ghost" onClick={onCustom}>+ Objet personnalisé</button>
+            {manage && (
+              <button className="btn btn-sm btn-ghost" title="Ajouter un objet à la liste de base"
+                onClick={() => setEditing(makeItem({ cat: filter === 'all' ? 'Butin' : filter, name: 'Nouvel objet' }))}>
+                + Nouvel objet de base
+              </button>
+            )}
+          </span>
           <span className="faint" style={{ fontSize:11 }}>{list.length} objets</span>
         </div>
       </div>
@@ -706,6 +725,16 @@ function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose }) {
           label={`Ajouter combien de « ${picked.entry.name} » ?`} confirmLabel="Ajouter"
           onConfirm={(n) => { onPick(picked.entry, n); setPicked(null); }}
           onClose={() => setPicked(null)} />
+      )}
+      {editing && (
+        <div className="modal-scrim" onClick={() => setEditing(null)}
+          style={{ display:'flex', alignItems:'center', justifyContent:'center', zIndex:205 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width:'min(420px,92vw)', background:'var(--bg-deep)', border:'1px solid var(--line-gold)', borderRadius:12, padding:16 }}>
+            <InvItemRow item={editing} editable={true} startEdit={true}
+              onSave={(it) => { setCatalogItem(it.id, it); setEditing(null); }}
+              onRemove={(id) => { removeCatalogItem(id); setEditing(null); }} />
+          </div>
+        </div>
       )}
     </div>
   );
