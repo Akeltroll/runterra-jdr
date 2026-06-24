@@ -32,6 +32,31 @@ function AdminUserRow({ uid, rec }) {
   );
 }
 
+/* Gestion du catalogue d'objets partagé (campaign/runeterra/catalog) : liste CRUD
+   complète (ajouter / éditer / supprimer) réutilisant InventoryPanel. Réservé au
+   staff par les règles RTDB ; ici rendu dans la page Admin. */
+function CatalogAdminPanel() {
+  const { catalog, seeded, setCatalogItem, removeCatalogItem } = useItemCatalog(true);
+  const itemsMap = {};
+  (catalog || []).forEach((it) => { if (it && it.id) itemsMap[it.id] = it; });
+  return (
+    <div style={{ padding:'0 24px 24px' }}>
+      <h2 style={{ marginBottom:4 }}>Catalogue d'objets</h2>
+      <p className="dim" style={{ fontSize:13, marginBottom:16 }}>
+        Liste de base partagée servant à l'ajout rapide d'objets (fiches, équipement,
+        coffre commun). Ajoute, édite ou supprime ici les objets enregistrés en base.
+      </p>
+      <div className="panel" style={{ padding:'14px 16px' }}>
+        {!seeded
+          ? <div className="dim" style={{ padding:'12px 0' }}>Amorçage du catalogue…</div>
+          : <InventoryPanel items={itemsMap} editable={true}
+              onSave={(it) => setCatalogItem(it.id, it)}
+              onRemove={(id) => removeCatalogItem(id)} />}
+      </div>
+    </div>
+  );
+}
+
 function AdminPage() {
   const users = useAllUsers();
   return (
@@ -53,8 +78,9 @@ function AdminPage() {
           ))}
         </div>
       </div>
+      <CatalogAdminPanel />
     </div>
   );
 }
 
-Object.assign(window, { AdminPage, AdminUserRow });
+Object.assign(window, { AdminPage, AdminUserRow, CatalogAdminPanel });
