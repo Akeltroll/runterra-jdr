@@ -57,6 +57,55 @@ function CatalogAdminPanel() {
   );
 }
 
+/* Gestion de l'inventaire PAR PERSONNAGE (campaign/runeterra/characters/{id}/state/inventory) :
+   le staff choisit un perso et ajoute / édite / supprime ses objets directement en base.
+   Réutilise InventoryPanel + le picker catalogue (même flux que la fiche). */
+function CharInventoryAdminPanel() {
+  const [charId, setCharId] = useState(CHARACTERS[0] ? CHARACTERS[0].id : '');
+  const { state, setInvItem, removeInvItem } = useCharState(charId);
+  const [catCat, setCatCat] = useState(null);   // catégorie pré-filtrée ; null = picker fermé
+  const inventory = state.inventory;
+  const equipment = state.equipment || {};
+  const char = CHARACTERS.find((c) => c.id === charId) || {};
+  const force = (state.attrs && state.attrs.force) != null ? state.attrs.force : (char.attrs && char.attrs.force) || 0;
+  const invWeight = carriedWeight(inventory || {});
+  const invCap = carryCapacity(force, equipment, inventory || {});
+  const invOver = weightStatus(invWeight, invCap).over;
+  const selStyle = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'6px 9px', fontSize:13 };
+  return (
+    <div style={{ padding:'0 24px 24px' }}>
+      <h2 style={{ marginBottom:4 }}>Inventaire des personnages</h2>
+      <p className="dim" style={{ fontSize:13, marginBottom:16 }}>
+        Gère directement en base l'inventaire d'un personnage : ajoute (depuis le catalogue
+        ou objet personnalisé), édite ou supprime ses objets. Modifications en temps réel.
+      </p>
+      <div className="panel" style={{ padding:'14px 16px' }}>
+        <div className="row gap-3" style={{ alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <select value={charId} onChange={(e) => setCharId(e.target.value)} style={selStyle}>
+            {CHARACTERS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <span className="row gap-2" style={{ alignItems:'center' }}>
+            <span className="mono" style={{ fontSize:11, color: invOver ? 'var(--hp)' : 'var(--faint)' }} title="Poids porté / capacité">⚖ {invWeight}/{invCap}</span>
+            <span className="mono faint" style={{ fontSize:11 }}>{inventory ? Object.keys(inventory).length : 0} objets</span>
+          </span>
+        </div>
+        <InventoryPanel items={inventory} editable={true} onSave={(it) => setInvItem(it.id, it)}
+          onRemove={removeInvItem} onAdd={(cat) => setCatCat(cat)} />
+      </div>
+      {catCat && (
+        <ItemCatalogPicker initialFilter={catCat} staff={true}
+          onPick={(entry, n) => {
+            const { patch } = planItemAdd(inventory, entry, n);
+            Object.entries(patch).forEach(([id, it]) => setInvItem(id, it));
+            setCatCat(null);
+          }}
+          onCustom={() => { const it = makeItem({ cat: catCat, name:'Nouvel objet' }); setInvItem(it.id, it); setCatCat(null); }}
+          onClose={() => setCatCat(null)} />
+      )}
+    </div>
+  );
+}
+
 function AdminPage() {
   const users = useAllUsers();
   return (
@@ -78,9 +127,10 @@ function AdminPage() {
           ))}
         </div>
       </div>
+      <CharInventoryAdminPanel />
       <CatalogAdminPanel />
     </div>
   );
 }
 
-Object.assign(window, { AdminPage, AdminUserRow, CatalogAdminPanel });
+Object.assign(window, { AdminPage, AdminUserRow, CatalogAdminPanel, CharInventoryAdminPanel });

@@ -94,6 +94,9 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
   const total = (dmg != null && sk.id === 'salve_corsaire') ? dmg * (vars.nbTargets || 1) : null;
   const enoughMana = manaCur >= (sk.mana || 0);
   const cdLabel = ready ? 'Prêt' : (readyAt === CD_LOCKED ? '1×/combat utilisé' : `prêt tour ${readyAt}`);
+  const cdInfo = sk.kind === 'turn' ? '1×/tour'
+    : sk.kind === 'combat' ? '1×/combat'
+    : (sk.cd ? `CD ${sk.cd} tour${sk.cd > 1 ? 's' : ''}` : 'Sans CD');
 
   return (
     <div className="panel" style={{ borderLeft: `3px solid ${ready ? color : 'var(--line-strong)'}`, opacity: ready ? 1 : 0.7 }}>
@@ -101,6 +104,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
         <h3>⚔ {sk.name}</h3>
         <span className="row gap-2" style={{ alignItems: 'center' }}>
           <span className="badge" style={{ background: 'var(--bg-inset)' }}>{sk.mana} mana</span>
+          <span className="badge" title="Cooldown de la compétence" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>{cdInfo}</span>
           <span className="badge" style={{ background: ready ? 'var(--bg-inset)' : 'var(--bg-panel-2)', color: ready ? 'var(--buff)' : 'var(--gold-pale)' }}>{cdLabel}</span>
         </span>
       </div>
