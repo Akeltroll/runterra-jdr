@@ -590,6 +590,22 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
             </div>
           </div>
         )}
+        <div className="row gap-2" style={{ alignItems:'center' }}>
+          <label className="row gap-1" style={{ alignItems:'center', fontSize:11, color:'var(--ink-soft)' }}>
+            Poids
+            <input style={{ ...fld, width:70 }} type="number" min="0" step="0.5"
+              value={d.weight != null ? d.weight : ''} placeholder="0"
+              onChange={e => setD({ ...d, weight: Math.max(0, parseFloat(e.target.value) || 0) })} />
+          </label>
+          {d.cat === 'Équipement' && (
+            <label className="row gap-1" style={{ alignItems:'center', fontSize:11, color:'var(--ink-soft)' }}>
+              Capacité (+charge)
+              <input style={{ ...fld, width:70 }} type="number" min="0" step="1"
+                value={d.carry != null ? d.carry : ''} placeholder="0"
+                onChange={e => setD({ ...d, carry: Math.max(0, parseFloat(e.target.value) || 0) })} />
+            </label>
+          )}
+        </div>
         {/* Image : téléversement + aperçu (pas besoin de connaître l'arborescence) */}
         <div className="row gap-2" style={{ alignItems:'center' }}>
           <span style={{ width:40, height:40, flex:'none', borderRadius:6, display:'grid', placeItems:'center', fontSize:18, background:'var(--bg-panel-2)', border:'1px solid var(--line)', overflow:'hidden' }}>
@@ -606,7 +622,7 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
           : <input style={fld} value={d.img || ''} placeholder="ou chemin/URL (ex. ATH/Items/xxx.webp)" onChange={e => setD({ ...d, img: e.target.value })} />}
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => { setD(item); setEdit(false); }}>Annuler</button>
-          <button className="btn btn-sm btn-gold" onClick={() => { const isEq = d.cat === 'Équipement'; onSave({ ...d, type: isEq ? (d.type || '') : '', mods: isEq ? (d.mods || {}) : {} }); setEdit(false); }}>Enregistrer</button>
+          <button className="btn btn-sm btn-gold" onClick={() => { const isEq = d.cat === 'Équipement'; onSave({ ...d, type: isEq ? (d.type || '') : '', mods: isEq ? (d.mods || {}) : {}, weight: Math.max(0, Number(d.weight) || 0), carry: isEq ? (Math.max(0, Number(d.carry) || 0)) : 0 }); setEdit(false); }}>Enregistrer</button>
         </div>
       </div>
     );

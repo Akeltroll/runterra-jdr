@@ -159,6 +159,10 @@ function EquipBody({ char }) {
   const bonuses = mergeMods(mergeMods(sumItemMods(equipment, itemsById), runeMods), passiveMods);  // items + runes + passif -> vert
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);  // buffs de compétence -> orange
   const eff = computeEffective(equipBase, state.modifiers, activeBuffs, mergeMods(bonuses, skillBuffMods));
+  const carryForce = (state.attrs && state.attrs.force != null ? state.attrs.force : (char.attrs ? char.attrs.force : 0)) || 0;
+  const weightCarried = carriedWeight(itemsById);
+  const weightCap = carryCapacity(carryForce, equipment, itemsById);
+  const weightOver = weightStatus(weightCarried, weightCap).over;
   const sval = (k, base, pct) => (pct ? (base || 0).toFixed(1) + '%' : invFmt(base || 0));
   const scol = (k) => (skillBuffMods[k] ? 'var(--skillbuff)' : (bonuses[k] ? '#9fd07a' : '#e9dcc4'));
 
@@ -348,6 +352,18 @@ function EquipBody({ char }) {
                 ))}
               </div>
             ))}
+          </div>
+
+          {/* Poids porté (affichage seul ; rouge en surcharge) */}
+          <div style={{ marginTop:12, paddingTop:10, borderTop:'1px solid rgba(160,128,72,0.15)' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, marginBottom:4 }}>
+              <span style={{ fontFamily:"'Cinzel',serif", letterSpacing:1, color:'#c2a05a' }}>POIDS</span>
+              <span style={{ color: weightOver ? 'var(--hp)' : '#9a8b76' }}>{weightCarried} / {weightCap}</span>
+            </div>
+            <div style={{ height:7, borderRadius:4, background:'var(--bg-inset)', overflow:'hidden', border:'1px solid rgba(160,128,72,0.18)' }}>
+              <div style={{ height:'100%', width:`${Math.min(100, weightStatus(weightCarried, weightCap).pct * 100)}%`,
+                background: weightOver ? 'var(--hp)' : 'linear-gradient(90deg,#7a5a2a,#c2a05a)', transition:'width .2s' }} />
+            </div>
           </div>
           </div>
         </div>

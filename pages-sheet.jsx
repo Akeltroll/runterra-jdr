@@ -104,7 +104,10 @@ function SecondaryStats({ stats, variant }) {
 }
 
 /* ---- Colonne 3 : buffs + inventaire ---- */
-function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventory, coins, onSaveItem, onRemoveItem, canEdit }) {
+function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventory, coins, onSaveItem, onRemoveItem, canEdit, equipment, force }) {
+  const invWeight = carriedWeight(inventory || {});
+  const invCap = carryCapacity(force || 0, equipment || {}, inventory || {});
+  const invOver = weightStatus(invWeight, invCap).over;
   const toast = useToast();
   const active = new Set(activeBuffs);
   const [catCat, setCatCat] = useState(null);   // catégorie pré-filtrée ; null = picker fermé
@@ -148,7 +151,10 @@ function BuffInvColumn({ char, activeBuffs, setBuff, setMod, modifiers, inventor
 
       <div className="panel">
         <div className="panel-head"><h3>Inventaire</h3>
-          <span className="mono faint" style={{ fontSize:11 }}>{inventory ? Object.keys(inventory).length : 0} objets</span>
+          <span className="row gap-2" style={{ alignItems:'center' }}>
+            <span className="mono" style={{ fontSize:11, color: invOver ? 'var(--hp)' : 'var(--faint)' }} title="Poids porté / capacité">⚖ {invWeight}/{invCap}</span>
+            <span className="mono faint" style={{ fontSize:11 }}>{inventory ? Object.keys(inventory).length : 0} objets</span>
+          </span>
         </div>
         <div className="col gap-4" style={{ padding:'14px 16px' }}>
           <InventoryPanel items={inventory} editable={canEdit} onSave={(it) => onSaveItem(it.id, it)}
@@ -329,7 +335,8 @@ function SheetBody({ char, variant }) {
           fatigue={state.fatigue} eau={state.eau} setField={setField} activeBuffs={activeBuffs} />
         {/* COLONNE 3 — BUFFS + MODIFICATEURS + INVENTAIRE */}
         <BuffInvColumn char={char} activeBuffs={activeBuffs} setBuff={setBuff} setMod={setMod} modifiers={state.modifiers}
-          inventory={state.inventory} coins={state.coins || char.coins} onSaveItem={setInvItem} onRemoveItem={removeInvItem} canEdit={canEdit} />
+          inventory={state.inventory} coins={state.coins || char.coins} onSaveItem={setInvItem} onRemoveItem={removeInvItem} canEdit={canEdit}
+          equipment={state.equipment} force={(state.attrs && state.attrs.force != null) ? state.attrs.force : (char.attrs ? char.attrs.force : 0)} />
       </div>
     </div>
   );
