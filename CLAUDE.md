@@ -45,7 +45,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `state.attrs ?? char.attrs`, niveau `state.level ?? char.level`). Validé contre les profils §9.
   **XP** : `xpToNext(level)` (courbe officielle du MJ
   `180 + 100*level` = `info-mj/tableau_XP.png` ; **cap niveau 18** → `Infinity` au cap, `MAX_LEVEL=18`)
-  + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade, figée au cap).
+  + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade, figée au cap)
+  + `applyXpLoss(level, xp, loss)` (miroir : descente en cascade, plancher niveau 1 / xp 0 — corrige une
+  saisie d'XP erronée). **Poids porté** : `carriedWeight(items)` (Σ `weight×qty`), `carryCapacity(force,
+  equipment, itemsById)` (= `CARRY_BASE`(10) + `force×CARRY_PER_FORCE`(5) + Σ `item.carry` des items équipés —
+  **la ceinture = un item avec `carry`**), `weightStatus(carried, cap)` (`{pct, over}`, affichage seul, le
+  MJ arbitre la surcharge). Items : champs `weight` (poids unitaire) + `carry` (bonus de capacité).
   Combat (vue MJ) : `mitigateDamage`
   (armure/resmag, AR-120, **léthalité** réduit AR/RM sans passer sous 0, brut sans réduction) +
   `applyDamageToPools` (bouclier puis HP, KO) — reproduit le moteur Excel. **Visibilité PV ennemis** :
@@ -79,7 +84,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `useCharState` ; `setSkillBuff(skillId, mods, until)` = buff sur soi, snapshot de mods plats +
   durée optionnelle (`until` = n° de tour de fin ; null = permanent jusqu'au ⟲ Combat).
   **XP** : orchestrateur `addXp(charId, gain)` (async, écriture staff : `getSnapshot`→`applyXp`→écrit
-  `{level, xp}`, `pushLog` au level-up, retourne `{level, xp, levelsGained}` pour le toast appelant) ;
+  `{level, xp}`, `pushLog` au level-up, retourne `{level, xp, levelsGained}` pour le toast appelant) +
+  miroir `removeXp(charId, loss)` (async, écriture staff : `getSnapshot`→`applyXpLoss`→écrit `{level, xp}`,
+  retourne `{levelsLost}` — corrige une saisie d'XP erronée ; bouton « −XP » côté MJ) ;
   `grantCoins(charId, patch)` (don additif d'argent : `getSnapshot`→ajoute `{plat,or,arg,cuiv}`→écrit ; récompense de séance).
   `useSharedTurn` (tour partagé ; `resetCombat` **async** : efface counters/cooldowns/`skillBuffs`/`combat/log`
   ET **ramène PV/bouclier aux caps de base** via `computeEffective` sans skillBuffs). **Plateau partagé** :
@@ -138,7 +145,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (lecture MJ). **`CombatLog`** (journal de combat partagé) affiché sous le plateau, « Vider » staff ;
   `pushLog` alimenté à la résolution joueur→ennemi (`PendingHitsPanel`), ennemi→joueur (`EnemyAttackModal`),
   au bouton **« Subir »** (`EnemyCard.applySubir`, dégâts manuels MJ) et au **cast de compétence** (côté joueur, voir `pages-competences.jsx`).
-- `pages-admin.jsx` — page Admin : attribution rôle + perso par compte (`AdminPage`).
+- `pages-admin.jsx` — page Admin (staff) : attribution rôle + perso par compte (`AdminUserRow`),
+  **gestion de l'inventaire par perso** (`CharInventoryAdminPanel` : sélecteur de perso →
+  `useCharState` → `InventoryPanel` éditable + `ItemCatalogPicker`/`planItemAdd`, ajout/édition/
+  suppression directe en BDD + jauge de poids) et **CRUD du catalogue partagé** (`CatalogAdminPanel`,
+  `useItemCatalog`).
 - `pages-inventory.jsx` — page **Inventaire commun** (`CommonInventoryPage`, coffre partagé) :
   rendu en **grille partagée** (`InventoryGrid`). Clic item → `ItemActionMenu` (Prendre / Éditer /
   Supprimer) ; clic pièce → retrait. **Transferts commun → perso** via `moveItem`/`moveCoins` :
@@ -152,7 +163,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Bonus d'items via `item.mods` **branchés sur `computeEffective`** (`sumItemMods` somme les
   items équipés → 4e param, même étage que les modificateurs ; cases « Bonus de stats » dans
   l'éditeur d'item) ; stat boostée affichée en vert.
-  `EQUIP_SLOTS` = les 15 slots, `equipTypeForItem` lit `item.type` en priorité (sinon infère :
+  **Jauge de poids** (poids porté / capacité `carriedWeight`/`carryCapacity`, rouge si surcharge).
+  `EQUIP_SLOTS` = **12 slots** : les 4 pièces d'armure (épaule/cuirasse/gants/pantalon) ont été
+  **fusionnées en un slot unique « Armure »** (`accepts` shoulders/chest/gloves/pants ; migration unique
+  `armureInit` qui transfère l'ancien équipement vers le slot fusionné) ; un slot **« Ceinture »** porte
+  la ceinture (item `carry` → capacité de charge). `equipTypeForItem` lit `item.type` en priorité (sinon infère :
   **dague→accessory** (choix MJ), autre arme→weapon, autre Équipement→accessory). Clic item →
   `ItemActionMenu` : Équiper / Utiliser (consommable) / **Envoyer au commun** (`moveItem` → `sharedInventory`,
   pile qty>1 = `AmountStepper`) / Éditer (`InvItemRow` en modal) / Supprimer ; clic pièce → dépôt au
@@ -179,7 +194,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `pages-competences.jsx` — onglet **Combat** (`CompetencesPage`, libellé de menu « Combat ») : cast au clic
   (mana − coût, pose le cooldown). Carte **Attaque de base** (arme équipée → `eff.ad`/`eff.ap`, bouton
   « Attaquer » → attaque en attente MJ, **sans mana ni cooldown**) + carte **Passif** (stepper de
-  compteur + effet de stat en vert) + cartes **Actives** (mana, badge CD, dégâts live, « Lancer »).
+  compteur + effet de stat en vert) + cartes **Actives** (mana, **badge CD statique** dans le coin
+  [`1×/tour` / `CD N tours` / `1×/combat` / `Sans CD`, visible sans lancer la comp] + badge d'état
+  prêt/tour, dégâts live, « Lancer »).
   `cast(sk, ctx, dmg, nbHits)` **respecte les variables d'attaque** (1er coup/camouflé/cases/cibles) ; une comp
   à **N cibles génère N attaques en attente** (un coup = une carte, chacune son `rollCrit`). **Garde « pas de
   cible »** : toute action à dégâts sans cible → toast + abandon (avant mana/cooldown). Données
@@ -248,9 +265,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     xp:        0   ← progression DANS le niveau courant (entier ≥ 0, < xpToNext(level)) ; via addXp ; montée auto → level
     buffs:     { [buffId]: true }
     modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, sapience }
-    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods } }   ← perso, éditable
+    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods, weight, carry } }   ← perso, éditable
     invInit:   true   ← marqueur de migration (amorçage unique de l'inventaire)
-    equipment: { [slotKey]: itemId }   ← paperdoll (page Équipement), temps réel ; slotKey ∈ EQUIP_SLOTS
+    equipment: { [slotKey]: itemId }   ← paperdoll (page Équipement), temps réel ; slotKey ∈ EQUIP_SLOTS (12 slots, armure fusionnée + ceinture)
+    armureInit: true   ← marqueur de migration (fusion des 4 slots d'armure → slot « armure » unique)
     coins:     { plat, or, arg, cuiv }   ← monnaie perso (entiers ≥ 0), via setCoin / moveCoins
     coinsInit: true   ← marqueur de migration (amorçage unique des pièces)
     runes:     { selected:{[nodeId]:true}, choices:{[nodeId]:'ad'|'ap'} }   ← arbre de runes (page Runes)
@@ -262,7 +280,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
     skillBuffs: { [skillId]: { mods:{ [stat]: n }, until:<n° de tour>|null } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; until = tour de fin (auto-expiration via sumSkillBuffs(buffs,turn), ex. Mur de Givre 1/2 tours), null = permanent ; ancienne forme plate { [stat]:n } encore lue (compat) ; effacés par « ⟲ Combat »
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
-    { id, cat, name, sub, qty, ic, img, type, mods }
+    { id, cat, name, sub, qty, ic, img, type, mods, weight, carry }
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
 /campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
 /campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, crit, dcrit, lethaAD, lethaAP, reveal, revealPct } ; lecture inscrits, écriture staff
@@ -343,6 +361,22 @@ SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées
 ```
 Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
+
+## État actuel (2026-06-24)
+- **Lot demandes MJ post-crash — mergé sur `main` et déployé** (`bd925bf`, cache `20260624-2`). 120 tests
+  verts. Aucune nouvelle règle RTDB. Contenu :
+  1. **Retrait d'XP** : `applyXpLoss` (game-logic, miroir d'`applyXp`, cascade + plancher) + orchestrateur
+     `removeXp(charId, loss)` (data-state) + bouton « −XP » côté MJ — corrige une saisie erronée.
+  2. **Fusion des slots d'armure** : épaule/cuirasse/gants/pantalon → **un slot « Armure » unique**
+     (`EQUIP_SLOTS` passe à 12 slots, `accepts` multi-types, migration unique `armureInit`).
+  3. **Système de poids** : items `weight`/`carry` ; `carriedWeight`/`carryCapacity`/`weightStatus`
+     (game-logic, testés) ; capacité = `CARRY_BASE + force×CARRY_PER_FORCE + Σ item.carry équipés` —
+     **la ceinture = un item `carry`** (+ slot « Ceinture ») ; jauge de poids sur fiche + Équipement.
+  4. **Badge CD statique** sur chaque carte de compétence Combat (`1×/tour` / `CD N tours` / `1×/combat` /
+     `Sans CD`) — lisible sans lancer la comp.
+  5. **Gestion d'inventaire par perso en Admin** (`CharInventoryAdminPanel`) : sélecteur de perso →
+     ajout (catalogue/perso) / édition / suppression directe en BDD + jauge de poids.
+  6. **CRUD du catalogue partagé** en Admin (`CatalogAdminPanel`, déjà livré dans le lot).
 
 ## État actuel (2026-06-20)
 - **Correctifs de playtest compétences** — branche `feat/competences-playtest`, **prête, à
