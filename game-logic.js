@@ -108,6 +108,8 @@
       img:  p.img || '',
       type: p.type || '',   // emplacement (helmet/chest/ring/weapon/accessory/boots…) ; vide = non équipable
       mods: p.mods || {},   // vide pour l'instant — hook futur des bonus de stats
+      weight: Number(p.weight) || 0,   // poids unitaire porté (affichage seul)
+      carry:  Number(p.carry) || 0,    // bonus de capacité de charge (ceinture/équipement)
     };
   }
 
@@ -129,6 +131,7 @@
     var dstPatch = fillStacks(dstItems, {
       cat: src.cat, name: src.name, sub: src.sub,
       ic: src.ic, img: src.img, type: src.type, mods: src.mods,
+      weight: src.weight, carry: src.carry,
     }, move);
     return { srcPatch: srcPatch, dstPatch: dstPatch };
   }
@@ -159,6 +162,7 @@
       var fresh = makeItem({
         cat: entry.cat, name: entry.name, sub: entry.sub, qty: take,
         ic: entry.ic, img: entry.img, type: entry.type, mods: entry.mods,
+        weight: entry.weight, carry: entry.carry,
       });
       patch[fresh.id] = fresh;
       remaining -= take;
@@ -170,6 +174,33 @@
     return { patch: fillStacks(items, entry, qty) };
   }
 
+  /* --- Système de poids porté (affichage seul ; le MJ arbitre la surcharge) --- */
+  var CARRY_BASE = 10;        // capacité de base commune
+  var CARRY_PER_FORCE = 5;    // capacité gagnée par point de Force
+
+  function carriedWeight(items) {
+    items = items || {};
+    var tot = 0;
+    for (var k in items) { var it = items[k] || {}; tot += (Number(it.weight) || 0) * (Number(it.qty) || 0); }
+    return tot;
+  }
+
+  function carryCapacity(force, equipment, itemsById) {
+    force = Number(force) || 0;
+    equipment = equipment || {}; itemsById = itemsById || {};
+    var bonus = 0;
+    for (var slot in equipment) {
+      var id = equipment[slot]; if (!id) continue;
+      var it = itemsById[id]; if (it) bonus += Number(it.carry) || 0;
+    }
+    return CARRY_BASE + force * CARRY_PER_FORCE + bonus;
+  }
+
+  function weightStatus(carried, cap) {
+    carried = Number(carried) || 0; cap = Number(cap) || 0;
+    return { pct: cap > 0 ? carried / cap : 0, over: carried > cap };
+  }
+
   /* Amorçage du catalogue partagé : transforme la liste ITEM_CATALOG (sans id)
      en map { id: {id,cat,name,sub,ic,img,type,mods} } prête pour Firebase. */
   function buildCatalogSeed(entries) {
@@ -179,7 +210,8 @@
       var e = entries[i] || {};
       var id = newItemId();
       out[id] = { id: id, cat: e.cat || 'Butin', name: e.name || 'Objet', sub: e.sub || '',
-        ic: e.ic || '', img: e.img || '', type: e.type || '', mods: e.mods || {} };
+        ic: e.ic || '', img: e.img || '', type: e.type || '', mods: e.mods || {},
+        weight: Number(e.weight) || 0, carry: Number(e.carry) || 0 };
     }
     return out;
   }
@@ -703,6 +735,14 @@
     if (level >= MAX_LEVEL) xp = 0;
     return { level, xp, levelsGained };
   }
+  function applyXpLoss(level, xp, loss) {
+    level = Math.max(1, level | 0);
+    xp = Math.max(0, xp | 0) - Math.max(0, loss | 0);
+    let levelsLost = 0;
+    while (xp < 0 && level > 1) { level -= 1; xp += xpToNext(level); levelsLost += 1; }
+    if (xp < 0) xp = 0;   // plancher niveau 1
+    return { level, xp, levelsLost };
+  }
 
   return {
     clamp, clampGauge,
@@ -710,6 +750,7 @@
     applyHealMods, buildDefaultState, makeItem, newItemId,
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd, buildCatalogSeed, catalogArray,
+    CARRY_BASE, CARRY_PER_FORCE, carriedWeight, carryCapacity, weightStatus,
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,
@@ -721,7 +762,7 @@
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs,
-    xpToNext, applyXp, MAX_LEVEL,
+    xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
     escalationFactor, computeStats, charBaseStats, attrSum, respecValid,
   };
 });

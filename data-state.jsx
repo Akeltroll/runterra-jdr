@@ -198,6 +198,22 @@ async function addXp(charId, gain) {
   return res;
 }
 
+/* Retrait d'XP (orchestrateur, écriture staff) : miroir d'addXp. Redescend de niveau
+   si on passe sous 0 (plancher niveau 1 / xp 0). pushLog si perte de niveau. */
+async function removeXp(charId, loss) {
+  loss = Math.max(0, loss | 0);
+  if (!loss) return { level: null, xp: null, levelsLost: 0 };
+  const c = CHARACTERS.find(x => x.id === charId);
+  const p = charPath(charId);
+  const st = (await window.RTDB.getSnapshot(p)) || {};
+  const curLevel = (st.level != null ? st.level : (c ? c.level : 1)) || 1;
+  const curXp = Math.max(0, st.xp | 0);
+  const res = applyXpLoss(curLevel, curXp, loss);
+  window.RTDB.updatePath(p, { level: res.level, xp: res.xp });
+  if (res.levelsLost > 0) pushLog(`<b>${c ? c.name : charId}</b> redescend niveau <b>${res.level}</b>.`, 'debuff');
+  return res;
+}
+
 /* Don d'argent (orchestrateur, écriture staff) : AJOUTE le patch aux pièces du joueur
    (récompense, pas un transfert depuis le coffre). Dénominations < 0 ignorées. */
 async function grantCoins(charId, patch) {
@@ -339,5 +355,5 @@ Object.assign(window, {
   useSharedTurn, COMBAT_TURN,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   usePendingHits, applyHitToEnemy, healCharacter, PENDING_HITS,
-  pushLog, useCombatLog, COMBAT_LOG, addXp, grantCoins,
+  pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
 });

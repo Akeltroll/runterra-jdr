@@ -749,3 +749,47 @@ test('catalogArray : repli si non amorcé, live trié si amorcé', () => {
   const map = { i2: { id: 'i2', cat: 'Butin', name: 'Bbb' }, i1: { id: 'i1', cat: 'Butin', name: 'Aaa' } };
   assert.deepEqual(L.catalogArray(map, true, fb).map(e => e.name), ['Aaa', 'Bbb']); // trié cat+nom
 });
+
+/* --- Retrait d'XP : applyXpLoss --- */
+test('applyXpLoss : retrait simple dans le niveau courant', () => {
+  assert.deepEqual(L.applyXpLoss(3, 200, 50), { level: 3, xp: 150, levelsLost: 0 });
+});
+test('applyXpLoss : cascade d\'un niveau (miroir applyXp)', () => {
+  // xpToNext(4) = 180 + 100*4 = 580 ; perdre 30 depuis niv5/xp0 -> niv4/xp550
+  assert.deepEqual(L.applyXpLoss(5, 0, 30), { level: 4, xp: 550, levelsLost: 1 });
+  // round-trip : monter 30 depuis niv4/xp550 redonne niv5/xp0
+  assert.deepEqual(L.applyXp(4, 550, 30), { level: 5, xp: 0, levelsGained: 1 });
+});
+test('applyXpLoss : cascade multi-niveaux + plancher niveau 1 / xp 0', () => {
+  assert.deepEqual(L.applyXpLoss(3, 0, 99999), { level: 1, xp: 0, levelsLost: 2 });
+});
+test('applyXpLoss : perte nulle ou négative = inchangé', () => {
+  assert.deepEqual(L.applyXpLoss(2, 100, 0), { level: 2, xp: 100, levelsLost: 0 });
+  assert.deepEqual(L.applyXpLoss(2, 100, -50), { level: 2, xp: 100, levelsLost: 0 });
+});
+
+/* --- Système de poids : carriedWeight / carryCapacity / weightStatus --- */
+test('carriedWeight : somme weight×qty, qty 0 ignorée, vide = 0', () => {
+  assert.equal(L.carriedWeight({}), 0);
+  const items = { a: { weight: 3, qty: 2 }, b: { weight: 5, qty: 0 }, c: { weight: 1, qty: 4 } };
+  assert.equal(L.carriedWeight(items), 3 * 2 + 1 * 4); // 10
+});
+test('carryCapacity : base + force×facteur + carry des items équipés', () => {
+  const itemsById = { belt: { id: 'belt', carry: 20 }, ring: { id: 'ring' } };
+  // CARRY_BASE 10 + force 4 ×5 = 30, + ceinture 20 = 50
+  assert.equal(L.carryCapacity(4, { ceinture: 'belt', anneau1: 'ring' }, itemsById), 10 + 4 * 5 + 20);
+  // sans équipement
+  assert.equal(L.carryCapacity(6, {}, {}), 10 + 6 * 5);
+});
+test('weightStatus : pct et dépassement', () => {
+  assert.deepEqual(L.weightStatus(25, 50), { pct: 0.5, over: false });
+  assert.equal(L.weightStatus(60, 50).over, true);
+  assert.deepEqual(L.weightStatus(10, 0), { pct: 0, over: true }); // cap 0 -> tout dépasse
+});
+test('makeItem : défauts weight/carry à 0, valeurs préservées', () => {
+  assert.equal(L.makeItem({}).weight, 0);
+  assert.equal(L.makeItem({}).carry, 0);
+  const it = L.makeItem({ weight: 3, carry: 20 });
+  assert.equal(it.weight, 3);
+  assert.equal(it.carry, 20);
+});

@@ -119,6 +119,12 @@ function MJCompactCard({ c, st, turn, onFull }) {
             if (res.levelsGained > 0) toast(`<b>${c.name}</b> passe niveau <b>${res.level}</b> !`, 'buff');
             setXpIn('');
           }}>+ XP</button>
+          <button className="btn btn-sm btn-ghost" title="Retirer de l'XP" onClick={async () => {
+            const n = Math.max(0, parseInt(xpIn, 10) || 0); if (!n) return;
+            const res = await removeXp(c.id, n);
+            if (res.levelsLost > 0) toast(`<b>${c.name}</b> redescend niveau <b>${res.level}</b>.`, 'debuff');
+            setXpIn('');
+          }}>− XP</button>
         </div>
       </div>
       {/* stats clés */}
