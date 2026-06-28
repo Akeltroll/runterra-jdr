@@ -835,3 +835,12 @@ test('statBreakdown : mod + stuff combinés', () => {
   assert.equal(b.ad.stuff, 20);
   assert.equal(b.ad.effective, 130);
 });
+
+test('parseConsumableEffect : descriptions chiffrées + repli par nom', () => {
+  assert.deepEqual(L.parseConsumableEffect({ cat:'Consommables', sub:'Rend 10 + 10% Mana' }), { kind:'mana', flat:10, pct:10 });
+  assert.deepEqual(L.parseConsumableEffect({ cat:'Consommables', sub:'Rend 15 + 15% PV' }), { kind:'hp', flat:15, pct:15 });
+  assert.deepEqual(L.parseConsumableEffect({ cat:'Consommables', name:'Potion soin mineur' }), { kind:'hp', flat:15, pct:15 });
+  assert.deepEqual(L.parseConsumableEffect({ cat:'Consommables', name:'Potion mana mineur' }), { kind:'mana', flat:10, pct:10 });
+  assert.equal(L.parseConsumableEffect({ cat:'Équipement', name:'Épée' }), null);
+  assert.equal(L.parseConsumableEffect(null), null);
+});

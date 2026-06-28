@@ -56,16 +56,7 @@ function equipTypeForItem(it) {
 /* Effet d'un consommable, parsé depuis sa description (source de vérité MJ :
    « Rend 15 + 15% HP », « Rend 10 + 10% Mana » = plat + % du max). Renvoie null
    pour un consommable sans effet chiffré (juste consommé). */
-function parseConsumableEffect(it) {
-  if (!it || it.cat !== 'Consommables') return null;
-  const txt = (it.sub || '') + ' ' + (it.name || '');
-  const m = txt.match(/Rend\s+(\d+)\s*\+\s*(\d+)\s*%\s*(HP|PV|Mana)/i);
-  if (m) return { kind: /mana/i.test(m[3]) ? 'mana' : 'hp', flat: parseInt(m[1], 10), pct: parseInt(m[2], 10) };
-  // Repli par nom pour les potions standard sans description chiffrée.
-  if (/potion\s+soin/i.test(it.name || '')) return { kind:'hp',   flat:15, pct:15 };
-  if (/potion\s+mana/i.test(it.name || '')) return { kind:'mana', flat:10, pct:10 };
-  return null;
-}
+/* parseConsumableEffect déplacé dans game-logic.js (partagé fiche/équipement). */
 
 /* (equipFmt, EQUIP_FILTERS supprimés — fournis par components.jsx sous invFmt / INV_FILTERS) */
 

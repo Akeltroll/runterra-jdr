@@ -633,6 +633,18 @@
     return {};
   }
 
+  /* Lit l'effet d'un consommable depuis sa description ("Rend X + Y% HP/Mana") ou par repli sur
+     son nom (potion de soin/mana standard). Renvoie { kind, flat, pct } ou null. */
+  function parseConsumableEffect(it) {
+    if (!it || it.cat !== 'Consommables') return null;
+    var txt = (it.sub || '') + ' ' + (it.name || '');
+    var m = txt.match(/Rend\s+(\d+)\s*\+\s*(\d+)\s*%\s*(HP|PV|Mana)/i);
+    if (m) return { kind: /mana/i.test(m[3]) ? 'mana' : 'hp', flat: parseInt(m[1], 10), pct: parseInt(m[2], 10) };
+    if (/potion\s+soin/i.test(it.name || '')) return { kind: 'hp', flat: 15, pct: 15 };
+    if (/potion\s+mana/i.test(it.name || '')) return { kind: 'mana', flat: 10, pct: 10 };
+    return null;
+  }
+
   /* Décompose chaque stat effective en sources : base / +modificateurs / +stuff (items+runes+
      passif+skillBuffs). Les buffs étant multiplicatifs (appliqués au-dessus du socle), on calcule
      des deltas MARGINAUX honnêtes : on recompose computeEffective avec/sans chaque source.
@@ -784,7 +796,7 @@
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
-    sumPassiveMods, sumSkillBuffs, statBreakdown,
+    sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect,
     xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
     escalationFactor, computeStats, charBaseStats, attrSum, respecValid,
   };
