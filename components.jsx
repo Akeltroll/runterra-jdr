@@ -377,17 +377,18 @@ const invThumbStyle = (item, inset) => ({
 
 /* Grille d'inventaire dark-fantasy réutilisable (page Équipement + coffre commun).
    N'gère PAS les actions : remonte les clics au parent via onItemClick/onCoinClick. */
-function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinClick, onAdd, onDropItem, capacity = 120, title = 'INVENTAIRE' }) {
+function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinClick, onAdd, onDropItem, capacity = 120, title = 'INVENTAIRE', minCells = 49, grow = false }) {
   const list = items ? Object.values(items).filter(it => it.qty == null || it.qty > 0) : [];
   const filtered = list.filter(it => filter === 'all' || it.cat === filter);
-  const N = Math.max(49, Math.ceil(filtered.length / 7) * 7);
+  const N = Math.max(minCells, Math.ceil(filtered.length / 7) * 7);
   const cells = Array.from({ length:N }, (_, i) => filtered[i] || null);
   const panelBg = 'linear-gradient(155deg,#1c1713 0%,#130f0c 55%,#0d0a08 100%)';
   const cornerStyle = (h, v) => ({ position:'absolute', [h]:6, [v]:6, width:14, height:14,
     [`border${h[0].toUpperCase()}${h.slice(1)}`]:'2px solid rgba(185,150,80,0.55)',
     [`border${v[0].toUpperCase()}${v.slice(1)}`]:'2px solid rgba(185,150,80,0.55)' });
   return (
-    <div style={{ position:'relative', display:'flex', flexDirection:'column', height:'100%', minHeight:0,
+    <div style={{ position:'relative', display:'flex', flexDirection:'column',
+      ...(grow ? {} : { height:'100%', minHeight:0 }),
       border:'1px solid rgba(160,128,72,0.3)', borderRadius:4, background:panelBg,
       boxShadow:'inset 0 0 55px rgba(0,0,0,0.5)', padding:'12px 12px 0',
       fontFamily:"'EB Garamond',serif", color:'#d8c8a8' }}>
@@ -413,7 +414,7 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
       </div>
       <div onDragOver={onDropItem ? (e) => e.preventDefault() : undefined}
         onDrop={onDropItem ? (e) => { e.preventDefault(); const id = e.dataTransfer.getData('text'); if (id) onDropItem(id); } : undefined}
-        style={{ flex:'1 1 auto', overflowY:'auto', overflowX:'hidden', minHeight:0 }}>
+        style={ grow ? { overflow:'visible' } : { flex:'1 1 auto', overflowY:'auto', overflowX:'hidden', minHeight:0 } }>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:5, paddingBottom:8 }}>
           {cells.map((item, i) => {
             const cs = invCatStyle(item);

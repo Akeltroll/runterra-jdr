@@ -586,16 +586,18 @@
   }
 
   /* Passif Rathael : +1 charge de Glaciation à chaque coup subi (max 5, tout stackable en 1 tour).
-     Marque aussi glaciationHitTurn = n° du tour où il a été touché (pour la non-perte de fin de tour).
-     Renvoie un patch counters, ou null si rien à écrire. */
+     Pendant Souverain Glacial (ultime), +2 charges/coup : actif tant que turn <= counters.souverainUntil
+     (fenêtre posée au cast de l'ultime). Marque aussi glaciationHitTurn = n° du tour où il a été touché
+     (pour la non-perte de fin de tour). Renvoie un patch counters, ou null si rien à écrire. */
   function glaciationOnHit(counters, turn) {
     counters = counters || {};
     turn = Math.max(1, turn | 0);
     var charges = Math.max(0, Math.min(5, counters.glaciation | 0));
+    var perHit = (counters.souverainUntil && turn <= counters.souverainUntil) ? 2 : 1;
     if (charges >= 5) {                                  // au max : on note quand même le coup du tour
       return counters.glaciationHitTurn === turn ? null : { glaciationHitTurn: turn };
     }
-    return { glaciation: charges + 1, glaciationHitTurn: turn };
+    return { glaciation: Math.min(5, charges + perHit), glaciationHitTurn: turn };
   }
 
   /* Fin de tour : si Rathael n'a PAS subi de dégâts ce tour (glaciationHitTurn ≠ tour qui se termine),
@@ -629,6 +631,40 @@
       return out;
     }
     return {};
+  }
+
+  /* Lit l'effet d'un consommable depuis sa description ("Rend X + Y% HP/Mana") ou par repli sur
+     son nom (potion de soin/mana standard). Renvoie { kind, flat, pct } ou null. */
+  function parseConsumableEffect(it) {
+    if (!it || it.cat !== 'Consommables') return null;
+    var txt = (it.sub || '') + ' ' + (it.name || '');
+    var m = txt.match(/Rend\s+(\d+)\s*\+\s*(\d+)\s*%\s*(HP|PV|Mana)/i);
+    if (m) return { kind: /mana/i.test(m[3]) ? 'mana' : 'hp', flat: parseInt(m[1], 10), pct: parseInt(m[2], 10) };
+    if (/potion\s+soin/i.test(it.name || '')) return { kind: 'hp', flat: 15, pct: 15 };
+    if (/potion\s+mana/i.test(it.name || '')) return { kind: 'mana', flat: 10, pct: 10 };
+    return null;
+  }
+
+  /* Décompose chaque stat effective en sources : base / +modificateurs / +stuff (items+runes+
+     passif+skillBuffs). Les buffs étant multiplicatifs (appliqués au-dessus du socle), on calcule
+     des deltas MARGINAUX honnêtes : on recompose computeEffective avec/sans chaque source.
+     base = socle brut ; mod = effet des modificateurs ; stuff = effet des mods plats. */
+  function statBreakdown(base, modifiers, buffs, stuffMods) {
+    base = base || {};
+    var effBase = computeEffective(base, {}, buffs, {});
+    var effMod  = computeEffective(base, modifiers || {}, buffs, {});
+    var effFull = computeEffective(base, modifiers || {}, buffs, stuffMods || {});
+    var out = {};
+    Object.keys(effFull).forEach(function (k) {
+      out[k] = {
+        effective: Math.round(effFull[k] || 0),
+        base: Math.round(base[k] || 0),
+        buff: Math.round((effBase[k] || 0) - (base[k] || 0)),
+        mod: Math.round((effMod[k] || 0) - (effBase[k] || 0)),
+        stuff: Math.round((effFull[k] || 0) - (effMod[k] || 0)),
+      };
+    });
+    return out;
   }
 
   /* Buffs sur soi (compétences) : somme des mods plats snapshotés au cast.
@@ -761,7 +797,7 @@
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
-    sumPassiveMods, sumSkillBuffs,
+    sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect,
     xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
     escalationFactor, computeStats, charBaseStats, attrSum, respecValid,
   };
