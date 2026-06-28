@@ -645,6 +645,29 @@
     return null;
   }
 
+  /* Positionnement coverflow 3D d'un carrousel circulaire : pour chaque carte, l'offset signé le
+     plus court par rapport à la carte active (avec wrap autour de l'anneau) → transform 3D.
+     Carte active : face, centrée, pleine ; voisines : tournées/reculées/atténuées. */
+  function carouselTransforms(count, activeIndex) {
+    count = Math.max(1, count | 0);
+    var out = [];
+    for (var i = 0; i < count; i++) {
+      var off = i - activeIndex;
+      while (off > count / 2) off -= count;
+      while (off < -count / 2) off += count;
+      var abs = Math.abs(off);
+      out.push({
+        offset: off,
+        rotateY: off * -35,
+        translateZ: -abs * 120,
+        scale: Math.max(0.6, 1 - abs * 0.18),
+        opacity: abs > 2 ? 0 : Math.max(0.35, 1 - abs * 0.3),
+        zIndex: count - abs,
+      });
+    }
+    return out;
+  }
+
   /* Décompose chaque stat effective en sources : base / +modificateurs / +stuff (items+runes+
      passif+skillBuffs). Les buffs étant multiplicatifs (appliqués au-dessus du socle), on calcule
      des deltas MARGINAUX honnêtes : on recompose computeEffective avec/sans chaque source.
@@ -797,7 +820,7 @@
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
-    sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect,
+    sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect, carouselTransforms,
     xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
     escalationFactor, computeStats, charBaseStats, attrSum, respecValid,
   };

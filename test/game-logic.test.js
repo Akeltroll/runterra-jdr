@@ -852,3 +852,23 @@ test('parseConsumableEffect : descriptions chiffrées + repli par nom', () => {
   assert.equal(L.parseConsumableEffect({ cat:'Équipement', name:'Épée' }), null);
   assert.equal(L.parseConsumableEffect(null), null);
 });
+
+test('carouselTransforms : carte active centrée, voisins symétriques, wrap', () => {
+  const t = L.carouselTransforms(5, 0);
+  assert.equal(t.length, 5);
+  assert.equal(t[0].offset, 0);
+  assert.equal(t[0].rotateY, 0);
+  assert.equal(t[0].scale, 1);
+  assert.equal(t[0].opacity, 1);
+  assert.equal(t[0].zIndex, 5);
+  assert.equal(t[1].offset, 1);
+  assert.equal(t[4].offset, -1);
+  assert.equal(t[1].rotateY, -t[4].rotateY);
+  assert.ok(t[0].scale >= t[1].scale);
+});
+test('carouselTransforms : active = dernier index, wrap correct', () => {
+  const t = L.carouselTransforms(5, 4);
+  assert.equal(t[4].offset, 0);
+  assert.equal(t[0].offset, 1);
+  assert.equal(t[3].offset, -1);
+});
