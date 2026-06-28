@@ -659,6 +659,7 @@
       out[k] = {
         effective: Math.round(effFull[k] || 0),
         base: Math.round(base[k] || 0),
+        buff: Math.round((effBase[k] || 0) - (base[k] || 0)),
         mod: Math.round((effMod[k] || 0) - (effBase[k] || 0)),
         stuff: Math.round((effFull[k] || 0) - (effMod[k] || 0)),
       };

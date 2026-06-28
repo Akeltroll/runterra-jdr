@@ -33,27 +33,34 @@ function SecondaryStats({ breakdown }) {
     ['omni', true], ['vol', false],
   ];
   const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'omni' || k === 'vol';
-  const sources = (d) => {
-    if (!d) return null;
-    const parts = [`base ${d.base}`];
-    if (d.mod) parts.push(`${d.mod > 0 ? '+' : ''}${d.mod} mod`);
+  const detail = (d) => {
+    const parts = [];
+    if (d.buff)  parts.push(`${d.buff  > 0 ? '+' : ''}${d.buff} buff`);
+    if (d.mod)   parts.push(`${d.mod   > 0 ? '+' : ''}${d.mod} mod`);
     if (d.stuff) parts.push(`${d.stuff > 0 ? '+' : ''}${d.stuff} stuff`);
     return parts.join(' · ');
   };
   return (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
       {items.map(([k, magic]) => {
-        const d = b[k];
-        const val = d ? d.effective : 0;
+        const d = b[k] || { effective:0, base:0, buff:0, mod:0, stuff:0 };
+        const bonus = d.effective - d.base;
+        const bonusCol = bonus > 0 ? 'var(--buff)' : 'var(--hp)';
         return (
-          <div key={k} style={{ padding:'9px 11px', borderRadius:8,
+          <div key={k} style={{ padding:'9px 11px', borderRadius:8, minHeight:54, boxSizing:'border-box',
+            display:'flex', flexDirection:'column', justifyContent:'center',
             background:'linear-gradient(180deg, var(--bg-panel-2), var(--bg-inset))',
             border:'1px solid ' + (magic ? 'var(--silver-deep)' : 'var(--line-gold)') }}>
             <div className="row" style={{ justifyContent:'space-between', alignItems:'baseline' }}>
               <span className="overline" style={{ fontSize:9 }}>{STAT_LABEL[k]}</span>
-              <span className="mono" style={{ fontSize:16, fontWeight:700, color: magic ? 'var(--silver)' : 'var(--gold-pale)' }}>{val}{pct(k) ? '%' : ''}</span>
+              <span style={{ display:'flex', alignItems:'baseline', gap:5 }}>
+                <span className="mono" style={{ fontSize:17, fontWeight:700, color: magic ? 'var(--silver)' : 'var(--gold-pale)' }}>{d.effective}{pct(k) ? '%' : ''}</span>
+                {bonus !== 0 && <span className="mono" style={{ fontSize:11, fontWeight:700, color: bonusCol }}>{bonus > 0 ? '+' : ''}{bonus}</span>}
+              </span>
             </div>
-            <div className="faint" style={{ fontSize:10, fontFamily:'var(--font-mono)', marginTop:2 }}>{sources(d)}</div>
+            <div className="faint" style={{ fontSize:10, fontFamily:'var(--font-mono)', marginTop:2 }}>
+              base {d.base}{detail(d) ? ' · ' + detail(d) : ''}
+            </div>
           </div>
         );
       })}

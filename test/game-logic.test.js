@@ -836,6 +836,14 @@ test('statBreakdown : mod + stuff combinés', () => {
   assert.equal(b.ad.effective, 130);
 });
 
+test('statBreakdown : champ buff présent + somme cohérente (base+buff+mod+stuff = effective)', () => {
+  const base = { ad: 100, armure: 30 };
+  const b = L.statBreakdown(base, { ad: 10 }, [], { armure: 5 });
+  assert.equal(b.ad.buff, 0);
+  assert.equal(b.ad.base + b.ad.buff + b.ad.mod + b.ad.stuff, b.ad.effective);
+  assert.equal(b.armure.base + b.armure.buff + b.armure.mod + b.armure.stuff, b.armure.effective);
+});
+
 test('parseConsumableEffect : descriptions chiffrées + repli par nom', () => {
   assert.deepEqual(L.parseConsumableEffect({ cat:'Consommables', sub:'Rend 10 + 10% Mana' }), { kind:'mana', flat:10, pct:10 });
   assert.deepEqual(L.parseConsumableEffect({ cat:'Consommables', sub:'Rend 15 + 15% PV' }), { kind:'hp', flat:15, pct:15 });
