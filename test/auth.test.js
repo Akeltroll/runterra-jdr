@@ -65,3 +65,12 @@ test("la page competences est visible par tous les roles", () => {
   assert.equal(A.canSeePage('competences', 'mj'), true);
   assert.equal(A.canSeePage('competences', 'admin'), true);
 });
+
+test('hub : atterrissage lobby pour tous les rôles', () => {
+  assert.equal(A.defaultRoute('joueur'), 'lobby');
+  assert.equal(A.defaultRoute('mj'), 'lobby');
+  assert.equal(A.defaultRoute('admin'), 'lobby');
+});
+test('hub : le joueur peut voir la page lobby', () => {
+  assert.equal(A.canSeePage('lobby', 'joueur'), true);
+});

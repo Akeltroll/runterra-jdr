@@ -29,7 +29,7 @@
 
   /* Pages visibles selon le rôle (ids alignés sur PAGES dans index.html). */
   const PAGE_ACCESS = {
-    joueur: ['sheet', 'equip', 'inv', 'recap', 'runes', 'competences', 'prog'],
+    joueur: ['lobby', 'sheet', 'equip', 'inv', 'recap', 'runes', 'competences', 'prog'],
     mj:     ['lobby', 'mj', 'sheet', 'equip', 'journal', 'prog', 'ds', 'inv', 'recap', 'runes', 'competences'],
     admin:  ['lobby', 'mj', 'sheet', 'equip', 'journal', 'prog', 'ds', 'inv', 'recap', 'runes', 'competences', 'admin'],
   };
@@ -37,7 +37,7 @@
   const canSeePage = (pageId, role) => pagesForRole(role).indexOf(pageId) !== -1;
 
   /* Page d'accueil par défaut selon le rôle. */
-  const defaultRoute = (role) => (role === 'joueur' ? 'sheet' : 'mj');
+  const defaultRoute = (role) => 'lobby';
 
   return {
     EMAIL_DOMAIN, ROLES, usernameToEmail,
