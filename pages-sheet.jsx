@@ -213,50 +213,78 @@ function CombatColumn({ char, weapon, eff, hp, setHp, mana, setMana, shield, set
   );
 }
 
-/* ---- Panneau Soins & ressources (modifie l'état en temps réel) ---- */
-function HealPanel({ char, eff, hp, setHp, mana, setMana, shield, setShield, activeBuffs }) {
+/* ---- Panneau Consommables & ressources (temps réel) ---- */
+function HealPanel({ char, eff, hp, setHp, mana, setMana, shield, setShield, activeBuffs, inventory, setInvItem, removeInvItem, staff }) {
   const toast = useToast();
-  // Plafonds = stats EFFECTIVES (incluent runes / items / modificateurs), pas les stats de base.
   const maxHp = eff.hp, maxMana = eff.mana, maxShield = char.shieldMax;
   const [amt, setAmt] = useState(50);
   const clampV = (v, m) => Math.max(0, Math.min(m, Math.round(v)));
-  const potHp = Math.round(15 + maxHp * 0.15);
-  const potMana = Math.round(10 + maxMana * 0.10);
-  const usePotionHp   = () => { const g = applyHealMods(potHp, activeBuffs); setHp(h => clampV(h + g, maxHp)); toast(`<b>${char.name}</b> utilise une Potion de soin · +${g} PV`, 'buff'); };
-  const usePotionMana = () => { setMana(v => clampV(v + potMana, maxMana)); toast(`<b>${char.name}</b> utilise une Potion de mana · +${potMana}`, 'gold'); };
+
+  // Consommables = items de l'inventaire (cat Consommables, qty>0, effet parsable).
+  const consumables = Object.values(inventory || {})
+    .filter(it => it.cat === 'Consommables' && (it.qty || 0) > 0 && parseConsumableEffect(it));
+  const consume = (it) => {
+    const fx = parseConsumableEffect(it); if (!fx) return;
+    if (fx.kind === 'hp') {
+      const gain = applyHealMods(fx.flat + Math.round(maxHp * fx.pct / 100), activeBuffs);
+      setHp(h => clampV(h + gain, maxHp));
+      toast(`<b>${char.name}</b> utilise ${it.name} · +${gain} PV`, 'buff');
+    } else {
+      const gain = fx.flat + Math.round(maxMana * fx.pct / 100);
+      setMana(v => clampV(v + gain, maxMana));
+      toast(`<b>${char.name}</b> utilise ${it.name} · +${gain} mana`, 'gold');
+    }
+    const q = (it.qty || 1) - 1;
+    if (q <= 0) removeInvItem(it.id); else setInvItem(it.id, { ...it, qty: q });
+  };
+  const consumValue = (it) => { const fx = parseConsumableEffect(it); if (!fx) return 0; return fx.flat + Math.round((fx.kind === 'hp' ? maxHp : maxMana) * fx.pct / 100); };
+
   const healHp    = () => { const g = applyHealMods(amt, activeBuffs); setHp(h => clampV(h + g, maxHp)); toast(`<b>${char.name}</b> reçoit ${g} soins`, 'buff'); };
   const dmgHp     = () => { setHp(h => clampV(h - amt, maxHp));     toast(`<b>${char.name}</b> subit ${amt} dégâts`, 'debuff'); };
   const addShield = () => { const g = applyHealMods(amt, activeBuffs); setShield(s => clampV(s + g, maxShield)); toast(`<b>${char.name}</b> gagne ${g} bouclier`, 'gold'); };
   const recupMana = () => { setMana(v => clampV(v + amt, maxMana)); toast(`<b>${char.name}</b> récupère ${amt} mana`, 'gold'); };
+
   return (
     <div className="panel">
-      <div className="panel-head"><h3>Soins &amp; ressources</h3><span className="overline">temps réel</span></div>
+      <div className="panel-head"><h3>Consommables</h3><span className="overline">temps réel</span></div>
       <div className="col gap-4" style={{ padding:'16px' }}>
         <div>
-          <div className="overline" style={{ marginBottom:7 }}>Consommables</div>
-          <div className="row gap-2 wrap">
-            <button className="btn btn-sm btn-hp" onClick={usePotionHp}>🧪 Potion soin · +{potHp}</button>
-            <button className="btn btn-sm btn-mana" onClick={usePotionMana}>🔵 Potion mana · +{potMana}</button>
-          </div>
+          {consumables.length === 0
+            ? <div className="faint" style={{ fontSize:12 }}>Aucun consommable dans l'inventaire.</div>
+            : <div className="row gap-2 wrap">
+                {consumables.map(it => {
+                  const fx = parseConsumableEffect(it);
+                  return (
+                    <button key={it.id} className={'btn btn-sm ' + (fx.kind === 'hp' ? 'btn-hp' : 'btn-mana')} onClick={() => consume(it)}>
+                      {fx.kind === 'hp' ? '🧪' : '🔵'} {it.name} · +{consumValue(it)} <span className="faint">×{it.qty}</span>
+                    </button>
+                  );
+                })}
+              </div>}
         </div>
-        <div>
-          <div className="row" style={{ justifyContent:'space-between', marginBottom:7 }}>
-            <span className="overline">Montant (soin reçu, bouclier…)</span>
-            <input type="number" value={amt} min="0" onChange={e => setAmt(Math.max(0, parseInt(e.target.value) || 0))}
-              style={{ width:80, background:'var(--bg-inset)', color:'var(--gold-pale)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontFamily:'var(--font-mono)', fontSize:13, textAlign:'right' }} />
-          </div>
-          <div className="row gap-2 wrap">
-            <button className="btn btn-sm btn-hp" onClick={healHp}>♥ Soigner</button>
-            <button className="btn btn-sm btn-shield" onClick={addShield}>🛡 Bouclier</button>
-            <button className="btn btn-sm btn-mana" onClick={recupMana}>🔷 Mana</button>
-            <button className="btn btn-sm btn-ghost" onClick={dmgHp}>− Dégâts</button>
-          </div>
-        </div>
-        <div className="row gap-2 wrap">
-          <button className="btn btn-sm btn-ghost" onClick={() => { setHp(maxHp); toast(`<b>${char.name}</b> — PV au maximum`, 'buff'); }}>↺ PV max</button>
-          <button className="btn btn-sm btn-ghost" onClick={() => { setMana(maxMana); toast(`<b>${char.name}</b> — Mana au maximum`, 'gold'); }}>↺ Mana max</button>
-          <button className="btn btn-sm btn-ghost" onClick={() => setShield(0)}>↺ Bouclier 0</button>
-        </div>
+
+        {staff && (
+          <>
+            <div>
+              <div className="row" style={{ justifyContent:'space-between', marginBottom:7 }}>
+                <span className="overline">Ajustement MJ (montant)</span>
+                <input type="number" value={amt} min="0" onChange={e => setAmt(Math.max(0, parseInt(e.target.value) || 0))}
+                  style={{ width:80, background:'var(--bg-inset)', color:'var(--gold-pale)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontFamily:'var(--font-mono)', fontSize:13, textAlign:'right' }} />
+              </div>
+              <div className="row gap-2 wrap">
+                <button className="btn btn-sm btn-hp" onClick={healHp}>♥ Soigner</button>
+                <button className="btn btn-sm btn-shield" onClick={addShield}>🛡 Bouclier</button>
+                <button className="btn btn-sm btn-mana" onClick={recupMana}>🔷 Mana</button>
+                <button className="btn btn-sm btn-ghost" onClick={dmgHp}>− Dégâts</button>
+              </div>
+            </div>
+            <div className="row gap-2 wrap">
+              <button className="btn btn-sm btn-ghost" onClick={() => { setHp(maxHp); toast(`<b>${char.name}</b> — PV au maximum`, 'buff'); }}>↺ PV max</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => { setMana(maxMana); toast(`<b>${char.name}</b> — Mana au maximum`, 'gold'); }}>↺ Mana max</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => setShield(0)}>↺ Bouclier 0</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
