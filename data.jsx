@@ -430,6 +430,7 @@ const SKILLS = {
           + '≥2 unités en fin de tour, elle persiste. Aura/débuffs/persistance gérés en table.' },
       { id: 'souverain_glacial', name: 'Souverain Glacial', mana: 100, cd: 0, kind: 'combat',
         dmg: () => null,
+        transform: { turns: 4 },
         selfBuffFlat: (eff, c) => { const hp = rathaelUltHpBonus((c.counters && c.counters.glaciation) || 0, c.hpMax || 0); return hp ? { hp } : {}; },
         note: 'Ultime : version améliorée des Ailes de Givre (transformation 4 tours, 1×/combat). Chaque charge de '
           + 'Glaciation accorde +20% de PV de BASE (avant équipement), max +100% — snapshot au lancement. Génère 2 '

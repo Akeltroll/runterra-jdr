@@ -294,7 +294,8 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
     const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag }, lethaNum);
     const res = applyDamageToPools({ hpCur: L.hp, shield: L.shield }, degats);
     window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
-    // Passif Rathael — Chair gelée : +1 charge de Glaciation quand il subit des dégâts (max 2/tour, max 5).
+    // Passif Rathael — Chair gelée : +1 charge de Glaciation par coup subi (tout stackable en 1 tour, max 5 ;
+    // +2/coup pendant Souverain Glacial). La perte -3/tour sans dégât est gérée en fin de tour (glaciationDecay).
     if (c.id === 'rathael' && degats > 0) {
       const gp = glaciationOnHit(st && st.counters, turn);
       if (gp) {

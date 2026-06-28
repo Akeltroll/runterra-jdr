@@ -220,6 +220,9 @@ function CompetencesBody({ char, staff }) {
     // Compteur fixé (ex. Éclat de l'âme : consomme toutes les charges → glaciation = 0).
     // Après calcul des dégâts (capturés via dmgArg), donc la conso n'affecte pas le coup.
     if (sk.counterSet) Object.keys(sk.counterSet).forEach(k => setCounter(k, sk.counterSet[k]));
+    // Transformation (ex. Souverain Glacial) : pose une fenêtre de tours (souverainUntil = dernier tour
+    // actif) → le passif Glaciation gagne +2 charges/coup pendant l'ultime (lu par glaciationOnHit).
+    if (sk.transform) setCounter('souverainUntil', turn + (sk.transform.turns - 1));
     // Buff sur soi : snapshot de mods plats → effet de combat orange. selfBuff = % de la stat
     // de base ; selfBuffFlat = valeurs plates littérales (objet) ou fonction (eff, ctx) → objet
     // (ex. Mur de Givre = scaling par niveau, Souverain Glacial = PV par charge).

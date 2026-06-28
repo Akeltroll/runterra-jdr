@@ -203,13 +203,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `SKILLS` (data.jsx) → `dmg*` pures de `game-logic.js` (transcrites des scripts `.gs`, **le script prime**).
   Compteurs/cooldowns en `state/counters`+`state/cooldowns` (cooldown = **`readyAt`** = n° de tour de dispo) ;
   variables d'attaque (1er coup / furtif / cases / cibles) en état local de carte. **Persos câblés** :
-  Elias/Smith/Urskaar/Jett + **Rathael (C1 Frappe Irritée + C2 Mur de Givre)** ; reste à faire : Rathael C3/C4,
-  Jett C3/C4. Passif calculable (Elias +AD/charge plat ; **Rathael +5%/charge Armure+RM de base** via compteur
+  Elias/Smith/Urskaar/Jett + **Rathael (C1 Frappe Irritée → C4 + ultime Souverain Glacial)** ; reste à faire :
+  **Jett C3/C4** (kits pas encore reçus). Passif calculable (Elias +AD/charge plat ; **Rathael +5%/charge Armure+RM de base** via compteur
   Glaciation — `sumPassiveMods(charId,counters,level,base)`, 4e param `base`) branché via
   `sumPassiveMods`→`computeEffective`. **Glaciation auto-incrémenté** quand Rathael subit une attaque ennemie
-  (`glaciationOnHit(counters,turn)`, +1/coup, max 5, tout stackable en 1 tour ; appelé dans `EnemyAttackModal.submit` ;
-  marque `glaciationHitTurn`). **Perte auto −3** en fin de tour s'il n'a pas été touché (`glaciationDecay(counters,
-  endingTurn)`, dans `useSharedTurn.nextTurn`). Le stepper reste un override manuel. `cast` gère **`selfBuffFlat`** (buff
+  (`glaciationOnHit(counters,turn)`, +1/coup, max 5, tout stackable en 1 tour ; **+2/coup pendant Souverain Glacial**
+  tant que `turn ≤ counters.souverainUntil` [fenêtre posée au cast via `sk.transform.turns`] ; appelé dans
+  `EnemyAttackModal.submit` ; marque `glaciationHitTurn`). **Perte auto −3** en fin de tour s'il n'a pas été touché
+  (`glaciationDecay(counters, endingTurn)`, dans `useSharedTurn.nextTurn`). Le stepper reste un override manuel. `cast` gère **`selfBuffFlat`** (buff
   plat, ex. Mur de Givre +20 AR/RM au niv 2) et **`counterBump`** (incrément conditionnel de compteur au cast) ;
   l'`eff` de la page Combat inclut les `skillBuffs` (aligné fiche/équip). **Durée de buff** : une comp avec
   `duration:{min,max}` (ex. Mur de Givre 1/2 tours) affiche un sélecteur sur sa carte ; `cast` snapshote
@@ -475,12 +476,13 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   monnaie vivante, paperdoll, `item.mods` branchés). Reste uniquement de la **saisie de contenu** :
   créer les **armures réelles** avec leur `type` + leurs `mods` (jusqu'ici seuls armes & accessoires
   ont un `type` câblé) — pas de dev, juste remplir `ITEM_CATALOG` / l'éditeur.
-- **Compétences** : **implémentées et déployées** (Elias/Smith/Urskaar/Jett + **Rathael C1+C2**). Le passif
-  Rathael (+5%/charge Armure+RM de base, compteur Glaciation manuel) calcule un mod plat depuis les stats de
-  base (`sumPassiveMods(...,base)`). **À FAIRE plus tard** : (1) comps manquantes (**Rathael C3/C4**, Jett C3/C4)
-  à ajouter dans `SKILLS` + `game-logic.js` ; (2) automatiser le cap 2 charges/tour + décroissance −2/tour et
-  l'état Âme fendue de Rathael (aujourd'hui narratif/manuel) ; (3) Phase 2 : auto-application des dégâts aux
-  ennemis (aujourd'hui le MJ saisit le nombre dans « Subir »).
+- **Compétences** : **implémentées et déployées** (Elias/Smith/Urskaar/Jett + **Rathael complet C1→C4 + ultime**).
+  Le passif Rathael (+5%/charge Armure+RM de base) calcule un mod plat depuis les stats de
+  base (`sumPassiveMods(...,base)`). Charges Glaciation **automatisées** : +1/coup subi (tout stackable en 1 tour,
+  max 5 ; +2/coup pendant Souverain Glacial via `souverainUntil`) ; −3/tour sans dégât (`glaciationDecay`). **À FAIRE
+  plus tard** : (1) **comps Jett C3/C4** (kits pas encore reçus) à ajouter dans `SKILLS` + `game-logic.js` ;
+  (2) automatiser l'état Âme fendue de Rathael à 5 charges (aujourd'hui narratif/manuel) ; (3) Phase 2 :
+  auto-application des dégâts aux ennemis (aujourd'hui le MJ saisit le nombre dans « Subir »).
 - **Arbre de runes** : **FAIT et déployé** (voir « État actuel »). Les 5 familles sont chiffrées
   (`RUNES`, data.jsx) et interactives. Reste seulement la validation MJ (capstone vs thématique,
   2 cellules tronquées).
