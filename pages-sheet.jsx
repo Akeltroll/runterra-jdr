@@ -54,51 +54,41 @@ function ResourceStack({ char, eff, variant, hp, mana, shield }) {
   );
 }
 
-/* ---- Grille de stats secondaires selon la direction ---- */
-function SecondaryStats({ stats, variant }) {
+/* ---- Grille de stats secondaires avec décomposition base / +mod / +stuff ---- */
+function SecondaryStats({ breakdown }) {
+  const b = breakdown || {};
   const items = [
-    ['ad', stats.ad, false], ['ap', stats.ap, true], ['armure', stats.armure, false],
-    ['resmag', stats.resmag, true], ['crit', stats.crit + '%', false], ['dcrit', stats.dcrit + '%', false],
-    // Sapience/Léthalité hors socle (refonte) : affichées seulement si une source (item/mod/comp) en accorde.
-    ...(stats.letha > 0 ? [['letha', stats.letha, false]] : []),
-    ...(stats.sapience > 0 ? [['sapience', stats.sapience, false]] : []),
-    ['omni', (stats.omni || 0) + '%', true],
-    ['vol', (stats.vol || 0) + '%', false],
+    ['ad', false], ['ap', true], ['armure', false], ['resmag', true],
+    ['crit', false], ['dcrit', false],
+    ...((b.letha && b.letha.effective > 0) ? [['letha', false]] : []),
+    ...((b.sapience && b.sapience.effective > 0) ? [['sapience', false]] : []),
+    ['omni', true], ['vol', false],
   ];
-  if (variant === 'b') {
-    // tuiles angulaires hextech
-    return (
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
-        {items.map(([k, v, magic]) => (
-          <div key={k} style={{ position:'relative', padding:'12px 8px', textAlign:'center',
-            background:'linear-gradient(180deg, var(--bg-panel-2), var(--bg-inset))',
-            border:'1px solid ' + (magic ? 'var(--silver-deep)' : 'var(--line-gold)'),
-            clipPath:'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)' }}>
-            <div className="mono" style={{ fontSize:18, fontWeight:700, color: magic ? 'var(--silver)' : 'var(--gold-pale)' }}>{v}</div>
-            <div className="overline" style={{ fontSize:9, marginTop:3 }}>{STAT_LABEL[k]}</div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (variant === 'c') {
-    // registre / codex à deux colonnes
-    return (
-      <div className="col" style={{ gap:0 }}>
-        {items.map(([k, v, magic], i) => (
-          <div key={k} className="row" style={{ justifyContent:'space-between', padding:'9px 4px',
-            borderBottom: i < items.length-1 ? '1px solid var(--line)' : 'none' }}>
-            <span className="row gap-2"><span className="mono faint" style={{ fontSize:10, width:22 }}>{STAT_GLYPH[k]}</span><span className="dim" style={{ fontSize:12 }}>{STAT_LABEL[k]}</span></span>
-            <span className="mono" style={{ fontSize:15, fontWeight:600, color: magic ? 'var(--silver)' : 'var(--gold-pale)' }}>{v}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  // variant a — chips
+  const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'omni' || k === 'vol';
+  const sources = (d) => {
+    if (!d) return null;
+    const parts = [`base ${d.base}`];
+    if (d.mod) parts.push(`${d.mod > 0 ? '+' : ''}${d.mod} mod`);
+    if (d.stuff) parts.push(`${d.stuff > 0 ? '+' : ''}${d.stuff} stuff`);
+    return parts.join(' · ');
+  };
   return (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-      {items.map(([k, v, magic]) => <StatChip key={k} k={k} value={v} magic={magic} />)}
+      {items.map(([k, magic]) => {
+        const d = b[k];
+        const val = d ? d.effective : 0;
+        return (
+          <div key={k} style={{ padding:'9px 11px', borderRadius:8,
+            background:'linear-gradient(180deg, var(--bg-panel-2), var(--bg-inset))',
+            border:'1px solid ' + (magic ? 'var(--silver-deep)' : 'var(--line-gold)') }}>
+            <div className="row" style={{ justifyContent:'space-between', alignItems:'baseline' }}>
+              <span className="overline" style={{ fontSize:9 }}>{STAT_LABEL[k]}</span>
+              <span className="mono" style={{ fontSize:16, fontWeight:700, color: magic ? 'var(--silver)' : 'var(--gold-pale)' }}>{val}{pct(k) ? '%' : ''}</span>
+            </div>
+            <div className="faint" style={{ fontSize:10, fontFamily:'var(--font-mono)', marginTop:2 }}>{sources(d)}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }
