@@ -195,7 +195,7 @@ function FicheInventoryColumn({ char, state, eff, canEdit, force, setInvItem, re
     <div className="col gap-5">
       <div className="panel" style={{ padding:0, overflow:'hidden' }}>
         <InventoryGrid items={inv} coins={state.coins || char.coins} filter={filter} setFilter={setFilter}
-          minCells={21} grow={true} onItemClick={openMenu} onAdd={canEdit ? (cat) => setCatCat(cat) : undefined} />
+          minCells={14} grow={true} onItemClick={openMenu} onAdd={canEdit ? (cat) => setCatCat(cat) : undefined} />
       </div>
       {canEdit && <ModifiersPanel modifiers={state.modifiers} setMod={setMod} />}
       {menu && <ItemActionMenu {...menu} onClose={() => setMenu(null)} />}
@@ -341,7 +341,7 @@ function SheetBody({ char }) {
       <div className="panel" style={{ padding:'10px 16px', marginBottom:16 }}>
         <XpBar level={effLevel} xp={state.xp || 0} />
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'minmax(300px,1fr) minmax(300px,1fr) minmax(320px,1.05fr)', gap:20, alignItems:'start' }} className="sheet-grid">
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3, minmax(300px, 1fr))', gap:20, alignItems:'start' }} className="sheet-grid">
         {/* COLONNE 1 — VITALITÉ & RESSOURCES */}
         <div className="col gap-5">
           <div className="panel">
