@@ -71,6 +71,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   jusqu'à 99 puis crée de nouvelles piles pour le surplus → patch `{itemId:item}`) +
   `planItemAdd(items,entry,qty)` (`{patch}`, ajout depuis le catalogue) ;
   `buildDefaultState` amorce `inventory` depuis `char.inv` et `coins` depuis `char.coins`.
+  **`parseConsumableEffect(item)`** (lit « Rend X + Y% HP/Mana » ou repli par nom → `{kind,flat,pct}|null` ;
+  partagé fiche + Équipement). **`statBreakdown(base, modifiers, buffs, stuffMods)`** → `{[stat]:{effective,
+  base, buff, mod, stuff}}` (décompose chaque stat effective par source via recomposition de `computeEffective` ;
+  `base+buff+mod+stuff = effectif` ; alimente l'affichage breakdown de la fiche).
 - `data.jsx` — règles immuables : `CHARACTERS` (avec `inv`
   par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS` (caps §3, cap PJ 20), `ATTRIBUTES`, `RUNE`, `JOURNAL`,
   `ITEM_CATALOG` (catalogue d'items pré-enregistrés pour l'ajout staff : `{cat,name,sub,ic,img,type}`).
@@ -107,20 +111,30 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   **Catégorie + Emplacement** (`type`, affiché si `cat==='Équipement'`) et le prop `startEdit`
   (ouverture directe en mode édition, pour les modals). `InventoryPanel` a un prop optionnel
   `onAdd(cat)` : si fourni, « + Ajouter » délègue au parent (ouvre le picker) ; sinon ajout vierge.
-  Grille dark-fantasy partagée `InventoryGrid` (Équipement + coffre commun ; badge quantité en **OR**) +
-  popovers `ItemActionMenu` / `AmountStepper` ; **`ItemCatalogPicker`** (modal de sélection rapide
+  Grille dark-fantasy partagée `InventoryGrid` (Équipement + coffre commun **+ fiche joueur** ; badge quantité
+  en **OR** ; props `minCells` [plancher de cases, défaut 49 ; 14 sur la fiche] + `grow` [s'étend avec le
+  contenu au lieu de scroller, pour la fiche]) + popovers `ItemActionMenu` / `AmountStepper` ;
+  **`ItemCatalogPicker`** (modal de sélection rapide
   depuis `ITEM_CATALOG` → `AmountStepper` → `onPick(entry,qty)` ; bouton « Objet personnalisé » = filet) ;
   constantes `INV_*`/`inv*` (styles/format/filtres/pièces).
-- `pages-sheet.jsx` — fiche joueur (3 colonnes, 3 variantes visuelles a/b/c).
-  Jauge **bouclier à max dynamique** (`max(shieldMax, bouclier)`) pour afficher le bouclier de comp.
-  **Omnivamp/vol de vie lus depuis `eff`** (`SecondaryStats`, plus de `0%` en dur).
-  Fatigue/Eau éditables, modificateurs, stats effectives, HealPanel, **inventaire perso
-  temps réel** (migration unique via marqueur `invInit`). **Arme affichée = celle équipée**
-  (slot `armePrincipale` de `state.equipment`, reliée à `WEAPONS` par nom ; repli `char.weaponId`).
-  **L'action d'attaque a été retirée de la fiche** (déplacée dans l'onglet Combat) : le panneau « Arme
-  équipée » reste en info (arme + dégâts estimés), sans bouton ni modale.
-  Bourse **live** (`state.coins`, ordre cuivre→argent→or→platine). **HealPanel plafonne sur les
-  stats EFFECTIVES** (`eff.hp`/`eff.mana`, incluent runes/items/mods) — pas les stats de base.
+- `pages-sheet.jsx` — fiche joueur **refondue (layout B, 3 colonnes thématiques, largeurs égales** via
+  `repeat(3,minmax(300px,1fr))`** ; un seul style — le sélecteur 3-styles `variant` a été RETIRÉ).
+  Col 1 = **Vitalité** (`ResourceStack`) + **Survie** (`SurvivePanel` Fatigue/Eau) + **Consommables**
+  (`HealPanel`) ; col 2 = **Statistiques** (`SecondaryStats`) + **Arme équipée** (`WeaponPanel`, info seule) +
+  **Effets actifs** (`BuffsPanel`) ; col 3 = **Inventaire** (`FicheInventoryColumn` → `InventoryGrid`
+  adaptatif, `minCells=14`/`grow`, clic → menu Utiliser/Éditer/Supprimer + `ItemCatalogPicker`) + (staff)
+  **Modificateurs** (`ModifiersPanel`). **Stats en breakdown** : `SecondaryStats` affiche la valeur effective +
+  le **bonus total en couleur** (`+N` vert/rouge) + le détail des sources (`base · +X buff · +Y mod · +Z stuff`),
+  alimenté par `statBreakdown` (game-logic, pur, testé ; `base+buff+mod+stuff = effectif`, deltas marginaux
+  honnêtes). **Consommables = vraies potions de l'inventaire** (`HealPanel` : items `cat:'Consommables'` qty>0
+  + effet parsable via `parseConsumableEffect` ; clic consomme une unité [valeur réelle = `flat + pct% du max
+  effectif`], décrémente/supprime à 0 ; **plus de potion → bouton masqué** ; fini les boutons potion infinis en dur).
+  **Outils d'ajustement libres réservés au MJ** (`isStaff` : Soigner/Dégâts/Mana/Bouclier d'un montant + ↺ max ;
+  les joueurs ne peuvent plus tricher). Jauge **bouclier à max dynamique** (`max(shieldMax, bouclier)`).
+  Inventaire perso temps réel (migration unique `invInit`). **Arme affichée = celle équipée**
+  (slot `armePrincipale` de `state.equipment`, reliée à `WEAPONS` par nom ; repli `char.weaponId`) ; le panneau
+  « Arme équipée » est en info seule (l'action d'attaque est dans l'onglet Combat). Bourse **live** (dans le pied
+  de `InventoryGrid`). **HealPanel plafonne sur les stats EFFECTIVES** (`eff.hp`/`eff.mana`).
 - `pages-mj.jsx` — tableau de bord MJ temps réel (`mjLive(c, st)` fusionne règles+état).
   Le mini-sac des cartes lit l'inventaire **live** (`st.inventory`, items qty>0, images
   `item.img`), fallback `c.inv`. Édition d'un joueur = bouton **⛶ plein écran** → `SheetBody`
@@ -321,7 +335,8 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
   Smith ad+20, crit+10 ; Elias (id `lunick`) ad+20 ; Jett aucun.
 - Une seule campagne partagée, mais **vraie séparation par joueur** depuis la v2 :
   cloisonnement appliqué côté serveur par les règles RTDB (joueur = sa fiche seule).
-- Sélecteur de 3 styles visuels conservé (masqué pour un joueur, verrouillé sur son perso).
+- **Sélecteur de 3 styles visuels RETIRÉ** (refonte fiche 2026-06-29) : un seul style abouti, fin de
+  l'expérimentation Tablettes/Hextech/Codex. (Le sélecteur de **perso** reste, staff only.)
 - **Lunick (mort) → Elias Crowe** : id interne `lunick` conservé (clé Firebase/Admin),
   seul l'affichage change (nom/image/titre). Pas de migration.
 - **Niveau 2** pour tous (les 12 pts de stats = 11 du niveau + 1 point bonus de création) ;
@@ -362,6 +377,23 @@ SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées
 ```
 Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
+
+## État actuel (2026-06-29)
+- **Refonte fiche joueur — mergée sur `main`** (merge `4ba147d`, cache `20260628-1`). 127 tests verts.
+  **Aucune nouvelle règle RTDB, aucun changement de schéma.** Spec/plan :
+  `docs/superpowers/{specs,plans}/2026-06-28-refonte-fiche-joueur*`. Contenu :
+  1. **Layout B** (3 colonnes thématiques de largeurs égales) ; retrait du sélecteur 3-styles `variant`
+     (un seul style) et du code mort des variantes b/c.
+  2. **Breakdown des stats** : `SecondaryStats` affiche valeur effective + bonus `+N` en couleur + détail
+     `base · +buff · +mod · +stuff` (`statBreakdown` pur testé ; `base+buff+mod+stuff = effectif`).
+  3. **Consommables réels** : `HealPanel` lit les potions de l'inventaire (valeur réelle, gating qty, plus de
+     potion = bouton masqué) ; `parseConsumableEffect` déplacé en logique partagée. Fini les potions infinies en dur.
+  4. **Anti-triche** : outils d'ajustement libres (soin/dégâts/mana/bouclier d'un montant + ↺ max) **réservés au MJ**.
+  5. **Inventaire en `InventoryGrid` adaptatif** (`minCells`/`grow`) — même visuel que commun/Équipement.
+  - ⏳ **Non encore poussé sur `origin/main`** au moment de cette note (merge local ; à `git push` pour déployer).
+- **Automatisation ultime Rathael (Souverain Glacial)** — mergée (`5efe226`) : `transform:{turns:4}` pose
+  `souverainUntil` au cast → `glaciationOnHit` donne **+2 charges/coup** pendant l'ultime (+1 sinon, max 5).
+  Charges Glaciation entièrement automatisées (+1/coup illimité par tour, −3/tour sans dégât).
 
 ## État actuel (2026-06-24)
 - **Lot demandes MJ post-crash — mergé sur `main` et déployé** (`bd925bf`, cache `20260624-2`). 120 tests
@@ -472,6 +504,16 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
   (`MOD_STATS`, 11 stats) visible si `cat==='Équipement'`. 39 tests verts.
 
 ## Chantiers en cours / backlog
+- **Lot améliorations graphiques** (brainstormé 2026-06-28, chantiers indépendants — chacun sa spec/plan) :
+  **A — Refonte fiche joueur = FAIT** (voir État actuel 2026-06-29). Restent :
+  **C — Hub d'accueil vivant** (remplacer la page Accueil mockup `pages-lobby.jsx` — boutons « Rejoindre/Créer
+  session » + code `VX-7K2` factices, invisible des joueurs — par un vrai tableau de bord : roster du groupe
+  PV/mana live, séance en cours, dernier récap, état du combat) ; **B — Arbre de runes en vrai arbre visuel**
+  (nœuds + liaisons SVG façon LoL ; le contenu/logique existe déjà, c'est du graphique) ; **D — Passe
+  d'animations** transversale (transitions d'onglets, level-up, etc.). Ordre suggéré : A→C→B, D en continu.
+- **Nouveau système d'attaque de base** (brainstorm en pause à la demande du MJ) : catégories d'armes
+  (`info-mj/Nouveau système de gestion des attaques de base (2).md`) + **maîtrise par perso×arme** (−25 % +
+  perte des propriétés si non maîtrisée), idée de **maîtrise qui progresse à l'usage**. À reprendre.
 - **Inventaire + Équipement : clos côté code** (perso + commun, transferts, catalogue, plafond 99,
   monnaie vivante, paperdoll, `item.mods` branchés). Reste uniquement de la **saisie de contenu** :
   créer les **armures réelles** avec leur `type` + leurs `mods` (jusqu'ici seuls armes & accessoires
