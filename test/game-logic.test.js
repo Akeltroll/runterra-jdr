@@ -688,6 +688,16 @@ test('glaciationOnHit : +1 charge par coup (max 5, tout stackable en 1 tour) + m
   // au max ET déjà touché ce tour : rien à écrire
   assert.equal(L.glaciationOnHit({ glaciation: 5, glaciationHitTurn: 2 }, 2), null);
 });
+test('glaciationOnHit : +2 charges/coup pendant Souverain Glacial (souverainUntil ≥ tour)', () => {
+  // fenêtre d'ultime active (souverainUntil >= turn) → +2 par coup
+  assert.deepEqual(L.glaciationOnHit({ souverainUntil: 4 }, 1), { glaciation: 2, glaciationHitTurn: 1 });
+  // plafonné à 5 (3 + 2)
+  assert.deepEqual(L.glaciationOnHit({ glaciation: 3, souverainUntil: 4 }, 4), { glaciation: 5, glaciationHitTurn: 4 });
+  // 4 + 2 plafonné à 5
+  assert.deepEqual(L.glaciationOnHit({ glaciation: 4, souverainUntil: 4 }, 4), { glaciation: 5, glaciationHitTurn: 4 });
+  // fenêtre expirée (turn > souverainUntil) → +1 normal
+  assert.deepEqual(L.glaciationOnHit({ souverainUntil: 4 }, 5), { glaciation: 1, glaciationHitTurn: 5 });
+});
 test('glaciationDecay : -3 charges en fin de tour sans dégâts subis', () => {
   // pas touché ce tour (glaciationHitTurn ≠ 3) → -3
   assert.deepEqual(L.glaciationDecay({ glaciation: 5, glaciationHitTurn: 2 }, 3), { glaciation: 2 });
@@ -792,4 +802,36 @@ test('makeItem : défauts weight/carry à 0, valeurs préservées', () => {
   const it = L.makeItem({ weight: 3, carry: 20 });
   assert.equal(it.weight, 3);
   assert.equal(it.carry, 20);
+});
+
+/* --- statBreakdown : décomposition base / +mod / +stuff --- */
+test('statBreakdown : base seule = effective, deltas à 0', () => {
+  const base = { ad: 100, armure: 30, hp: 400, mana: 200, ap: 0, resmag: 10, crit: 5, dcrit: 200 };
+  const b = L.statBreakdown(base, {}, [], {});
+  assert.equal(b.ad.base, 100);
+  assert.equal(b.ad.mod, 0);
+  assert.equal(b.ad.stuff, 0);
+  assert.equal(b.ad.effective, 100);
+});
+test('statBreakdown : modificateur isolé en delta mod', () => {
+  const base = { ad: 100, armure: 30, hp: 400, mana: 200, ap: 0, resmag: 10, crit: 5, dcrit: 200 };
+  const b = L.statBreakdown(base, { ad: 10 }, [], {});
+  assert.equal(b.ad.mod, 10);
+  assert.equal(b.ad.stuff, 0);
+  assert.equal(b.ad.effective, 110);
+});
+test('statBreakdown : bonus de stuff isolé en delta stuff', () => {
+  const base = { ad: 100, armure: 30, hp: 400, mana: 200, ap: 0, resmag: 10, crit: 5, dcrit: 200 };
+  const b = L.statBreakdown(base, {}, [], { armure: 15 });
+  assert.equal(b.armure.base, 30);
+  assert.equal(b.armure.mod, 0);
+  assert.equal(b.armure.stuff, 15);
+  assert.equal(b.armure.effective, 45);
+});
+test('statBreakdown : mod + stuff combinés', () => {
+  const base = { ad: 100, armure: 30, hp: 400, mana: 200, ap: 0, resmag: 10, crit: 5, dcrit: 200 };
+  const b = L.statBreakdown(base, { ad: 10 }, [], { ad: 20 });
+  assert.equal(b.ad.mod, 10);
+  assert.equal(b.ad.stuff, 20);
+  assert.equal(b.ad.effective, 130);
 });
