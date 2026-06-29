@@ -39,7 +39,7 @@ test('canSeePage filtre selon le rôle', () => {
   assert.equal(A.canSeePage('mj', 'mj'), true);
   assert.equal(A.canSeePage('admin', 'mj'), false);
   assert.equal(A.canSeePage('admin', 'admin'), true);
-  assert.deepEqual(A.pagesForRole('joueur'), ['sheet', 'equip', 'inv', 'recap', 'runes', 'competences', 'prog']);
+  assert.deepEqual(A.pagesForRole('joueur'), ['lobby', 'sheet', 'equip', 'inv', 'recap', 'runes', 'competences', 'prog']);
 });
 
 test("la page inv (inventaire commun) est visible par tous les roles", () => {
@@ -64,4 +64,13 @@ test("la page competences est visible par tous les roles", () => {
   assert.equal(A.canSeePage('competences', 'joueur'), true);
   assert.equal(A.canSeePage('competences', 'mj'), true);
   assert.equal(A.canSeePage('competences', 'admin'), true);
+});
+
+test('hub : atterrissage lobby pour tous les rôles', () => {
+  assert.equal(A.defaultRoute('joueur'), 'lobby');
+  assert.equal(A.defaultRoute('mj'), 'lobby');
+  assert.equal(A.defaultRoute('admin'), 'lobby');
+});
+test('hub : le joueur peut voir la page lobby', () => {
+  assert.equal(A.canSeePage('lobby', 'joueur'), true);
 });

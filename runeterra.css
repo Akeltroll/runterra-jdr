@@ -461,3 +461,22 @@ input, select { font-family: inherit; }
 }
 .mj-card-warn   { animation: mjPulseWarn 1.5s ease-in-out infinite; }
 .mj-card-danger { animation: mjPulseDanger 0.9s ease-in-out infinite; }
+
+/* --- Hub : carrousel horizontal (slider) --- */
+.carousel-stage { position:relative; height:400px; margin:0 auto; overflow:hidden; }
+.carousel-card { position:absolute; top:50%; left:50%; width:185px; height:290px;
+  transition: transform .45s cubic-bezier(.25,.8,.3,1), opacity .35s ease; cursor:pointer;
+  background:linear-gradient(180deg, var(--bg-panel-2), var(--bg-inset));
+  border:1px solid var(--line-gold); border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.55);
+  display:flex; flex-direction:column; overflow:hidden; will-change:transform, opacity; }
+.carousel-card.is-active { box-shadow:0 0 38px var(--gold-glow); border-color:var(--gold); }
+.carousel-portrait { width:100%; height:170px; background-size:cover; background-position:top center; }
+.carousel-nav { display:flex; justify-content:center; gap:16px; margin-top:10px; }
+.carousel-nav button { width:42px; height:42px; border-radius:50%; border:1px solid var(--line-gold);
+  background:var(--bg-inset); color:var(--gold-pale); font-size:18px; cursor:pointer; }
+.carousel-bio { text-align:center; max-width:520px; margin:14px auto 0; color:var(--ink-faint); font-size:14px; min-height:42px; }
+/* --- Hub : mémorial --- */
+.tomb { background:linear-gradient(180deg,#1a1714,#0e0c0a); border:1px solid #3a342a; border-radius:10px;
+  padding:14px; width:220px; text-align:center; }
+.tomb img { width:96px; height:110px; border-radius:8px; object-fit:cover; object-position:top center; filter:sepia(.55) grayscale(.25); }
+.tomb .epitaph { color:#b9a98a; font-size:12px; font-style:italic; margin-top:8px; }

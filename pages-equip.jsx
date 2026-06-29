@@ -31,12 +31,7 @@ const EQUIP_SLOTS = {
 const EQUIP_GRID_AREAS =
   "'casque armeP armeP amulette' 'armure armeP armeP anneau1' 'armure armeP armeP anneau2' 'armure armeS armeS ceinture' 'acc1 armeS armeS bottes' 'acc2 acc3 wnone wnone'";
 
-/* Portrait réel par perso (id interne -> fichier ATH/Perso). */
-const EQUIP_PORTRAITS = {
-  rathael:'ATH/Perso/Rathael.webp', urskaar:'ATH/Perso/Urskaar.webp',
-  smith:'ATH/Perso/Smith.webp',     lunick:'ATH/Perso/Elias.webp',
-  jett:'ATH/Perso/Jett.webp',
-};
+/* Portrait réel par perso : PORTRAITS (data.jsx, partagé hub + équipement). */
 
 /* (EQUIP_COINS, EQUIP_CAT_STYLE, EQUIP_CAT_FALLBACK, equipCatStyle supprimés — fournis par components.jsx sous INV_COINS / invCatStyle) */
 
@@ -380,7 +375,7 @@ function EquipBody({ char }) {
             background:'radial-gradient(ellipse 55% 60% at 50% 45%,rgba(130,30,30,0.22),transparent 62%)' }} />
           <div style={{ position:'absolute', bottom:0, left:0, right:0, height:180, pointerEvents:'none', animation:'groundGlow 4s ease-in-out infinite',
             background:'radial-gradient(ellipse 70% 100% at 50% 100%,rgba(150,45,25,0.28),transparent 70%)' }} />
-          <img src={EQUIP_PORTRAITS[char.id]} alt={char.name} draggable="false"
+          <img src={PORTRAITS[char.id]} alt={char.name} draggable="false"
             style={{ position:'relative', zIndex:2, height:'100%', maxWidth:'100%', objectFit:'contain',
               objectPosition:'bottom center',
               filter:'drop-shadow(0 32px 60px rgba(0,0,0,1)) drop-shadow(0 0 80px rgba(180,40,40,0.32)) drop-shadow(-50px 0 70px rgba(90,15,15,0.2)) drop-shadow(50px 0 70px rgba(90,15,15,0.2))' }} />

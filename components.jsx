@@ -23,7 +23,7 @@ const STAT_GLYPH = {
 };
 
 /* --- Barre de ressource (HP / Mana / Bouclier) avec flash de perte --- */
-function ResourceBar({ kind='hp', cur, max, big=false, segments=0 }) {
+function ResourceBar({ kind='hp', cur, max, big=false, segments=0, hideText=false }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (cur / max) * 100)) : 0;
   const prev = useRef(cur);
   const [flash, setFlash] = useState(null);
@@ -39,7 +39,7 @@ function ResourceBar({ kind='hp', cur, max, big=false, segments=0 }) {
       {segments > 0 && Array.from({ length: segments - 1 }).map((_, i) => (
         <div key={i} className="seg" style={{ left: ((i + 1) / segments) * 100 + '%' }}></div>
       ))}
-      <div className="txt">{Math.round(cur)} / {max}</div>
+      {!hideText && <div className="txt">{Math.round(cur)} / {max}</div>}
     </div>
   );
 }
