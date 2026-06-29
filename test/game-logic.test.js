@@ -865,6 +865,36 @@ test('carouselTransforms : slider horizontal plat — carte active centrée, voi
   assert.equal(t[4].offset, -1);
   assert.equal(t[1].translateX, -t[4].translateX);  // décalage horizontal symétrique
 });
+test('planReorder : déplace un item à la position d un autre + réindexe', () => {
+  const items = {
+    a: { id:'a', order:0 }, b: { id:'b', order:1 }, c: { id:'c', order:2 },
+  };
+  // déplacer c en position de a (début) → ordre c, a, b
+  const patch = L.planReorder(items, 'c', 'a');
+  assert.equal(patch.c, 0);
+  assert.equal(patch.a, 1);
+  assert.equal(patch.b, 2);
+});
+test('planReorder : targetId null = envoyer en fin', () => {
+  const items = { a:{ id:'a', order:0 }, b:{ id:'b', order:1 }, c:{ id:'c', order:2 } };
+  const patch = L.planReorder(items, 'a', null);   // a → fin : b, c, a
+  assert.equal(patch.a, 2);
+  assert.equal(patch.b, 0);
+  assert.equal(patch.c, 1);
+});
+test('planReorder : drop sur soi-même ou id inconnu = aucun changement', () => {
+  const items = { a:{ id:'a', order:0 }, b:{ id:'b', order:1 } };
+  assert.deepEqual(L.planReorder(items, 'a', 'a'), {});
+  assert.deepEqual(L.planReorder(items, 'zzz', 'a'), {});
+});
+test('planReorder : items sans order conservent leur ordre d insertion comme base', () => {
+  const items = { x:{ id:'x' }, y:{ id:'y' }, z:{ id:'z' } };
+  const patch = L.planReorder(items, 'z', 'x');   // z, x, y
+  assert.equal(patch.z, 0);
+  assert.equal(patch.x, 1);
+  assert.equal(patch.y, 2);
+});
+
 test('carouselTransforms : active = dernier index, wrap correct', () => {
   const t = L.carouselTransforms(5, 4);
   assert.equal(t[4].offset, 0);

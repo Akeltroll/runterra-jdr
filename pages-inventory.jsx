@@ -121,6 +121,11 @@ function CommonInventoryPage() {
   };
   const addItem = () => { const it = makeItem({ cat:'Butin', name:'Nouvel objet' }); setItem(it.id, it); setSelectedId(it.id); setEditing(it); };
   const staff = isStaff(role);
+  // Rangement manuel du coffre (staff) : drag & drop sur une case → réindexe l'ordre.
+  const reorderShared = (draggedId, targetId) => {
+    const patch = planReorder(items || {}, draggedId, targetId);
+    Object.entries(patch).forEach(([id, order]) => { const it = items[id]; if (it) setItem(id, { ...it, order }); });
+  };
 
   return (
     <div className="col" style={{ height:'100%', minHeight:0, padding:16 }}>
@@ -132,6 +137,7 @@ function CommonInventoryPage() {
             ? <div className="dim">Chargement…</div>
             : <InventoryGrid items={items} coins={sharedCoins} filter={filter} setFilter={setFilter}
                 onItemClick={(item) => setSelectedId(item.id)} onCoinClick={openCoinMenu} onAdd={staff ? () => setCatalog(true) : undefined}
+                onReorderItem={staff ? reorderShared : undefined}
                 title="INVENTAIRE COMMUN" capacity={240} />}
         </div>
         <div style={{ flex:'1 1 auto', minHeight:0 }}>

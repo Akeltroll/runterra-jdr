@@ -645,6 +645,29 @@
     return null;
   }
 
+  /* Réordonne un inventaire (objet {id:item}) : déplace draggedId à la position de targetId
+     (ou en fin si targetId est null). Trie par `item.order` (les items sans order gardent leur
+     ordre d'insertion, placés à la suite), insère, puis réindexe 0..n-1. Retourne un patch
+     {itemId: nouvelOrder} ne contenant QUE les items dont l'order a changé (pur, testé). */
+  function reorderOrdVal(it) { return typeof it.order === 'number' ? it.order : Number.MAX_SAFE_INTEGER; }
+  function planReorder(items, draggedId, targetId) {
+    if (targetId === draggedId) return {};
+    var arr = Object.values(items || {}).slice();
+    arr.sort(function (a, b) { return reorderOrdVal(a) - reorderOrdVal(b); });
+    var from = arr.findIndex(function (it) { return it.id === draggedId; });
+    if (from < 0) return {};
+    var moved = arr.splice(from, 1)[0];
+    if (targetId == null) {
+      arr.push(moved);
+    } else {
+      var to = arr.findIndex(function (it) { return it.id === targetId; });
+      if (to < 0) arr.push(moved); else arr.splice(to, 0, moved);
+    }
+    var patch = {};
+    arr.forEach(function (it, i) { if (it.order !== i) patch[it.id] = i; });
+    return patch;
+  }
+
   /* Positionnement d'un carrousel horizontal plat (slider) : pour chaque carte, l'offset signé le
      plus court par rapport à la carte active (avec wrap autour de l'anneau) → décalage horizontal.
      Carte active : centrée, agrandie, surélevée, au-dessus ; voisines : de face, plus petites et atténuées. */
@@ -821,7 +844,7 @@
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
-    sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect, carouselTransforms,
+    sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect, carouselTransforms, planReorder,
     xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
     escalationFactor, computeStats, charBaseStats, attrSum, respecValid,
   };

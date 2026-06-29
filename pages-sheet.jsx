@@ -173,6 +173,12 @@ function FicheInventoryColumn({ char, state, eff, canEdit, force, setInvItem, re
   const visibleInv = {};
   for (const [id, it] of Object.entries(inv)) if (!equippedIds.has(id)) visibleInv[id] = it;
 
+  // Rangement manuel : drag & drop d'un item sur une case → réindexe l'ordre d'affichage.
+  const reorderInv = (draggedId, targetId) => {
+    const patch = planReorder(visibleInv, draggedId, targetId);
+    Object.entries(patch).forEach(([id, order]) => { const it = visibleInv[id]; if (it) setInvItem(id, { ...it, order }); });
+  };
+
   const consume = (it) => {
     const fx = parseConsumableEffect(it); if (!fx) { setMenu(null); return; }
     if (fx.kind === 'hp') {
@@ -204,7 +210,8 @@ function FicheInventoryColumn({ char, state, eff, canEdit, force, setInvItem, re
     <div className="col gap-5">
       <div className="panel" style={{ padding:0, overflow:'hidden' }}>
         <InventoryGrid items={visibleInv} coins={state.coins || char.coins} filter={filter} setFilter={setFilter}
-          minCells={14} grow={true} onItemClick={openMenu} onAdd={canEdit ? (cat) => setCatCat(cat) : undefined} />
+          minCells={14} grow={true} onItemClick={openMenu} onReorderItem={reorderInv}
+          onAdd={canEdit ? (cat) => setCatCat(cat) : undefined} />
       </div>
       {canEdit && <ModifiersPanel modifiers={state.modifiers} setMod={setMod} />}
       {menu && <ItemActionMenu {...menu} onClose={() => setMenu(null)} />}

@@ -377,8 +377,11 @@ const invThumbStyle = (item, inset) => ({
 
 /* Grille d'inventaire dark-fantasy réutilisable (page Équipement + coffre commun).
    N'gère PAS les actions : remonte les clics au parent via onItemClick/onCoinClick. */
-function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinClick, onAdd, onDropItem, capacity = 120, title = 'INVENTAIRE', minCells = 49, grow = false }) {
-  const list = items ? Object.values(items).filter(it => it.qty == null || it.qty > 0) : [];
+function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinClick, onAdd, onDropItem, onReorderItem, capacity = 120, title = 'INVENTAIRE', minCells = 49, grow = false }) {
+  const ordVal = (it) => typeof it.order === 'number' ? it.order : Number.MAX_SAFE_INTEGER;
+  const list = items
+    ? Object.values(items).filter(it => it.qty == null || it.qty > 0).sort((a, b) => ordVal(a) - ordVal(b))
+    : [];
   const filtered = list.filter(it => filter === 'all' || it.cat === filter);
   const N = Math.max(minCells, Math.ceil(filtered.length / 7) * 7);
   const cells = Array.from({ length:N }, (_, i) => filtered[i] || null);
@@ -418,8 +421,18 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:5, paddingBottom:8 }}>
           {cells.map((item, i) => {
             const cs = invCatStyle(item);
+            // Réorganisation : déposer un item sur une case (un item = insérer avant lui ;
+            // une case vide = envoyer en fin). stopPropagation pour ne pas déclencher onDropItem.
+            const reorderProps = onReorderItem ? {
+              onDragOver: (e) => { e.preventDefault(); e.stopPropagation(); },
+              onDrop: (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const id = e.dataTransfer.getData('text');
+                if (id) onReorderItem(id, item ? item.id : null);
+              },
+            } : {};
             return (
-              <div key={i} style={{ position:'relative', aspectRatio:'1', borderRadius:3,
+              <div key={i} {...reorderProps} style={{ position:'relative', aspectRatio:'1', borderRadius:3,
                 background:item ? 'rgba(12,8,7,0.7)' : 'radial-gradient(circle at 50% 30%,#1b1510,#0e0a08)',
                 border:'1px solid ' + (item ? cs.border : 'rgba(160,128,72,0.16)'),
                 boxShadow:item ? 'inset 0 0 14px ' + cs.glow : 'none',
@@ -428,7 +441,7 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
                   <div draggable="true"
                     onDragStart={(e) => e.dataTransfer.setData('text', item.id)}
                     onClick={(e) => onItemClick && onItemClick(item, e)}
-                    style={{ ...invThumbStyle(item, '3px'), cursor:'pointer' }}>
+                    style={{ ...invThumbStyle(item, '3px'), cursor:'grab' }}>
                     {!item.img && (item.ic || '◆')}
                   </div>
                 )}

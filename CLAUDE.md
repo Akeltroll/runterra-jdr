@@ -119,7 +119,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `onAdd(cat)` : si fourni, « + Ajouter » délègue au parent (ouvre le picker) ; sinon ajout vierge.
   Grille dark-fantasy partagée `InventoryGrid` (Équipement + coffre commun **+ fiche joueur** ; badge quantité
   en **OR** ; props `minCells` [plancher de cases, défaut 49 ; 14 sur la fiche] + `grow` [s'étend avec le
-  contenu au lieu de scroller, pour la fiche]) + popovers `ItemActionMenu` / `AmountStepper` ;
+  contenu au lieu de scroller, pour la fiche]). **Rangement manuel** : les items sont triés par `item.order`
+  (les items sans `order` restent à la suite) ; prop `onReorderItem(draggedId, targetId)` = drag & drop d'un
+  item sur une case (item = insérer avant lui ; case vide = envoyer en fin) → `planReorder` (game-logic, pur,
+  testé) réindexe 0..n-1 et persiste l'`order` (fiche : tous ; coffre commun : staff ; Équipement : non câblé
+  pour ne pas casser le drag-vers-slot). Popovers `ItemActionMenu` / `AmountStepper` ;
   **`ItemCatalogPicker`** (modal de sélection rapide
   depuis `ITEM_CATALOG` → `AmountStepper` → `onPick(entry,qty)` ; bouton « Objet personnalisé » = filet) ;
   constantes `INV_*`/`inv*` (styles/format/filtres/pièces).
@@ -296,7 +300,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     xp:        0   ← progression DANS le niveau courant (entier ≥ 0, < xpToNext(level)) ; via addXp ; montée auto → level
     buffs:     { [buffId]: true }
     modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, sapience }
-    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods, weight, carry } }   ← perso, éditable
+    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods, weight, carry, order } }   ← perso, éditable (order = rangement manuel, cf. planReorder)
     invInit:   true   ← marqueur de migration (amorçage unique de l'inventaire)
     equipment: { [slotKey]: itemId }   ← paperdoll (page Équipement), temps réel ; slotKey ∈ EQUIP_SLOTS (12 slots, armure fusionnée + ceinture)
     armureInit: true   ← marqueur de migration (fusion des 4 slots d'armure → slot « armure » unique)
