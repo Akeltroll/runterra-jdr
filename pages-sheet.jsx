@@ -53,13 +53,17 @@ function SecondaryStats({ breakdown }) {
             border:'1px solid ' + (magic ? 'var(--silver-deep)' : 'var(--line-gold)') }}>
             <div className="row" style={{ justifyContent:'space-between', alignItems:'baseline' }}>
               <span className="overline" style={{ fontSize:9 }}>{STAT_LABEL[k]}</span>
-              <span style={{ display:'flex', alignItems:'baseline', gap:5 }}>
+              <span style={{ display:'flex', alignItems:'baseline', gap:4 }}>
+                {bonus !== 0 && (
+                  <span className="mono faint" style={{ fontSize:11 }}>
+                    {d.base} <span style={{ color: bonusCol, fontWeight:700 }}>{bonus > 0 ? '+' : '−'}{Math.abs(bonus)}</span> =
+                  </span>
+                )}
                 <span className="mono" style={{ fontSize:17, fontWeight:700, color: magic ? 'var(--silver)' : 'var(--gold-pale)' }}>{d.effective}{pct(k) ? '%' : ''}</span>
-                {bonus !== 0 && <span className="mono" style={{ fontSize:11, fontWeight:700, color: bonusCol }}>{bonus > 0 ? '+' : ''}{bonus}</span>}
               </span>
             </div>
             <div className="faint" style={{ fontSize:10, fontFamily:'var(--font-mono)', marginTop:2 }}>
-              base {d.base}{detail(d) ? ' · ' + detail(d) : ''}
+              {bonus !== 0 ? detail(d) : 'aucun bonus'}
             </div>
           </div>
         );
@@ -163,6 +167,11 @@ function FicheInventoryColumn({ char, state, eff, canEdit, force, setInvItem, re
   const [editing, setEditing] = useState(null);  // item édité (modal)
   const [catCat, setCatCat] = useState(null);     // picker catalogue
   const inv = state.inventory || {};
+  // Les items actuellement équipés (arme/armure/accessoires) ne sont plus "dans le sac" :
+  // on les retire de la grille affichée (l'inventaire complet reste pour l'ajout/stacking).
+  const equippedIds = new Set(Object.values(state.equipment || {}));
+  const visibleInv = {};
+  for (const [id, it] of Object.entries(inv)) if (!equippedIds.has(id)) visibleInv[id] = it;
 
   const consume = (it) => {
     const fx = parseConsumableEffect(it); if (!fx) { setMenu(null); return; }
@@ -194,7 +203,7 @@ function FicheInventoryColumn({ char, state, eff, canEdit, force, setInvItem, re
   return (
     <div className="col gap-5">
       <div className="panel" style={{ padding:0, overflow:'hidden' }}>
-        <InventoryGrid items={inv} coins={state.coins || char.coins} filter={filter} setFilter={setFilter}
+        <InventoryGrid items={visibleInv} coins={state.coins || char.coins} filter={filter} setFilter={setFilter}
           minCells={14} grow={true} onItemClick={openMenu} onAdd={canEdit ? (cat) => setCatCat(cat) : undefined} />
       </div>
       {canEdit && <ModifiersPanel modifiers={state.modifiers} setMod={setMod} />}
