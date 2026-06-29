@@ -348,9 +348,15 @@ function setUserAssignment(uid, role, charId) {
   return window.RTDB.updatePath(`users/${uid}`, { role, charId: charId || null });
 }
 
+/* Supprime un compte de /users (page Admin, réservé admin). Efface le mapping rôle/perso ;
+   le compte Firebase Auth subsiste (se ré-inscrira « joueur en attente » à sa prochaine connexion). */
+function removeUser(uid) {
+  return window.RTDB.setPath(`users/${uid}`, null);
+}
+
 Object.assign(window, {
   useCharState, useAllCharStates, useSharedInventory, useSharedCoins, useItemCatalog, CATALOG,
-  useAuthIdentity, useAllUsers, setUserAssignment,
+  useAuthIdentity, useAllUsers, setUserAssignment, removeUser,
   seedIfEmpty, charPath, CAMPAIGN, SHARED_INV, SHARED_COINS, moveItem, moveCoins,
   useSharedTurn, COMBAT_TURN,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,

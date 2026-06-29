@@ -16,6 +16,18 @@ function AdminUserRow({ uid, rec }) {
       toast('Échec de la mise à jour (droits admin ?)', 'debuff');
     }
   };
+  const myUid = window.RTDB.currentUser && window.RTDB.currentUser.uid;
+  const isSelf = uid === myUid;
+  const del = async () => {
+    const label = rec.username || '(sans nom)';
+    if (!window.confirm(`Supprimer le compte « ${label} » de la liste ?\n\nLe compte de connexion Firebase subsiste : il réapparaîtra « en attente » s'il se reconnecte. Pour l'effacer totalement, supprime-le aussi dans la console Firebase (Authentication).`)) return;
+    try {
+      await removeUser(uid);
+      toast(`Compte « ${label} » supprimé de la liste`, 'debuff');
+    } catch (e) {
+      toast('Échec de la suppression (droits admin ?)', 'debuff');
+    }
+  };
   const selStyle = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'6px 9px', fontSize:13 };
   return (
     <div className="row gap-3 wrap" style={{ alignItems:'center', padding:'10px 0', borderBottom:'1px solid var(--line)' }}>
@@ -28,6 +40,9 @@ function AdminUserRow({ uid, rec }) {
         {CHARACTERS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
       <button className="btn btn-sm btn-gold" onClick={save} disabled={!dirty}>Enregistrer</button>
+      <button className="btn btn-sm" onClick={del} disabled={isSelf}
+        title={isSelf ? 'Impossible de supprimer votre propre compte' : 'Supprimer ce compte de la liste'}
+        style={{ color:'var(--hp)', borderColor:'var(--hp)', opacity: isSelf ? 0.4 : 1 }}>🗑</button>
     </div>
   );
 }
