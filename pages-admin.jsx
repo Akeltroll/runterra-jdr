@@ -62,7 +62,9 @@ function CatalogAdminPanel() {
    Réutilise InventoryPanel + le picker catalogue (même flux que la fiche). */
 function CharInventoryAdminPanel() {
   const [charId, setCharId] = useState(CHARACTERS[0] ? CHARACTERS[0].id : '');
-  const { state, setInvItem, removeInvItem } = useCharState(charId);
+  const cs = useCharState(charId);
+  const { setInvItem, removeInvItem } = cs;
+  const state = cs.state || {};   // null avant chargement Firebase → repli (sinon crash sur state.inventory)
   const [catCat, setCatCat] = useState(null);   // catégorie pré-filtrée ; null = picker fermé
   const inventory = state.inventory;
   const equipment = state.equipment || {};
