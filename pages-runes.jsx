@@ -6,14 +6,21 @@
    ============================================================ */
 const RUNE_INDEX = buildRuneIndex(RUNES);
 
-function RuneNode({ node, state, choice, capstone, onClick, onChoice }) {
+/* Glyphe décoratif + libellé par palier. */
+const RUNE_GLYPH = { mineure:'◆', avancee:'◇', fondamentale:'⬢' };
+const RUNE_TIER_LABEL = { mineure:'Mineure', avancee:'Avancée', fondamentale:'Fondamentale' };
+
+function RuneNode({ node, state, choice, capstone, onClick, onChoice, onHover }) {
   const isAdp = node.mods && node.mods.adp != null;
   return (
-    <div className={'rune-node ' + state} title={node.desc}
-      onClick={() => onClick(node)}>
-      <div className="ntier">{node.tier}</div>
-      <div className="nname">{node.name}</div>
-      <div className="ndesc">{node.desc}</div>
+    <div className="rune-cell">
+      <div className={'rune-hex tier-' + node.tier + ' ' + state}
+        onClick={() => onClick(node)}
+        onMouseEnter={(e) => onHover(node, capstone, e)}
+        onMouseLeave={() => onHover(null)}>
+        <span className="rune-hex-glyph">{RUNE_GLYPH[node.tier] || '◆'}</span>
+      </div>
+      <div className="rune-hex-name">{node.name}</div>
       {isAdp && state === 'selected' && (
         <div className="rune-adp" onClick={(e) => e.stopPropagation()}>
           {['ad', 'ap'].map(k => (
@@ -22,12 +29,45 @@ function RuneNode({ node, state, choice, capstone, onClick, onChoice }) {
           ))}
         </div>
       )}
-      {capstone && (
-        <div className="rune-capstone-sub">
-          <span className="cap-lbl">Bonus thématique</span>
-          <span className="cap-txt">{capstone}</span>
-        </div>
-      )}
+    </div>
+  );
+}
+
+/* Connecteurs SVG verticaux d'une famille (mineure->avancée->fondamentale par voie).
+   Coordonnées déterministes : 3 colonnes (x=50/150/250), 3 rangées (y=50/150/250).
+   Une liaison est illuminée quand le palier SUPÉRIEUR (prérequis) est sélectionné. */
+function RuneLinks({ family, isSelected }) {
+  const colX = [50, 150, 250], rowY = [50, 150, 250];
+  const lines = [];
+  family.paths.forEach((p, c) => {
+    for (let r = 0; r < p.nodes.length - 1; r++) {
+      const lit = isSelected(p.nodes[r].id);
+      lines.push(
+        <line key={p.key + '-' + r} x1={colX[c]} y1={rowY[r]} x2={colX[c]} y2={rowY[r + 1]}
+          className={'rune-link' + (lit ? ' lit' : '')} />
+      );
+    }
+  });
+  return (
+    <svg className="rune-links" viewBox="0 0 300 300" preserveAspectRatio="none" aria-hidden="true">
+      {lines}
+    </svg>
+  );
+}
+
+/* Popover de détail (survol d'un nœud). hover = { node, capstone, fam, x, y } | null. */
+function RuneTooltip({ hover }) {
+  if (!hover) return null;
+  const { node, capstone, x, y } = hover;
+  return (
+    <div className="rune-tooltip" style={{ '--fam': hover.fam,
+      left: Math.min(x + 14, window.innerWidth - 272),
+      top: Math.min(y + 12, window.innerHeight - 170) }}>
+      <div className="rt-tier">{RUNE_TIER_LABEL[node.tier] || node.tier}</div>
+      <div className="rt-name">{node.name}</div>
+      <div className="rt-desc">{node.desc}</div>
+      {node.note ? <div className="rt-note">⚠ {node.note}</div> : null}
+      {capstone ? <div className="rt-cap"><span>Bonus thématique</span>{capstone}</div> : null}
     </div>
   );
 }
