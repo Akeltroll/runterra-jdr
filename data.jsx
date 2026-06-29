@@ -97,8 +97,8 @@ const PORTRAITS = {
 const MEMORIAL = [
   { name:'Lunick', player:'Fab', img:'ATH/Perso/Lunick.webp',
     fell:'Séance n°13, Désert de Shurima (30/05)',
-    epitaph:'Tombé dans les sables de Shurima, au cœur de la bataille des Xer’Sai. La fureur du combat l’emporta avant la bête.',
-    tale:'Désert de Shurima, bataille des Xer’Sai. Lunick achève l’une des créatures d’une Relique Lunaire, mais encaisse de plein fouet le renvoi de la mer astrale. Relevé in extremis, il rejoint un front truffé de bombes hextech où l’ordre du combat vole en éclats. Dans la confusion, un coup destiné au monstre le frappe. Ses compagnons ne purent rien. Le groupe reprit la route de Taliyah, le cœur lourd.' },
+    epitaph:'Survécut au renvoi astral. Survécut au Xer’Sai géant. N’a pas survécu à Urskaar, qui visait pourtant le monstre.',
+    tale:'Désert de Shurima, bataille des Xer’Sai. Lunick achève une bête à la Relique Lunaire et encaisse le renvoi de la mer astrale : mourant, sauvé in extremis par une potion. Galvanisé, il fonce sur le front… truffé de bombes hextech. Là, dans une superbe chorégraphie d’échecs critiques, Urskaar (bras déjà fracturé) place LE coup parfait : sur Lunick. Le Xer’Sai, lui, n’y est pour rien. Mâchoire relocalisée, quelques cailloux en supplément. Ses compagnons, médusés, n’eurent que le temps de constater le travail.' },
 ];
 
 const CHARACTERS = [
