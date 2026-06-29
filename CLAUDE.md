@@ -208,12 +208,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   portrait via `--pw`, `paginate`), `RecapLightbox` (lecture plein écran zoomable). Visible des
   3 rôles, **lecture seule, zéro Firebase, zéro règle RTDB**. Ajouter une séance = déposer les
   `.webp` dans `recaps/seance-XX/` + une entrée `RECAPS`.
-- `pages-runes.jsx` — onglet **Runes** (`RuneTreePage`) : **arbre visuel** (nœuds hexagonaux à
-  taille croissante par palier, liaisons SVG verticales qui s'illuminent quand la voie progresse,
-  tooltip de détail au survol — `RuneNode`/`RuneLinks`/`RuneTooltip`/`RuneFamilyPanel` ; grille 3 voies
-  × 3 paliers à pas fixe → coordonnées SVG déterministes, viewBox `0 0 300 300`). Refonte **purement
-  graphique** (logique/données inchangées ; spec/plan `docs/superpowers/{specs,plans}/2026-06-30-arbre-runes-visuel*`).
-  Arbre des 5 familles (data `RUNES`),
+- `pages-runes.jsx` — onglet **Runes** (`RuneTreePage`) : **constellation radiale** (les 5 familles
+  rayonnent d'un cœur central, chaque voie = chaîne de nœuds centre→bord ; formes SVG par palier
+  losange/carré/hexagone, **hook `node.img`** pour des assets futurs ; faisceaux **centre→rune** qui
+  s'illuminent quand la rune extérieure est prise ; tooltip de détail au survol des nœuds ET des cœurs
+  de famille — `RuneConstellation`/`RuneNodeShape`/`RuneCore`/`RuneTooltip`). Géométrie en **logique
+  pure testée** `runeRadialLayout(RUNES)` (game-logic ; secteurs 360/n, éventail des voies, rayons par
+  palier). Refonte **purement graphique** (logique/données inchangées ; spec/plan
+  `docs/superpowers/{specs,plans}/2026-06-30-arbre-runes-visuel*`). Arbre des 5 familles (data `RUNES`),
   sélection stricte (budget = `level + runeBonus`, ordre Mineure→Avancée→Fondamentale), persistée
   `state/runes` (`setRuneSelected`/`setRuneChoice`/`resetRunes`). Bonus plats via `sumRuneMods`+`mergeMods`
   → `computeEffective` (fiche/MJ/équip) ; conditionnel/actif **et sous-effets non calculés** (champ

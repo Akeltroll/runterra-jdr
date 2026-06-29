@@ -668,6 +668,43 @@
     return patch;
   }
 
+  /* Disposition radiale (constellation) de l'arbre de runes : les familles rayonnent d'un cœur
+     central, chaque famille sur un secteur de 360/n, ses voies en éventail, chaque voie = une
+     chaîne de nœuds du centre vers le bord (mineure proche → fondamentale sur la jante). Pur.
+     Retourne { size, center, ring, families:[{ key,name,color,theme, core:{x,y},
+       nodes:[{id,tier,name,x,y}], segments:[{x1,y1,x2,y2,outerId}] }] }.
+     `outerId` = id du nœud extérieur dont la sélection illumine le segment (faisceau centre→rune). */
+  function runeRadialLayout(families, opts) {
+    opts = opts || {};
+    var size = opts.size || 1000;
+    var c = size / 2;
+    var ring = opts.ring || 165;                       // anneau central (cœurs de famille)
+    var radii = opts.radii || [305, 405, 470];         // mineure / avancée / fondamentale
+    var spread = (opts.pathSpreadDeg != null ? opts.pathSpreadDeg : 21) * Math.PI / 180;
+    var start = (opts.startDeg != null ? opts.startDeg : -90) * Math.PI / 180;
+    var n = families.length || 1;
+    var out = { size: size, center: c, ring: ring, families: [] };
+    families.forEach(function (fam, fi) {
+      var base = start + (2 * Math.PI) * (fi / n);
+      var core = { x: c + ring * Math.cos(base), y: c + ring * Math.sin(base) };
+      var nodes = [], segments = [];
+      (fam.paths || []).forEach(function (p, pi) {
+        var ang = base + (pi - 1) * spread;            // -spread, 0, +spread
+        var prev = core;
+        (p.nodes || []).forEach(function (node, ti) {
+          var r = radii[ti] != null ? radii[ti] : radii[radii.length - 1];
+          var pt = { x: c + r * Math.cos(ang), y: c + r * Math.sin(ang) };
+          nodes.push({ id: node.id, tier: node.tier, name: node.name, x: pt.x, y: pt.y });
+          segments.push({ x1: prev.x, y1: prev.y, x2: pt.x, y2: pt.y, outerId: node.id });
+          prev = pt;
+        });
+      });
+      out.families.push({ key: fam.key, name: fam.name, color: fam.color, theme: fam.theme,
+        core: core, nodes: nodes, segments: segments });
+    });
+    return out;
+  }
+
   /* Positionnement d'un carrousel horizontal plat (slider) : pour chaque carte, l'offset signé le
      plus court par rapport à la carte active (avec wrap autour de l'anneau) → décalage horizontal.
      Carte active : centrée, agrandie, surélevée, au-dessus ; voisines : de face, plus petites et atténuées. */
@@ -845,6 +882,7 @@
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect, carouselTransforms, planReorder,
+    runeRadialLayout,
     xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
     escalationFactor, computeStats, charBaseStats, attrSum, respecValid,
   };

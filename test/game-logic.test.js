@@ -895,6 +895,41 @@ test('planReorder : items sans order conservent leur ordre d insertion comme bas
   assert.equal(patch.y, 2);
 });
 
+test('runeRadialLayout : 5 familles, 9 nœuds + 9 segments chacune, cœur sur l anneau', () => {
+  const fams = [1,2,3,4,5].map(i => ({
+    key:'f'+i, name:'F'+i, color:'#fff', theme:'t',
+    paths:[0,1,2].map(p => ({ key:'p'+p, nodes:[
+      { id:`f${i}_p${p}_1`, tier:'mineure', name:'a' },
+      { id:`f${i}_p${p}_2`, tier:'avancee', name:'b' },
+      { id:`f${i}_p${p}_3`, tier:'fondamentale', name:'c' },
+    ]})),
+  }));
+  const lay = L.runeRadialLayout(fams);
+  assert.equal(lay.families.length, 5);
+  assert.equal(lay.families[0].nodes.length, 9);
+  assert.equal(lay.families[0].segments.length, 9);
+  // cœur sur l'anneau (distance au centre ≈ ring)
+  const c = lay.families[0].core, cx = lay.center;
+  const dCore = Math.hypot(c.x - cx, c.y - cx);
+  assert.ok(Math.abs(dCore - lay.ring) < 1);
+});
+test('runeRadialLayout : mineure plus proche du centre que la fondamentale (même voie)', () => {
+  const fams = [{ key:'f', name:'F', color:'#fff', theme:'t',
+    paths:[{ key:'p', nodes:[
+      { id:'m', tier:'mineure', name:'m' },
+      { id:'a', tier:'avancee', name:'a' },
+      { id:'g', tier:'fondamentale', name:'g' },
+    ]}] }];
+  const lay = L.runeRadialLayout(fams);
+  const cx = lay.center;
+  const ns = lay.families[0].nodes;
+  const d = (n) => Math.hypot(n.x - cx, n.y - cx);
+  assert.ok(d(ns[0]) < d(ns[1]) && d(ns[1]) < d(ns[2]));
+  // chaque segment référence la rune extérieure qui l'illumine
+  assert.equal(lay.families[0].segments[0].outerId, 'm');
+  assert.equal(lay.families[0].segments[2].outerId, 'g');
+});
+
 test('carouselTransforms : active = dernier index, wrap correct', () => {
   const t = L.carouselTransforms(5, 4);
   assert.equal(t[4].offset, 0);
