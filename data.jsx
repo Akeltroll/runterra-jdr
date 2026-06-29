@@ -96,14 +96,14 @@ const PORTRAITS = {
 /* Personnages tombés (mémorial du hub). Données statiques, non persistées. */
 const MEMORIAL = [
   { name:'Lunick', player:'Fab', img:'ATH/Perso/Lunick.webp',
-    fell:'Séance n°13 — Désert de Shurima (30/05)',
+    fell:'Séance n°13, Désert de Shurima (30/05)',
     epitaph:'Achevé non par le Xer’Sai, mais par un coup d’Urskaar en plein chaos. Mâchoire relocalisée, côtes criblées de pierres.',
-    tale:'Bataille des Xer’Sai à Shurima. Après avoir achevé une bête à la Relique Lunaire (et encaissé le renvoi de la connexion astrale), Lunick rejoint le front truffé de bombes Hextech. Dans la confusion, Urskaar — échec critique, bras fracturé — le tue accidentellement. Le groupe, bouleversé, poursuit la route de Taliyah.' },
+    tale:'Bataille des Xer’Sai à Shurima. Après avoir achevé une bête à la Relique Lunaire (et encaissé le renvoi de la connexion astrale), Lunick rejoint le front truffé de bombes Hextech. Dans la confusion, Urskaar (échec critique, bras fracturé) le tue accidentellement. Le groupe, bouleversé, poursuit la route de Taliyah.' },
 ];
 
 const CHARACTERS = [
   mkChar({ id:'rathael', name:'Rathäel', player:'JB', title:'Le Serment Brisé', cls:'Chevalier déchu',
-    bio:'Chevalier déchu rongé par un serment brisé. Sa chair gèle à mesure que son âme se fend — plus on le frappe, plus il s’endurcit.',
+    bio:'Chevalier déchu rongé par un serment brisé. Sa chair gèle à mesure que son âme se fend. Plus on le frappe, plus il s’endurcit.',
     F:4, H:3, M:4, C:1, level:2, color:'var(--hp)', initial:'R', img:'players/rathael.jpg',
     weaponId:'claymore', weaponIds:['claymore','epeebouclier'], lethality:0, fatigue:1, eau:3,
     hpCur:1.0, manaCur:205/265, shieldCur:99, shieldMax:200,
@@ -119,7 +119,7 @@ const CHARACTERS = [
     coins:{ plat:0, or:10, arg:10, cuiv:10 },
   }),
   mkChar({ id:'urskaar', name:'Urskaar', player:'Baptiste', title:'Le Poing de Fer', cls:'Pugiliste',
-    bio:'Colosse au sang d’ours, encaisseur né. Frappe fort, tombe rarement — et veille (parfois maladroitement) sur les siens.',
+    bio:'Colosse au sang d’ours, encaisseur né. Frappe fort, tombe rarement, et veille (parfois maladroitement) sur les siens.',
     F:6, H:1, M:5, C:0, level:2, color:'var(--gold)', initial:'U', img:'players/urskaar.jpg',
     weaponId:'gantelet', weaponIds:['gantelet','dague','epeeni'], lethality:0, fatigue:1, eau:2,
     hpCur:312/685, manaCur:30/180, shieldCur:0, shieldMax:0,

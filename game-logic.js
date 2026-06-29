@@ -645,11 +645,12 @@
     return null;
   }
 
-  /* Positionnement coverflow 3D d'un carrousel circulaire : pour chaque carte, l'offset signé le
-     plus court par rapport à la carte active (avec wrap autour de l'anneau) → transform 3D.
-     Carte active : face, centrée, pleine ; voisines : tournées/reculées/atténuées. */
+  /* Positionnement d'un carrousel horizontal plat (slider) : pour chaque carte, l'offset signé le
+     plus court par rapport à la carte active (avec wrap autour de l'anneau) → décalage horizontal.
+     Carte active : centrée, agrandie, surélevée, au-dessus ; voisines : de face, plus petites et atténuées. */
   function carouselTransforms(count, activeIndex) {
     count = Math.max(1, count | 0);
+    var SPACING = 150;
     var out = [];
     for (var i = 0; i < count; i++) {
       var off = i - activeIndex;
@@ -658,10 +659,10 @@
       var abs = Math.abs(off);
       out.push({
         offset: off,
-        rotateY: off * -35,
-        translateZ: -abs * 120,
-        scale: Math.max(0.6, 1 - abs * 0.18),
-        opacity: abs > 2 ? 0 : Math.max(0.35, 1 - abs * 0.3),
+        translateX: off * SPACING,
+        translateY: off === 0 ? -10 : 0,
+        scale: off === 0 ? 1.12 : Math.max(0.7, 0.92 - (abs - 1) * 0.14),
+        opacity: abs > 2 ? 0 : (off === 0 ? 1 : Math.max(0.4, 0.9 - (abs - 1) * 0.45)),
         zIndex: count - abs,
       });
     }

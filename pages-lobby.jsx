@@ -20,7 +20,7 @@ function CharCarousel({ chars, statesById, accessibleIds, staff }) {
           return (
             <div key={c.id} className={'carousel-card' + (i === active ? ' is-active' : '')}
               onClick={() => i !== active && t.opacity > 0 && setActive(i)}
-              style={{ transform:`translate(-50%,-50%) rotateY(${t.rotateY}deg) translateZ(${t.translateZ}px) scale(${t.scale})`,
+              style={{ transform:`translate(-50%,-50%) translateX(${t.translateX}px) translateY(${t.translateY}px) scale(${t.scale})`,
                 opacity:t.opacity, zIndex:t.zIndex, pointerEvents: t.opacity > 0 ? 'auto' : 'none' }}>
               <div className="carousel-portrait" style={{ backgroundImage:`url(${PORTRAITS[c.id]})` }} />
               <div style={{ padding:'10px 12px', flex:1 }}>
@@ -95,7 +95,7 @@ function HubPage({ go }) {
   const lastRecap = (typeof RECAPS !== 'undefined' && RECAPS.length) ? RECAPS[0] : null;
 
   return (
-    <div className="hex-bg" style={{ minHeight:'100%', position:'relative', overflow:'auto' }}>
+    <div className="hex-bg" style={{ height:'100%', position:'relative', overflow:'auto' }}>
       <div style={{ position:'absolute', top:'-25%', left:'50%', transform:'translateX(-50%)', width:900, height:900,
         background:'radial-gradient(circle, rgba(200,155,60,.10), transparent 65%)', pointerEvents:'none' }} />
       <div style={{ position:'relative', padding:'40px 24px', maxWidth:1000, margin:'0 auto' }}>
@@ -108,8 +108,8 @@ function HubPage({ go }) {
 
         <div className="row gap-4" style={{ justifyContent:'center', flexWrap:'wrap', marginTop:28 }}>
           <button className="btn btn-gold btn-lg" onClick={() => go(staff ? 'mj' : 'sheet')}>▶ Reprendre</button>
-          {combatActif && <button className="btn btn-lg" onClick={() => go('competences')}>⚔ Combat en cours — Tour {turn}</button>}
-          {lastRecap && <button className="btn btn-lg" onClick={() => go('recap')}>📖 Dernier récap — {lastRecap.titre || lastRecap.date}</button>}
+          {combatActif && <button className="btn btn-lg" onClick={() => go('competences')}>⚔ Combat en cours · Tour {turn}</button>}
+          {lastRecap && <button className="btn btn-lg" onClick={() => go('recap')}>📖 Dernier récap · {lastRecap.titre || lastRecap.date}</button>}
         </div>
 
         <MemorialSection />
