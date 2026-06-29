@@ -478,5 +478,5 @@ input, select { font-family: inherit; }
 /* --- Hub : mémorial --- */
 .tomb { background:linear-gradient(180deg,#1a1714,#0e0c0a); border:1px solid #3a342a; border-radius:10px;
   padding:14px; width:220px; text-align:center; }
-.tomb img { width:80px; height:80px; border-radius:8px; object-fit:cover; filter:sepia(.6) grayscale(.3); }
+.tomb img { width:96px; height:110px; border-radius:8px; object-fit:cover; object-position:top center; filter:sepia(.55) grayscale(.25); }
 .tomb .epitaph { color:#b9a98a; font-size:12px; font-style:italic; margin-top:8px; }
