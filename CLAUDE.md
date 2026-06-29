@@ -36,6 +36,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   « ⋯ Plus » : Journal + Progression, staff), `footer` (lien discret bas de page :
   Design System, staff). Récap placé en avant-dernier (Admin reste dernier).
   L'onglet `id:'competences'` a pour **libellé « Combat »** (id inchangé pour le routage).
+  **`defaultRoute → 'lobby'` pour tous les rôles** : tout le monde atterrit sur le Hub d'accueil
+  (`id:'lobby'` → `<HubPage/>`), joueurs inclus (`lobby` ajouté à `PAGE_ACCESS.joueur`).
 - `game-logic.js` — **logique pure** (UMD : testable en Node + `window`). `clamp`,
   `clampGauge`, `DEFAULT_MODIFIERS`, `BUFF_STAT_MAP`, `computeEffective`,
   `applyHealMods`, `buildDefaultState`. **Moteur de stats refondu** (système hypermétrique) :
@@ -75,11 +77,15 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   partagé fiche + Équipement). **`statBreakdown(base, modifiers, buffs, stuffMods)`** → `{[stat]:{effective,
   base, buff, mod, stuff}}` (décompose chaque stat effective par source via recomposition de `computeEffective` ;
   `base+buff+mod+stuff = effectif` ; alimente l'affichage breakdown de la fiche).
+  **`carouselTransforms(count, activeIndex)`** → tableau `{offset, translateX, translateY, scale, opacity, zIndex}`
+  (slider horizontal plat du hub : carte active centrée/agrandie, voisines décalées/atténuées, wrap circulaire).
 - `data.jsx` — règles immuables : `CHARACTERS` (avec `inv`
   par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS` (caps §3, cap PJ 20), `ATTRIBUTES`, `RUNE`, `JOURNAL`,
   `ITEM_CATALOG` (catalogue d'items pré-enregistrés pour l'ajout staff : `{cat,name,sub,ic,img,type}`).
   `mkChar` attache `attrs` + `modifiers` (ne bake **plus** `stats` : calcul live via `charBaseStats`,
-  voir `game-logic.js`). (`ATTACK_MODES` **retiré** — voir Décisions.)
+  voir `game-logic.js`). (`ATTACK_MODES` **retiré** — voir Décisions.) Aussi : `char.bio` (description courte
+  par perso, affichée au hub) ; **`PORTRAITS`** (`{charId: 'ATH/Perso/X.webp'}`, partagé hub + Équipement) ;
+  **`MEMORIAL`** (`[{name,player,img,fell,epitaph,tale}]`, persos morts du hub — Lunick).
 - `data-state.jsx` — hooks temps réel : `useCharState` (+ setters inventaire
   `setInvItem`/`removeInvItem` + équipement `setEquipment` + monnaie `setCoin`), `useAllCharStates`,
   `useSharedInventory` (inventaire commun), `useSharedCoins` (monnaie commune), `useAuthIdentity`
@@ -252,7 +258,17 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   CREATION_BONUS`, cap = `LEVELS.limit`, plancher 0 ; **aperçu live** des stats résultantes (`computeStats`).
   **Verrou** : un joueur respec **une fois** → `setAttrs(draft,true)` (écrit `attrs`+`attrsLocked`) ; le staff
   édite librement + (dé)verrouille (`setAttrsLocked`). Logique pure `attrSum`/`respecValid` (game-logic, testées).
-- `pages-lobby/ds.jsx` — pages secondaires (mockup, données surtout statiques).
+- `pages-lobby.jsx` — **Hub d'accueil** (`HubPage`, onglet « Accueil », **page d'atterrissage de tous les
+  rôles** via `defaultRoute → 'lobby'`). Pièce maîtresse : **`CharCarousel`** = carrousel horizontal plat
+  (slider) des 5 persos, positionné par `carouselTransforms(count, activeIndex)` (game-logic, pur : carte active
+  centrée/agrandie/au-dessus, voisines de face atténuées, navigation ◄/► + clic). Cartes = portrait `PORTRAITS`,
+  nom/classe/niveau + **barres PV/mana/bouclier `ResourceBar hideText`** (sans chiffres). **Données temps réel** :
+  staff = `useAllCharStates()` (les 5) ; joueur = `useCharState(monId)` (sa carte ; les autres grisées, contrainte
+  RTDB « sa fiche seule »). Max via `charBaseStats`. **Bio** (`char.bio`) sous la carte de face. Accès rapides :
+  ▶ Reprendre (→ fiche/MJ), ⚔ Combat en cours (si `useSharedTurn`/`useMJEnemies` actifs), 📖 Dernier récap.
+  **`MemorialSection`** = mémorial des persos morts (`MEMORIAL`, data.jsx ; Lunick en tête, récit dépliable).
+  Conteneur `height:100% + overflow:auto` (scroll interne). Zéro Firebase en écriture, zéro nouvelle règle RTDB.
+- `pages-ds.jsx` — page secondaire (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
   joueur = sa fiche seule, staff = tout ; `sharedInventory` = R/W pour tout participant
