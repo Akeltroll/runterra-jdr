@@ -72,21 +72,20 @@ function RuneTooltip({ hover }) {
   );
 }
 
-function RuneFamilyPanel({ family, nodeState, choices, onClick, onChoice }) {
+function RuneFamilyPanel({ family, nodeState, choices, selectedSet, onClick, onChoice, onHover }) {
   return (
     <div className="rune-family" style={{ '--fam': family.color }}>
       <h3 style={{ color: family.color }}>{family.name}</h3>
-      <div className="rune-paths">
-        {family.paths.map(p => (
-          <div className="rune-path" key={p.key}>
-            <div className="pname">{p.name}</div>
-            {p.nodes.map(n => (
-              <RuneNode key={n.id} node={n} state={nodeState(n.id)} choice={choices[n.id]}
-                capstone={n.tier === 'fondamentale' ? p.capstone : null}
-                onClick={onClick} onChoice={onChoice} />
-            ))}
-          </div>
-        ))}
+      <div className="rune-tree">
+        <RuneLinks family={family} isSelected={(id) => !!selectedSet[id]} />
+        <div className="rune-node-grid">
+          {family.paths.map(p => p.nodes.map(n => (
+            <RuneNode key={n.id} node={n} state={nodeState(n.id)} choice={choices[n.id]}
+              capstone={n.tier === 'fondamentale' ? p.capstone : null}
+              onClick={onClick} onChoice={onChoice}
+              onHover={(node, capstone, e) => onHover(node, capstone, family.color, e)} />
+          )))}
+        </div>
       </div>
       <div className="rune-theme-cond">Condition de thématique : {family.theme}</div>
     </div>
@@ -108,6 +107,11 @@ function RuneReminders({ selectedIds }) {
 function RuneBody({ char, staff }) {
   const { state, setField, setRuneSelected, setRuneChoice, resetRunes } = useCharState(char.id);
   const toast = useToast();
+  const [hover, setHover] = useState(null);
+  const onHover = (node, capstone, fam, e) => {
+    if (!node) { setHover(null); return; }
+    setHover({ node, capstone, fam, x: e.clientX, y: e.clientY });
+  };
   if (!state) return <div style={{ padding:40 }} className="dim">Chargement…</div>;
   const runes = state.runes || {};
   const selectedSet = runes.selected || {};
@@ -161,10 +165,12 @@ function RuneBody({ char, staff }) {
       <div className="rune-grid">
         {RUNES.map(f => (
           <RuneFamilyPanel key={f.key} family={f} nodeState={nodeState}
-            choices={choices} onClick={onClick} onChoice={setRuneChoice} />
+            choices={choices} selectedSet={selectedSet} onClick={onClick}
+            onChoice={setRuneChoice} onHover={onHover} />
         ))}
       </div>
       <RuneReminders selectedIds={selectedIds} />
+      <RuneTooltip hover={hover} />
     </div>
   );
 }
