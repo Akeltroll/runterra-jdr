@@ -122,8 +122,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   contenu au lieu de scroller, pour la fiche]). **Rangement manuel** : les items sont triés par `item.order`
   (les items sans `order` restent à la suite) ; prop `onReorderItem(draggedId, targetId)` = drag & drop d'un
   item sur une case (item = insérer avant lui ; case vide = envoyer en fin) → `planReorder` (game-logic, pur,
-  testé) réindexe 0..n-1 et persiste l'`order` (fiche : tous ; coffre commun : staff ; Équipement : non câblé
-  pour ne pas casser le drag-vers-slot). Popovers `ItemActionMenu` / `AmountStepper` ;
+  testé) réindexe 0..n-1 et persiste l'`order` (fiche : tous ; coffre commun : staff ; Équipement : staff/joueur).
+  Le drag des items de la grille porte un marqueur `x-inv-reorder` ; les cases ne réclament le drop **que** s'il
+  est présent — un item glissé depuis un slot d'équipement (non marqué) remonte au conteneur `onDropItem`
+  (déséquiper), donc réorganisation et drag-vers-slot coexistent. Popovers `ItemActionMenu` / `AmountStepper` ;
   **`ItemCatalogPicker`** (modal de sélection rapide
   depuis `ITEM_CATALOG` → `AmountStepper` → `onPick(entry,qty)` ; bouton « Objet personnalisé » = filet) ;
   constantes `INV_*`/`inv*` (styles/format/filtres/pièces).

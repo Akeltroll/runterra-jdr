@@ -246,6 +246,13 @@ function EquipBody({ char }) {
   const inventoryForGrid = {};
   for (const it of allItems) if (!equippedIds.has(it.id)) inventoryForGrid[it.id] = it;
 
+  // Rangement manuel : drag & drop d'un item de la grille sur une case → réindexe l'ordre
+  // (le drag depuis un slot d'équipement n'est pas concerné : il reste géré par onDropItem → déséquiper).
+  const reorderInv = (draggedId, targetId) => {
+    const patch = planReorder(inventoryForGrid, draggedId, targetId);
+    Object.entries(patch).forEach(([id, order]) => { const it = inventoryForGrid[id]; if (it) setInvItem(id, { ...it, order }); });
+  };
+
   const hp = state.hpCur || 0, hpMax = eff.hp || 1;
   const mana = state.manaCur || 0, manaMax = eff.mana || 1;
   const hpPct = Math.max(0, Math.min(100, Math.round(hp / hpMax * 100)));
@@ -389,6 +396,7 @@ function EquipBody({ char }) {
         <div style={{ flex:'0 0 390px', minHeight:0, zIndex:2 }}>
           <InventoryGrid items={inventoryForGrid} coins={coins} filter={filter} setFilter={setFilter}
             onItemClick={openItemMenu} onCoinClick={openCoinMenu} onAdd={staff ? () => setCatalog(true) : undefined}
+            onReorderItem={reorderInv}
             onDropItem={(id) => { if (slotOfItem(id)) unequip(id); }} capacity={120} />
         </div>
       </div>

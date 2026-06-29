@@ -421,11 +421,15 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:5, paddingBottom:8 }}>
           {cells.map((item, i) => {
             const cs = invCatStyle(item);
-            // Réorganisation : déposer un item sur une case (un item = insérer avant lui ;
-            // une case vide = envoyer en fin). stopPropagation pour ne pas déclencher onDropItem.
+            // Réorganisation : déposer un item de la grille sur une case (un item = insérer avant lui ;
+            // une case vide = envoyer en fin). On ne « réclame » le drop QUE si la source est la grille
+            // (marqueur 'x-inv-reorder') : un item glissé depuis un slot d'équipement n'est pas marqué,
+            // donc on laisse l'événement remonter au conteneur (onDropItem → déséquiper).
+            const fromGrid = (e) => Array.prototype.indexOf.call(e.dataTransfer.types, 'x-inv-reorder') !== -1;
             const reorderProps = onReorderItem ? {
-              onDragOver: (e) => { e.preventDefault(); e.stopPropagation(); },
+              onDragOver: (e) => { if (!fromGrid(e)) return; e.preventDefault(); e.stopPropagation(); },
               onDrop: (e) => {
+                if (!fromGrid(e)) return;
                 e.preventDefault(); e.stopPropagation();
                 const id = e.dataTransfer.getData('text');
                 if (id) onReorderItem(id, item ? item.id : null);
@@ -439,7 +443,7 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
                 display:'flex', alignItems:'center', justifyContent:'center', overflow:'visible' }}>
                 {item && (
                   <div draggable="true"
-                    onDragStart={(e) => e.dataTransfer.setData('text', item.id)}
+                    onDragStart={(e) => { e.dataTransfer.setData('text', item.id); e.dataTransfer.setData('x-inv-reorder', item.id); }}
                     onClick={(e) => onItemClick && onItemClick(item, e)}
                     style={{ ...invThumbStyle(item, '3px'), cursor:'grab' }}>
                     {!item.img && (item.ic || '◆')}
