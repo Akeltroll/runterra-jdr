@@ -160,8 +160,9 @@ function EquipBody({ char }) {
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);  // buffs de compétence -> orange
   const eff = computeEffective(equipBase, state.modifiers, activeBuffs, mergeMods(bonuses, skillBuffMods));
   const carryForce = (state.attrs && state.attrs.force != null ? state.attrs.force : (char.attrs ? char.attrs.force : 0)) || 0;
+  const carryMental = (state.attrs && state.attrs.mental != null ? state.attrs.mental : (char.attrs ? char.attrs.mental : 0)) || 0;
   const weightCarried = carriedWeight(itemsById);
-  const weightCap = carryCapacity(carryForce, equipment, itemsById);
+  const weightCap = carryCapacity(carryForce, carryMental, effLevel, equipment, itemsById);
   const weightOver = weightStatus(weightCarried, weightCap).over;
   const sval = (k, base, pct) => (pct ? (base || 0).toFixed(1) + '%' : invFmt(base || 0));
   const scol = (k) => (skillBuffMods[k] ? 'var(--skillbuff)' : (bonuses[k] ? '#9fd07a' : '#e9dcc4'));

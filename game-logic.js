@@ -175,7 +175,7 @@
   }
 
   /* --- Système de poids porté (affichage seul ; le MJ arbitre la surcharge) --- */
-  var CARRY_BASE = 10;        // capacité de base commune
+  var CARRY_BASE = 30;        // capacité de base commune (plancher garanti) — spec poids/encombrement
   var CARRY_PER_FORCE = 5;    // capacité gagnée par point de Force
 
   function carriedWeight(items) {
@@ -185,15 +185,19 @@
     return tot;
   }
 
-  function carryCapacity(force, equipment, itemsById) {
+  function carryCapacity(force, mental, level, equipment, itemsById) {
     force = Number(force) || 0;
+    mental = Number(mental) || 0;
+    level = Math.max(1, Number(level) || 1);
     equipment = equipment || {}; itemsById = itemsById || {};
     var bonus = 0;
     for (var slot in equipment) {
       var id = equipment[slot]; if (!id) continue;
       var it = itemsById[id]; if (it) bonus += Number(it.carry) || 0;
     }
-    return CARRY_BASE + force * CARRY_PER_FORCE + bonus;
+    /* Charge max = 30 + Force×5 + Mental×Niveau÷10 + bonus 'carry' des objets équipés,
+       arrondi à l'inférieur (spec « Système de poids et d'encombrement »). */
+    return Math.floor(CARRY_BASE + force * CARRY_PER_FORCE + (mental * level) / 10 + bonus);
   }
 
   function weightStatus(carried, cap) {

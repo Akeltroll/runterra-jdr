@@ -85,8 +85,10 @@ function CharInventoryAdminPanel() {
   const equipment = state.equipment || {};
   const char = CHARACTERS.find((c) => c.id === charId) || {};
   const force = (state.attrs && state.attrs.force) != null ? state.attrs.force : (char.attrs && char.attrs.force) || 0;
+  const mental = (state.attrs && state.attrs.mental) != null ? state.attrs.mental : (char.attrs && char.attrs.mental) || 0;
+  const level = (state.level != null ? state.level : char.level) || 1;
   const invWeight = carriedWeight(inventory || {});
-  const invCap = carryCapacity(force, equipment, inventory || {});
+  const invCap = carryCapacity(force, mental, level, equipment, inventory || {});
   const invOver = weightStatus(invWeight, invCap).over;
   const selStyle = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'6px 9px', fontSize:13 };
   return (
