@@ -161,9 +161,13 @@ function EquipBody({ char }) {
   const eff = computeEffective(equipBase, state.modifiers, activeBuffs, mergeMods(bonuses, skillBuffMods));
   const carryForce = (state.attrs && state.attrs.force != null ? state.attrs.force : (char.attrs ? char.attrs.force : 0)) || 0;
   const carryMental = (state.attrs && state.attrs.mental != null ? state.attrs.mental : (char.attrs ? char.attrs.mental : 0)) || 0;
+  const carryHab = (state.attrs && state.attrs.hab != null ? state.attrs.hab : (char.attrs ? char.attrs.hab : 0)) || 0;
   const weightCarried = carriedWeight(itemsById);
   const weightCap = carryCapacity(carryForce, carryMental, effLevel, equipment, itemsById);
-  const weightOver = weightStatus(weightCarried, weightCap).over;
+  const wStatus = weightStatus(weightCarried, weightCap, carryHab);
+  const weightOver = wStatus.over;
+  const WEIGHT_STATE = { leger: { label:'Léger', col:'#9fd07a' }, encombre: { label:'Encombré', col:'#e0a33a' }, surcharge: { label:'Surchargé', col:'var(--hp)' } };
+  const wInfo = WEIGHT_STATE[wStatus.state] || WEIGHT_STATE.leger;
   const sval = (k, base, pct) => (pct ? (base || 0).toFixed(1) + '%' : invFmt(base || 0));
   const scol = (k) => (skillBuffMods[k] ? 'var(--skillbuff)' : (bonuses[k] ? '#9fd07a' : '#e9dcc4'));
 
@@ -362,16 +366,21 @@ function EquipBody({ char }) {
             ))}
           </div>
 
-          {/* Poids porté (affichage seul ; rouge en surcharge) */}
+          {/* Poids porté + état d'encombrement (affichage seul ; malus arbitrés sur Roll20) */}
           <div style={{ marginTop:12, paddingTop:10, borderTop:'1px solid rgba(160,128,72,0.15)' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, marginBottom:4 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', fontSize:11, marginBottom:4 }}>
               <span style={{ fontFamily:"'Cinzel',serif", letterSpacing:1, color:'#c2a05a' }}>POIDS</span>
-              <span style={{ color: weightOver ? 'var(--hp)' : '#9a8b76' }}>{weightCarried} / {weightCap}</span>
+              <span><span style={{ color:wInfo.col, fontWeight:700, marginRight:6 }}>{wInfo.label}</span><span style={{ color:'#9a8b76' }}>{weightCarried} / {weightCap}</span></span>
             </div>
-            <div style={{ height:7, borderRadius:4, background:'var(--bg-inset)', overflow:'hidden', border:'1px solid rgba(160,128,72,0.18)' }}>
-              <div style={{ height:'100%', width:`${Math.min(100, weightStatus(weightCarried, weightCap).pct * 100)}%`,
-                background: weightOver ? 'var(--hp)' : 'linear-gradient(90deg,#7a5a2a,#c2a05a)', transition:'width .2s' }} />
+            <div style={{ position:'relative', height:7, borderRadius:4, background:'var(--bg-inset)', overflow:'hidden', border:'1px solid rgba(160,128,72,0.18)' }}>
+              <div style={{ height:'100%', width:`${Math.min(100, wStatus.pct * 100)}%`,
+                background: wInfo.col, transition:'width .2s' }} />
+              {weightCap > 0 && (
+                <div title={`Seuil de confort : ${wStatus.comfort}`} style={{ position:'absolute', top:0, bottom:0,
+                  left:`${Math.min(100, wStatus.comfortPct * 100)}%`, width:2, background:'#f0e6cf', opacity:0.85 }} />
+              )}
             </div>
+            <div style={{ display:'flex', justifyContent:'flex-end', fontSize:10, color:'#8a7c68', marginTop:2 }}>confort ≤ {wStatus.comfort}</div>
           </div>
           </div>
         </div>

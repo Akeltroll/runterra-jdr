@@ -200,9 +200,24 @@
     return Math.floor(CARRY_BASE + force * CARRY_PER_FORCE + (mental * level) / 10 + bonus);
   }
 
-  function weightStatus(carried, cap) {
+  /* Seuil de confort = 60% + Habileté×2% (plafond 90%), en fraction de la charge max. */
+  function comfortPct(hab) {
+    hab = Number(hab) || 0;
+    return Math.min(90, 60 + hab * 2) / 100;
+  }
+
+  /* Compare le poids porté au seuil de confort et à la charge max → état d'encombrement.
+     États (affichage seul ; les malus sont arbitrés sur Roll20) :
+       'leger'     : poids ≤ seuil de confort
+       'encombre'  : seuil de confort < poids ≤ charge max
+       'surcharge' : poids > charge max */
+  function weightStatus(carried, cap, hab) {
     carried = Number(carried) || 0; cap = Number(cap) || 0;
-    return { pct: cap > 0 ? carried / cap : 0, over: carried > cap };
+    var cPct = comfortPct(hab);
+    var comfort = Math.floor(cPct * cap);
+    var state = carried > cap ? 'surcharge' : (carried > comfort ? 'encombre' : 'leger');
+    return { pct: cap > 0 ? carried / cap : 0, over: carried > cap,
+             comfort: comfort, comfortPct: cPct, state: state };
   }
 
   /* Amorçage du catalogue partagé : transforme la liste ITEM_CATALOG (sans id)
@@ -837,7 +852,7 @@
     applyHealMods, buildDefaultState, makeItem, newItemId,
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd, buildCatalogSeed, catalogArray,
-    CARRY_BASE, CARRY_PER_FORCE, carriedWeight, carryCapacity, weightStatus,
+    CARRY_BASE, CARRY_PER_FORCE, carriedWeight, carryCapacity, weightStatus, comfortPct,
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,

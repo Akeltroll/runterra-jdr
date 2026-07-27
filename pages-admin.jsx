@@ -86,10 +86,13 @@ function CharInventoryAdminPanel() {
   const char = CHARACTERS.find((c) => c.id === charId) || {};
   const force = (state.attrs && state.attrs.force) != null ? state.attrs.force : (char.attrs && char.attrs.force) || 0;
   const mental = (state.attrs && state.attrs.mental) != null ? state.attrs.mental : (char.attrs && char.attrs.mental) || 0;
+  const hab = (state.attrs && state.attrs.hab) != null ? state.attrs.hab : (char.attrs && char.attrs.hab) || 0;
   const level = (state.level != null ? state.level : char.level) || 1;
   const invWeight = carriedWeight(inventory || {});
   const invCap = carryCapacity(force, mental, level, equipment, inventory || {});
-  const invOver = weightStatus(invWeight, invCap).over;
+  const invWStatus = weightStatus(invWeight, invCap, hab);
+  const invOver = invWStatus.over;
+  const invWColor = invWStatus.state === 'surcharge' ? 'var(--hp)' : (invWStatus.state === 'encombre' ? '#e0a33a' : 'var(--faint)');
   const selStyle = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'6px 9px', fontSize:13 };
   return (
     <div style={{ padding:'0 24px 24px' }}>
@@ -104,7 +107,7 @@ function CharInventoryAdminPanel() {
             {CHARACTERS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <span className="row gap-2" style={{ alignItems:'center' }}>
-            <span className="mono" style={{ fontSize:11, color: invOver ? 'var(--hp)' : 'var(--faint)' }} title="Poids porté / capacité">⚖ {invWeight}/{invCap}</span>
+            <span className="mono" style={{ fontSize:11, color: invWColor }} title={`Poids porté / capacité — ${invWStatus.state} (confort ≤ ${invWStatus.comfort})`}>⚖ {invWeight}/{invCap}</span>
             <span className="mono faint" style={{ fontSize:11 }}>{inventory ? Object.keys(inventory).length : 0} objets</span>
           </span>
         </div>

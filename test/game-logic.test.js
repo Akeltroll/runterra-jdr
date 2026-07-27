@@ -784,17 +784,38 @@ test('carriedWeight : somme weight×qty, qty 0 ignorée, vide = 0', () => {
   const items = { a: { weight: 3, qty: 2 }, b: { weight: 5, qty: 0 }, c: { weight: 1, qty: 4 } };
   assert.equal(L.carriedWeight(items), 3 * 2 + 1 * 4); // 10
 });
-test('carryCapacity : base + force×facteur + carry des items équipés', () => {
+test('carryCapacity : 30 + force×5 + mental×niveau÷10 + carry équipés (arrondi inférieur)', () => {
   const itemsById = { belt: { id: 'belt', carry: 20 }, ring: { id: 'ring' } };
-  // CARRY_BASE 10 + force 4 ×5 = 30, + ceinture 20 = 50
-  assert.equal(L.carryCapacity(4, { ceinture: 'belt', anneau1: 'ring' }, itemsById), 10 + 4 * 5 + 20);
-  // sans équipement
-  assert.equal(L.carryCapacity(6, {}, {}), 10 + 6 * 5);
+  // 30 + force 4 ×5 = 50, + ceinture 20 = 70 (mental 0, niveau 1)
+  assert.equal(L.carryCapacity(4, 0, 1, { ceinture: 'belt', anneau1: 'ring' }, itemsById), 30 + 4 * 5 + 20);
+  // sans équipement, mental/niveau nuls
+  assert.equal(L.carryCapacity(6, 0, 1, {}, {}), 30 + 6 * 5);
+  // terme Mental×Niveau÷10 + arrondi inférieur : Jett F1 M1 niv2 → 30+5+0,2 = 35,2 → 35
+  assert.equal(L.carryCapacity(1, 1, 2, {}, {}), 35);
+  // fidélité au tableau de la spec : tank F13 M20 niv18 → 30+65+36 = 131
+  assert.equal(L.carryCapacity(13, 20, 18, {}, {}), 131);
+  // et niv1 → 30+65+2 = 97
+  assert.equal(L.carryCapacity(13, 20, 1, {}, {}), 97);
 });
-test('weightStatus : pct et dépassement', () => {
-  assert.deepEqual(L.weightStatus(25, 50), { pct: 0.5, over: false });
-  assert.equal(L.weightStatus(60, 50).over, true);
-  assert.deepEqual(L.weightStatus(10, 0), { pct: 0, over: true }); // cap 0 -> tout dépasse
+test('weightStatus : pct, seuil de confort et 3 états', () => {
+  // hab 0 → confort 60% ; cap 50 → confort 30
+  const a = L.weightStatus(25, 50, 0);
+  assert.equal(a.pct, 0.5);
+  assert.equal(a.over, false);
+  assert.equal(a.comfort, 30);
+  assert.equal(a.state, 'leger');                             // 25 ≤ 30
+  assert.equal(L.weightStatus(40, 50, 0).state, 'encombre');  // 30 < 40 ≤ 50
+  assert.equal(L.weightStatus(60, 50, 0).state, 'surcharge'); // > 50
+  assert.equal(L.weightStatus(60, 50, 0).over, true);
+  assert.equal(L.weightStatus(40, 50, 15).state, 'leger');    // hab 15 → confort 45 ; 40 ≤ 45
+  assert.equal(L.weightStatus(40, 50, 20).comfort, 45);       // plafond 90% même à hab 20
+  assert.equal(L.weightStatus(10, 0, 5).state, 'surcharge');  // cap 0 → tout surcharge
+});
+test('comfortPct : 60% + hab×2%, plafond 90%', () => {
+  assert.equal(L.comfortPct(0), 0.60);
+  assert.equal(L.comfortPct(5), 0.70);
+  assert.equal(L.comfortPct(15), 0.90);
+  assert.equal(L.comfortPct(20), 0.90);
 });
 test('makeItem : défauts weight/carry à 0, valeurs préservées', () => {
   assert.equal(L.makeItem({}).weight, 0);
