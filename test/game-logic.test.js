@@ -147,7 +147,7 @@ test('makeItem porte un champ type (défaut vide)', () => {
 
 test('EQUIP_TYPES couvre les emplacements clés', () => {
   const vals = L.EQUIP_TYPES.map(t => t.value);
-  for (const v of ['helmet','chest','ring','weapon','accessory','boots'])
+  for (const v of ['helmet','armor','ring','weapon','accessory','boots'])
     assert.ok(vals.includes(v), 'manque ' + v);
 });
 
@@ -816,6 +816,51 @@ test('comfortPct : 60% + hab×2%, plafond 90%', () => {
   assert.equal(L.comfortPct(5), 0.70);
   assert.equal(L.comfortPct(15), 0.90);
   assert.equal(L.comfortPct(20), 0.90);
+});
+
+/* --- B-6 : réduction du poids d'armure par le Mental (spec §5.1) --- */
+test('armorWeightReduction : −5%/pt (≤5) puis −1%/pt, plafond −40%', () => {
+  assert.equal(L.armorWeightReduction(0), 0);
+  assert.equal(L.armorWeightReduction(5), 0.25);
+  assert.equal(Math.round(L.armorWeightReduction(10) * 100), 30);
+  assert.equal(Math.round(L.armorWeightReduction(13) * 100), 33);
+  assert.equal(L.armorWeightReduction(20), 0.40);
+  assert.equal(L.armorWeightReduction(30), 0.40);   // plafond maintenu au-delà
+  assert.equal(L.armorWeightReduction(-5), 0);      // négatif borné à 0
+});
+test('armorEffectiveWeight : base × (1−réduction), arrondi inférieur (repères spec)', () => {
+  // Légère (4)
+  assert.equal(L.armorEffectiveWeight(4, 0), 4);
+  assert.equal(L.armorEffectiveWeight(4, 5), 3);
+  assert.equal(L.armorEffectiveWeight(4, 10), 2);   // 2.8 → 2
+  assert.equal(L.armorEffectiveWeight(4, 20), 2);   // 2.4 → 2
+  // Intermédiaire (10)
+  assert.equal(L.armorEffectiveWeight(10, 5), 7);   // 7.5 → 7
+  assert.equal(L.armorEffectiveWeight(10, 10), 7);
+  assert.equal(L.armorEffectiveWeight(10, 13), 6);  // 6.7 → 6
+  assert.equal(L.armorEffectiveWeight(10, 20), 6);
+  // Lourde (20)
+  assert.equal(L.armorEffectiveWeight(20, 0), 20);
+  assert.equal(L.armorEffectiveWeight(20, 5), 15);
+  assert.equal(L.armorEffectiveWeight(20, 10), 14);
+  assert.equal(L.armorEffectiveWeight(20, 13), 13); // 13.4 → 13
+  assert.equal(L.armorEffectiveWeight(20, 20), 12);
+});
+test('carriedWeight : réduction Mental sur l\'armure ÉQUIPÉE seulement', () => {
+  const items = {
+    a1: { id:'a1', weight:20, qty:1, type:'armor', armorClass:'lourde' },  // armure lourde
+    w1: { id:'w1', weight:5,  qty:1, type:'weapon' },                       // arme (pas de réduction)
+    f1: { id:'f1', weight:3,  qty:2, type:'' },                             // fourniment ×2
+  };
+  // Sans équipement : tout à plat = 20 + 5 + 6 = 31
+  assert.equal(L.carriedWeight(items), 31);
+  assert.equal(L.carriedWeight(items, 20, {}), 31);
+  // Armure équipée (slot armure), Mental 20 : 20→12, total = 12 + 5 + 6 = 23
+  assert.equal(L.carriedWeight(items, 20, { armure:'a1' }), 23);
+  // Mental 5 : 20→15, total = 15 + 5 + 6 = 26
+  assert.equal(L.carriedWeight(items, 5, { armure:'a1' }), 26);
+  // L'arme dans un autre slot n'est jamais réduite
+  assert.equal(L.carriedWeight(items, 20, { armePrincipale:'w1' }), 31);
 });
 test('makeItem : défauts weight/carry à 0, valeurs préservées', () => {
   assert.equal(L.makeItem({}).weight, 0);

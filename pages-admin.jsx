@@ -88,7 +88,7 @@ function CharInventoryAdminPanel() {
   const mental = (state.attrs && state.attrs.mental) != null ? state.attrs.mental : (char.attrs && char.attrs.mental) || 0;
   const hab = (state.attrs && state.attrs.hab) != null ? state.attrs.hab : (char.attrs && char.attrs.hab) || 0;
   const level = (state.level != null ? state.level : char.level) || 1;
-  const invWeight = carriedWeight(inventory || {});
+  const invWeight = carriedWeight(inventory || {}, mental, equipment);
   const invCap = carryCapacity(force, mental, level, equipment, inventory || {});
   const invWStatus = weightStatus(invWeight, invCap, hab);
   const invOver = invWStatus.over;

@@ -110,12 +110,14 @@
       mods: p.mods || {},   // vide pour l'instant — hook futur des bonus de stats
       weight: Number(p.weight) || 0,   // poids unitaire porté (affichage seul)
       carry:  Number(p.carry) || 0,    // bonus de capacité de charge (ceinture/équipement)
+      armorClass: p.armorClass || '',  // '' | 'legere' | 'intermediaire' | 'lourde' (armures)
     };
   }
 
   /* --- Transfert/fusion d'items : logique pure --- */
   function _sameKind(a, b) {
-    return a && b && a.name === b.name && (a.type || '') === (b.type || '') && a.cat === b.cat;
+    return a && b && a.name === b.name && (a.type || '') === (b.type || '') && a.cat === b.cat
+      && (a.armorClass || '') === (b.armorClass || '');
   }
   function planItemTransfer(srcItems, dstItems, itemId, n) {
     srcItems = srcItems || {}; dstItems = dstItems || {};
@@ -131,7 +133,7 @@
     var dstPatch = fillStacks(dstItems, {
       cat: src.cat, name: src.name, sub: src.sub,
       ic: src.ic, img: src.img, type: src.type, mods: src.mods,
-      weight: src.weight, carry: src.carry,
+      weight: src.weight, carry: src.carry, armorClass: src.armorClass,
     }, move);
     return { srcPatch: srcPatch, dstPatch: dstPatch };
   }
@@ -162,7 +164,7 @@
       var fresh = makeItem({
         cat: entry.cat, name: entry.name, sub: entry.sub, qty: take,
         ic: entry.ic, img: entry.img, type: entry.type, mods: entry.mods,
-        weight: entry.weight, carry: entry.carry,
+        weight: entry.weight, carry: entry.carry, armorClass: entry.armorClass,
       });
       patch[fresh.id] = fresh;
       remaining -= take;
@@ -178,10 +180,17 @@
   var CARRY_BASE = 30;        // capacité de base commune (plancher garanti) — spec poids/encombrement
   var CARRY_PER_FORCE = 5;    // capacité gagnée par point de Force
 
-  function carriedWeight(items) {
+  function carriedWeight(items, mental, equipment) {
     items = items || {};
+    equipment = equipment || {};
+    var armorId = equipment.armure || null;   // objet dans le slot Armure → réduction Mental (§5.1)
     var tot = 0;
-    for (var k in items) { var it = items[k] || {}; tot += (Number(it.weight) || 0) * (Number(it.qty) || 0); }
+    for (var k in items) {
+      var it = items[k] || {};
+      var w = Number(it.weight) || 0;
+      if (armorId && k === armorId) w = armorEffectiveWeight(w, mental);   // armure équipée allégée
+      tot += w * (Number(it.qty) || 0);
+    }
     return tot;
   }
 
@@ -220,6 +229,29 @@
              comfort: comfort, comfortPct: cPct, state: state };
   }
 
+  /* --- Armures : classes + réduction du poids par le Mental (spec §5.1) --- */
+  /* Classes d'armure : libellé (affichage) + poids de base par défaut. */
+  var ARMOR_CLASSES = [
+    { value:'legere',        label:'Légère',        baseWeight:4  },
+    { value:'intermediaire', label:'Intermédiaire', baseWeight:10 },
+    { value:'lourde',        label:'Lourde',        baseWeight:20 },
+  ];
+
+  /* Réduction du poids d'armure par le Mental (endurance à porter) :
+     −5 %/pt sur les 5 premiers points, puis −1 %/pt au-delà, plafond −40 %.
+     Indépendante du niveau. Repères : M0→0, M5→0.25, M10→0.30, M13→0.33, M20→0.40. */
+  function armorWeightReduction(mental) {
+    var m = Math.max(0, Number(mental) || 0);
+    var r = m <= 5 ? 0.05 * m : 0.25 + 0.01 * (m - 5);
+    return Math.min(0.40, r);
+  }
+
+  /* Poids d'armure effectif = poids de base × (1 − réduction), arrondi à l'entier inférieur. */
+  function armorEffectiveWeight(baseWeight, mental) {
+    var w = Math.max(0, Number(baseWeight) || 0);
+    return Math.floor(w * (1 - armorWeightReduction(mental)));
+  }
+
   /* Amorçage du catalogue partagé : transforme la liste ITEM_CATALOG (sans id)
      en map { id: {id,cat,name,sub,ic,img,type,mods} } prête pour Firebase. */
   function buildCatalogSeed(entries) {
@@ -230,7 +262,7 @@
       var id = newItemId();
       out[id] = { id: id, cat: e.cat || 'Butin', name: e.name || 'Objet', sub: e.sub || '',
         ic: e.ic || '', img: e.img || '', type: e.type || '', mods: e.mods || {},
-        weight: Number(e.weight) || 0, carry: Number(e.carry) || 0 };
+        weight: Number(e.weight) || 0, carry: Number(e.carry) || 0, armorClass: e.armorClass || '' };
     }
     return out;
   }
@@ -246,10 +278,7 @@
   /* --- Liste des types d'emplacements d'équipement --- */
   var EQUIP_TYPES = [
     { value:'helmet',    label:'Casque' },
-    { value:'shoulders', label:'Épaules' },
-    { value:'chest',     label:'Cuirasse' },
-    { value:'gloves',    label:'Gants' },
-    { value:'pants',     label:'Pantalon' },
+    { value:'armor',     label:'Armure' },
     { value:'boots',     label:'Bottes' },
     { value:'belt',      label:'Ceinture' },
     { value:'weapon',    label:'Arme principale' },
@@ -853,6 +882,7 @@
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd, buildCatalogSeed, catalogArray,
     CARRY_BASE, CARRY_PER_FORCE, carriedWeight, carryCapacity, weightStatus, comfortPct,
+    ARMOR_CLASSES, armorWeightReduction, armorEffectiveWeight,
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods,

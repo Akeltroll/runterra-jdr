@@ -588,9 +588,19 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
             onChange={e => setD({ ...d, qty: parseInt(e.target.value) || 1 })} />
         </div>
         {d.cat === 'Équipement' && (
-          <select style={fld} value={d.type || ''} onChange={e => setD({ ...d, type: e.target.value })}>
+          <select style={fld} value={d.type || ''} onChange={e => setD({ ...d, type: e.target.value, armorClass: e.target.value === 'armor' ? d.armorClass : '' })}>
             <option value="">— Emplacement —</option>
             {EQUIP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        )}
+        {d.cat === 'Équipement' && d.type === 'armor' && (
+          <select style={fld} value={d.armorClass || ''} onChange={e => {
+            const ac = e.target.value;
+            const def = ARMOR_CLASSES.find(c => c.value === ac);
+            setD(prev => ({ ...prev, armorClass: ac, weight: def ? def.baseWeight : prev.weight }));
+          }}>
+            <option value="">— Classe d'armure —</option>
+            {ARMOR_CLASSES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         )}
         {d.cat === 'Équipement' && (
@@ -640,7 +650,7 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
           : <input style={fld} value={d.img || ''} placeholder="ou chemin/URL (ex. ATH/Items/xxx.webp)" onChange={e => setD({ ...d, img: e.target.value })} />}
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => { setD(item); setEdit(false); }}>Annuler</button>
-          <button className="btn btn-sm btn-gold" onClick={() => { const isEq = d.cat === 'Équipement'; onSave({ ...d, type: isEq ? (d.type || '') : '', mods: isEq ? (d.mods || {}) : {}, weight: Math.max(0, Number(d.weight) || 0), carry: isEq ? (Math.max(0, Number(d.carry) || 0)) : 0 }); setEdit(false); }}>Enregistrer</button>
+          <button className="btn btn-sm btn-gold" onClick={() => { const isEq = d.cat === 'Équipement'; onSave({ ...d, type: isEq ? (d.type || '') : '', mods: isEq ? (d.mods || {}) : {}, weight: Math.max(0, Number(d.weight) || 0), carry: isEq ? (Math.max(0, Number(d.carry) || 0)) : 0, armorClass: (isEq && d.type === 'armor') ? (d.armorClass || '') : '' }); setEdit(false); }}>Enregistrer</button>
         </div>
       </div>
     );

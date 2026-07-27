@@ -16,7 +16,7 @@
    `wnone` (dans grid-template-areas) reste une case vide de remplissage. */
 const EQUIP_SLOTS = {
   casque:         { label:'Casque',          accepts:['helmet'],                    area:'casque'   },
-  armure:         { label:'Armure',          accepts:['shoulders','chest','gloves','pants'], area:'armure' },
+  armure:         { label:'Armure',          accepts:['armor','shoulders','chest','gloves','pants'], area:'armure' },
   armePrincipale: { label:'Arme principale', accepts:['weapon'],                    area:'armeP'    },
   armeSecondaire: { label:'Arme secondaire', accepts:['offhand','shield','weapon'], area:'armeS'    },
   amulette:       { label:'Amulette',        accepts:['amulet'],                    area:'amulette' },
@@ -162,7 +162,7 @@ function EquipBody({ char }) {
   const carryForce = (state.attrs && state.attrs.force != null ? state.attrs.force : (char.attrs ? char.attrs.force : 0)) || 0;
   const carryMental = (state.attrs && state.attrs.mental != null ? state.attrs.mental : (char.attrs ? char.attrs.mental : 0)) || 0;
   const carryHab = (state.attrs && state.attrs.hab != null ? state.attrs.hab : (char.attrs ? char.attrs.hab : 0)) || 0;
-  const weightCarried = carriedWeight(itemsById);
+  const weightCarried = carriedWeight(itemsById, carryMental, equipment);
   const weightCap = carryCapacity(carryForce, carryMental, effLevel, equipment, itemsById);
   const wStatus = weightStatus(weightCarried, weightCap, carryHab);
   const weightOver = wStatus.over;
@@ -449,6 +449,11 @@ function EquipBody({ char }) {
             fontFamily:"'EB Garamond',serif" }}>
             <div style={{ fontFamily:"'Cinzel',serif", fontSize:14, fontWeight:600, color:'#e9dcc4' }}>{it.name}</div>
             <div style={{ fontSize:12.5, color:'#9a8b76', fontStyle:'italic', marginTop:2 }}>{it.sub || (it.cat + (it.qty > 1 ? ' · ×' + it.qty : ''))}</div>
+            {it.armorClass && (
+              <div style={{ fontSize:11.5, color:'#c8a35a', marginTop:3, fontFamily:"'Cinzel',serif", letterSpacing:'0.3px' }}>
+                Armure {(ARMOR_CLASSES.find(c => c.value === it.armorClass) || {}).label || it.armorClass}
+              </div>
+            )}
             {modRows.length > 0 && (
               <React.Fragment>
                 <div style={{ height:1, background:'rgba(160,128,72,0.22)', margin:'8px 0' }} />
