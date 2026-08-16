@@ -369,12 +369,18 @@ const INV_COINS = [
 ];
 const invFmt = (n) => Number(n || 0).toLocaleString('fr-FR');
 /* Libellé de poids d'un item : unitaire, + le total de la pile si qty > 1.
-   Renvoie null si l'item ne pèse rien (rien à afficher). */
-const invWeightLabel = (item) => {
+   Renvoie null si l'item ne pèse rien (rien à afficher).
+   `effUnit` = poids unitaire EFFECTIF (optionnel) : sert à l'armure équipée, allégée par
+   le Mental (armorEffectiveWeight). S'il diffère du poids de base, on affiche le poids
+   réellement compté par la jauge de charge + un rappel « base N ». */
+const invWeightLabel = (item, effUnit) => {
   const w = Number((item && item.weight) || 0);
   if (!w) return null;
+  const reduced = effUnit != null && Number(effUnit) !== w;
+  const unit = reduced ? Number(effUnit) : w;
   const qty = Number((item && item.qty) || 0);
-  return qty > 1 ? `${invFmt(w)} × ${invFmt(qty)} = ${invFmt(w * qty)}` : invFmt(w);
+  const txt = qty > 1 ? `${invFmt(unit)} × ${invFmt(qty)} = ${invFmt(unit * qty)}` : invFmt(unit);
+  return reduced ? `${txt} (base ${invFmt(w)})` : txt;
 };
 const invThumbStyle = (item, inset) => ({
   position:'absolute', inset, cursor:'grab', display:'flex', alignItems:'center', justifyContent:'center',

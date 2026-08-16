@@ -441,6 +441,10 @@ function EquipBody({ char }) {
         const it = tip.item;
         const cs = invCatStyle(it);
         const modRows = Object.keys(it.mods || {}).map(k => ({ k:(STAT_LABEL[k] || k), v:(it.mods[k] > 0 ? '+' : '') + it.mods[k] }));
+        // Armure équipée : le poids compté par la jauge est allégé par le Mental (cf. carriedWeight).
+        const tipEffW = (equipment.armure && equipment.armure === it.id)
+          ? armorEffectiveWeight(it.weight, carryMental) : null;
+        const tipW = invWeightLabel(it, tipEffW);
         return (
           <div style={{ position:'fixed', left:Math.min(tip.x + 16, window.innerWidth - 255) + 'px',
             top:Math.min(tip.y + 16, window.innerHeight - 190) + 'px', zIndex:9999, width:242, padding:'13px 15px',
@@ -464,11 +468,12 @@ function EquipBody({ char }) {
                 ))}
               </React.Fragment>
             )}
-            {invWeightLabel(it) && (
+            {tipW && (
               <React.Fragment>
                 <div style={{ height:1, background:'rgba(160,128,72,0.22)', margin:'8px 0' }} />
                 <div style={{ display:'flex', justifyContent:'space-between', fontSize:12.5, padding:'2px 0' }}>
-                  <span style={{ color:'#9a8b76' }}>⚖ Poids</span><span style={{ color:'#c9b990' }}>{invWeightLabel(it)}</span>
+                  <span style={{ color:'#9a8b76' }}>⚖ Poids</span>
+                  <span style={{ color: tipEffW != null ? '#9fd07a' : '#c9b990' }}>{tipW}</span>
                 </div>
               </React.Fragment>
             )}

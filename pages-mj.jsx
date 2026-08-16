@@ -84,6 +84,11 @@ function MJCompactCard({ c, st, turn, onFull }) {
   const inv = (st && st.inventory)
     ? Object.values(st.inventory).filter(it => (it.qty || 0) > 0)
     : (c.inv || []);
+  // Poids : l'armure équipée est allégée par le Mental (même règle que carriedWeight).
+  const invEquip = (st && st.equipment) || {};
+  const invMental = (st && st.attrs && st.attrs.mental != null) ? st.attrs.mental : ((c.attrs && c.attrs.mental) || 0);
+  const invEffW = (it) => (invEquip.armure && invEquip.armure === it.id)
+    ? armorEffectiveWeight(it.weight, invMental) : null;
   return (
     <div className={'panel' + (hpCls ? ' ' + hpCls : '')} style={{ display:'flex', flexDirection:'column',
       borderColor: hpCls ? undefined : 'var(--line)' }}>
@@ -171,7 +176,7 @@ function MJCompactCard({ c, st, turn, onFull }) {
                 {it.img ? <img src={it.img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : (it.ic || '◆')}
               </div>
               <div className="tip-body"><b className="gold">{it.name}</b> ×{it.qty}<br/>{it.sub}
-                {invWeightLabel(it) ? <React.Fragment><br/>⚖ {invWeightLabel(it)}</React.Fragment> : null}</div>
+                {invWeightLabel(it, invEffW(it)) ? <React.Fragment><br/>⚖ {invWeightLabel(it, invEffW(it))}</React.Fragment> : null}</div>
             </div>
           ))}
         </div>
