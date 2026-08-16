@@ -65,6 +65,11 @@ function ItemDetail({ item, onTake, onEdit, onRemove, canEdit }) {
         <div style={{ fontSize:13, color:'rgba(190,170,135,0.8)' }}>
           Quantité : <b style={{ color:'#f0e6d2' }}>{invFmt(item.qty || 0)}</b>
         </div>
+        {invWeightLabel(item) && (
+          <div style={{ fontSize:13, color:'rgba(190,170,135,0.8)', marginTop:4 }}>
+            ⚖ Poids : <b style={{ color:'#f0e6d2' }}>{invWeightLabel(item)}</b>
+          </div>
+        )}
       </div>
 
       {/* Actions */}

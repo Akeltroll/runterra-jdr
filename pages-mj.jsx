@@ -170,7 +170,8 @@ function MJCompactCard({ c, st, turn, onFull }) {
                 background:'var(--bg-inset)', border:'1px solid var(--line)', overflow:'hidden' }}>
                 {it.img ? <img src={it.img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : (it.ic || '◆')}
               </div>
-              <div className="tip-body"><b className="gold">{it.name}</b> ×{it.qty}<br/>{it.sub}</div>
+              <div className="tip-body"><b className="gold">{it.name}</b> ×{it.qty}<br/>{it.sub}
+                {invWeightLabel(it) ? <React.Fragment><br/>⚖ {invWeightLabel(it)}</React.Fragment> : null}</div>
             </div>
           ))}
         </div>

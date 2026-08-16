@@ -368,6 +368,14 @@ const INV_COINS = [
   { key:'plat', label:'Mythril', img:'ATH/Items/piece-mythril.webp', col:'#b8d4e8' },
 ];
 const invFmt = (n) => Number(n || 0).toLocaleString('fr-FR');
+/* Libellé de poids d'un item : unitaire, + le total de la pile si qty > 1.
+   Renvoie null si l'item ne pèse rien (rien à afficher). */
+const invWeightLabel = (item) => {
+  const w = Number((item && item.weight) || 0);
+  if (!w) return null;
+  const qty = Number((item && item.qty) || 0);
+  return qty > 1 ? `${invFmt(w)} × ${invFmt(qty)} = ${invFmt(w * qty)}` : invFmt(w);
+};
 const invThumbStyle = (item, inset) => ({
   position:'absolute', inset, cursor:'grab', display:'flex', alignItems:'center', justifyContent:'center',
   ...(item.img ? { backgroundImage:`url(${item.img})`, backgroundSize:'contain', backgroundRepeat:'no-repeat',
@@ -663,6 +671,7 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ fontSize:13, color:'var(--ink)' }}>{item.name}{item.qty > 1 ? <span className="faint mono" style={{ fontSize:11 }}> ×{item.qty}</span> : null}</div>
         {item.sub ? <div className="faint" style={{ fontSize:11 }}>{item.sub}</div> : null}
+        {invWeightLabel(item) ? <div className="faint mono" style={{ fontSize:11 }}>⚖ {invWeightLabel(item)}</div> : null}
       </div>
       {editable && (
         <span className="row gap-1">
@@ -788,6 +797,6 @@ Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
   ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
-  InventoryGrid, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invThumbStyle,
+  InventoryGrid, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invWeightLabel, invThumbStyle,
   AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar,
 });

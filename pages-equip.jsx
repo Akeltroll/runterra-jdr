@@ -464,6 +464,14 @@ function EquipBody({ char }) {
                 ))}
               </React.Fragment>
             )}
+            {invWeightLabel(it) && (
+              <React.Fragment>
+                <div style={{ height:1, background:'rgba(160,128,72,0.22)', margin:'8px 0' }} />
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12.5, padding:'2px 0' }}>
+                  <span style={{ color:'#9a8b76' }}>⚖ Poids</span><span style={{ color:'#c9b990' }}>{invWeightLabel(it)}</span>
+                </div>
+              </React.Fragment>
+            )}
           </div>
         );
       })()}
