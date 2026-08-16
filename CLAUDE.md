@@ -404,8 +404,48 @@ node --test test/auth.test.js                 # helpers d'auth (6 tests)
 python -m http.server 5050 --bind 127.0.0.1  # servir le site (autre terminal)
 SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées + compte attribué)
 ```
-Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null`.
+Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null` (⚠️ **pas** de `--loader=jsx` :
+ce flag ne vaut que pour stdin, esbuild déduit le loader de l'extension).
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
+
+⚠️ **Ne jamais éditer un fichier accentué via PowerShell 5.1** (`Get-Content -Raw` + `Out-File`) :
+il relit l'UTF-8 en ANSI et réécrit un BOM + des accents cassés (`é`→`Ã©`). Utiliser l'outil Edit,
+ou `perl -i -pe` pour un search-replace global (ex. le bump du token de cache).
+
+## Branches (convention depuis 2026-08-16)
+Le dépôt est nettoyé : **3 branches seulement**, plus de branches `feat/*` ou `fix/*` résiduelles.
+- **`main`** — branche de référence, toujours déployable (c'est elle que sert GitHub Pages).
+- **`Woolost`** — branche de travail du contributeur Woolost.
+- **`JB`** — branche de travail du MJ (Akeltroll / JB).
+
+Chacun travaille sur sa branche puis fusionne dans `main`. Après un merge dans `main`, on **ne
+supprime pas** `Woolost`/`JB` : on les resynchronise sur `main` (`git merge main`) pour repartir
+d'une base propre. Les anciennes branches de fonctionnalité (auth-comptes-roles, inventaire,
+arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, catalogue-editable)
+ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
+
+## État actuel (2026-08-16)
+- **Dépôt réaligné et nettoyé** (voir « Branches » ci-dessus) : `main` contient **toutes** les features,
+  les 7 anciennes branches fusionnées ont été supprimées, `Woolost` et `JB` créées depuis `main`.
+  Cache `20260816-1`. **141 tests verts** (game-logic 130 + auth 11), tous les `.jsx` compilent.
+- **Arbre de runes visuel (chantier B) fusionné** (merge `60ef261`) — constellation radiale.
+  Seul conflit au merge : le token de cache d'`index.html` (résolu par un token neuf).
+  ⏳ **Validation visuelle MJ en attente.**
+- **Poids des items affiché dans les descriptions** (`d054ed0` + `35776d7`) : helper partagé
+  `invWeightLabel(item, effUnit)` (components.jsx) → poids unitaire, ou `unitaire × qty = total`
+  pour une pile ; `null` si l'item ne pèse rien. Branché sur tooltip Équipement, détail du coffre
+  commun, `InvItemRow` (fiche + Admin) et tooltip du mini-sac MJ.
+  **Aligné sur le poids EFFECTIF** là où le porteur est connu (Équipement + MJ) : l'armure du slot
+  `armure` est allégée par le Mental (`armorEffectiveWeight`, règle de `carriedWeight`) → affichage
+  `12 (base 20)` en vert, cohérent avec la jauge de charge. Le coffre commun garde le poids brut
+  (aucun porteur). ⚠️ **Limite connue** : `InvItemRow` (lignes de liste fiche/Admin) affiche le poids
+  de **base** même pour l'armure équipée — le contexte porteur n'est pas passé jusqu'au composant.
+  En Admin, la jauge peut donc afficher un total inférieur à la somme des poids listés.
+- **Travail de Woolost intégré** (3 commits, système de poids §5) : formule de charge max
+  (`30 + Force×5 + Mental×Niveau/10`), seuil de confort (`comfortPct` = 60 % + Hab×2 %, plafond 90 %,
+  3 états léger/encombré/surchargé), classes d'armure (`ARMOR_CLASSES` légère 4 / intermédiaire 10 /
+  lourde 20) + réduction du poids d'armure par le Mental (−5 %/pt ≤5 puis −1 %/pt, plafond −40 %),
+  et **fusion des 4 types d'armure en un type `armor` unique** dans `EQUIP_TYPES`.
 
 ## État actuel (2026-06-29)
 - **Refonte fiche joueur — mergée sur `main`** (merge `4ba147d`, cache `20260628-1`). 127 tests verts.
@@ -534,12 +574,14 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 
 ## Chantiers en cours / backlog
 - **Lot améliorations graphiques** (brainstormé 2026-06-28, chantiers indépendants — chacun sa spec/plan) :
-  **A — Refonte fiche joueur = FAIT** (voir État actuel 2026-06-29). Restent :
+  **A — Refonte fiche joueur = FAIT** (voir État actuel 2026-06-29).
+  **B — Arbre de runes en vrai arbre visuel = FAIT** (merge `60ef261`, 2026-08-16) : constellation radiale
+  (`RuneConstellation`/`RuneNodeShape`/`RuneCore`/`RuneTooltip`, géométrie pure testée `runeRadialLayout`).
+  ⏳ **Reste la validation visuelle du MJ** (jamais regardée en vrai à la date du merge). Reste :
   **C — Hub d'accueil vivant** (remplacer la page Accueil mockup `pages-lobby.jsx` — boutons « Rejoindre/Créer
   session » + code `VX-7K2` factices, invisible des joueurs — par un vrai tableau de bord : roster du groupe
-  PV/mana live, séance en cours, dernier récap, état du combat) ; **B — Arbre de runes en vrai arbre visuel**
-  (nœuds + liaisons SVG façon LoL ; le contenu/logique existe déjà, c'est du graphique) ; **D — Passe
-  d'animations** transversale (transitions d'onglets, level-up, etc.). Ordre suggéré : A→C→B, D en continu.
+  PV/mana live, séance en cours, dernier récap, état du combat) ; **D — Passe
+  d'animations** transversale (transitions d'onglets, level-up, etc.). Ordre suggéré : C puis D en continu.
 - **Nouveau système d'attaque de base** (brainstorm en pause à la demande du MJ) : catégories d'armes
   (`info-mj/Nouveau système de gestion des attaques de base (2).md`) + **maîtrise par perso×arme** (−25 % +
   perte des propriétés si non maîtrisée), idée de **maîtrise qui progresse à l'usage**. À reprendre.
