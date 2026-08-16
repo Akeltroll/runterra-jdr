@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Rune Domination — Fondamentale</title>
+  <desc id="desc">Icône vectorielle transparente pour arbre de runes RPG, rang fondamentale.</desc>
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#788195"/><stop offset=".28" stop-color="#252a37"/><stop offset=".58" stop-color="#08090f"/><stop offset=".82" stop-color="#252a37"/><stop offset="1" stop-color="#788195"/></linearGradient>
+    <linearGradient id="metalDark" x1="0" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#788195"/><stop offset=".16" stop-color="#252a37"/><stop offset=".55" stop-color="#08090f"/><stop offset="1" stop-color="#05070a"/></linearGradient>
+    <linearGradient id="energy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".34" stop-color="#788195"/><stop offset=".68" stop-color="#ff2338"/><stop offset="1" stop-color="#252a37"/></linearGradient>
+    <radialGradient id="core" cx="38%" cy="34%"><stop offset="0" stop-color="#ffffff"/><stop offset=".28" stop-color="#788195"/><stop offset=".64" stop-color="#ff2338"/><stop offset="1" stop-color="#252a37"/></radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity=".42"/></filter>
+    <filter id="glow1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow3" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="22" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g id="cadre-fondamentale" filter="url(#shadow)"><polygon points="512,56 906,284 906,740 512,968 118,740 118,284" fill="none" stroke="url(#metal)" stroke-width="58" stroke-linejoin="round"/><polygon points="512,56 906,284 906,740 512,968 118,740 118,284" fill="none" stroke="#ff2338" stroke-width="12" stroke-linejoin="round" filter="url(#glow2)"/><polygon points="512,20 524.24,43.76 548,56 524.24,68.24 512,92 499.76,68.24 476,56 499.76,43.76" fill="url(#energy)" stroke="#788195" stroke-width="5" filter="url(#glow3)"/><polygon points="906,248 918.24,271.76 942,284 918.24,296.24 906,320 893.76,296.24 870,284 893.76,271.76" fill="url(#energy)" stroke="#788195" stroke-width="5" filter="url(#glow3)"/><polygon points="906,704 918.24,727.76 942,740 918.24,752.24 906,776 893.76,752.24 870,740 893.76,727.76" fill="url(#energy)" stroke="#788195" stroke-width="5" filter="url(#glow3)"/><polygon points="512,932 524.24,955.76 548,968 524.24,980.24 512,1004 499.76,980.24 476,968 499.76,955.76" fill="url(#energy)" stroke="#788195" stroke-width="5" filter="url(#glow3)"/><polygon points="118,704 130.24,727.76 154,740 130.24,752.24 118,776 105.76,752.24 82,740 105.76,727.76" fill="url(#energy)" stroke="#788195" stroke-width="5" filter="url(#glow3)"/><polygon points="118,248 130.24,271.76 154,284 130.24,296.24 118,320 105.76,296.24 82,284 105.76,271.76" fill="url(#energy)" stroke="#788195" stroke-width="5" filter="url(#glow3)"/></g>
+  <g id="embleme-domination" filter="url(#shadow)">
+    <path d="M493 758c-69-23-136-74-163-139-29-70-18-171 29-244 31-49 80-90 132-113-42 73-64 139-54 202 6 42 27 71 52 91l-47 98z" fill="url(#metalDark)" stroke="#596274" stroke-width="10"/>
+    <path d="M531 758c69-23 136-74 163-139 29-70 18-171-29-244-31-49-80-90-132-113 42 73 64 139 54 202-6 42-27 71-52 91l47 98z" fill="url(#metalDark)" stroke="#596274" stroke-width="10"/>
+    <path d="M512 278l95 158-42 299-53 69-53-69-42-299z" fill="url(#metalDark)" stroke="#3b4352" stroke-width="10"/>
+    <path d="M548 342l-91 184 67-13-48 184 108-231-64 17z" fill="url(#core)" stroke="#ff3147" stroke-width="10" stroke-linejoin="round" filter="url(#glow3)"/>
+  </g>
+</svg>

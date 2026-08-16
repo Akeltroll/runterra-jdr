@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Rune Inspiration — Avancée</title>
+  <desc id="desc">Icône vectorielle transparente pour arbre de runes RPG, rang avancée.</desc>
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0a4"/><stop offset=".28" stop-color="#d29625"/><stop offset=".58" stop-color="#6d3d08"/><stop offset=".82" stop-color="#d29625"/><stop offset="1" stop-color="#fff0a4"/></linearGradient>
+    <linearGradient id="metalDark" x1="0" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#fff0a4"/><stop offset=".16" stop-color="#d29625"/><stop offset=".55" stop-color="#6d3d08"/><stop offset="1" stop-color="#05070a"/></linearGradient>
+    <linearGradient id="energy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".34" stop-color="#fff0a4"/><stop offset=".68" stop-color="#32deec"/><stop offset="1" stop-color="#d29625"/></linearGradient>
+    <radialGradient id="core" cx="38%" cy="34%"><stop offset="0" stop-color="#ffffff"/><stop offset=".30" stop-color="#8ff7ff"/><stop offset=".66" stop-color="#54d9ef"/><stop offset=".84" stop-color="#cf9eff"/><stop offset="1" stop-color="#529bdc"/></radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity=".42"/></filter>
+    <filter id="glow1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow3" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="22" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g id="cadre-avancee" filter="url(#shadow)"><polygon points="512,58 946,373 780,912 244,912 78,373" fill="none" stroke="url(#metal)" stroke-width="38" stroke-linejoin="round"/><polygon points="512,58 946,373 780,912 244,912 78,373" fill="none" stroke="#32deec" stroke-opacity=".76" stroke-width="8" stroke-linejoin="round" filter="url(#glow1)"/></g>
+  <g id="embleme-inspiration" filter="url(#shadow)">
+    <ellipse cx="512" cy="512" rx="230" ry="92" fill="none" stroke="url(#metal)" stroke-width="38"/>
+    <ellipse cx="512" cy="512" rx="230" ry="92" fill="none" stroke="url(#metal)" stroke-width="38" transform="rotate(60 512 512)"/>
+    <ellipse cx="512" cy="512" rx="230" ry="92" fill="none" stroke="url(#metal)" stroke-width="38" transform="rotate(-60 512 512)"/>
+    <ellipse cx="512" cy="512" rx="230" ry="92" fill="none" stroke="#32deec" stroke-opacity="0.44" stroke-width="8" transform="rotate(60 512 512)" filter="url(#glow2)"/>
+    <polygon points="512,390 614,455 590,582 512,650 434,582 410,455" fill="url(#core)" stroke="#d8ffff" stroke-width="9" filter="url(#glow2)"/>
+    <path d="M512 406v226M426 463l157 109M598 463L441 572" stroke="#fff" stroke-opacity=".58" stroke-width="6"/>
+    <g fill="url(#core)" stroke="url(#metal)" stroke-width="14"><polygon points="512,258 542,288 512,318 482,288"/><polygon points="512,706 542,736 512,766 482,736"/><polygon points="258,512 288,482 318,512 288,542"/><polygon points="706,512 736,482 766,512 736,542"/></g>
+  </g>
+</svg>

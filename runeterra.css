@@ -498,6 +498,12 @@ input, select { font-family: inherit; }
 .rune-gem.locked    { stroke:color-mix(in srgb, var(--fam) 26%, transparent); stroke-width:1.2; opacity:.7; }
 .rune-gem.available { stroke:color-mix(in srgb, var(--fam) 72%, transparent); stroke-width:1.8; }
 .rune-gem.selected  { stroke:var(--fam); stroke-width:2.6; }
+/* Icône de nœud (image découpée à la forme du palier). `stroke` n'a aucun effet sur une
+   <image> : l'état se lit ici par l'opacité, et par le cadre .rune-gem posé au-dessus. */
+.rune-icon { cursor:pointer; transition:opacity .25s ease; }
+.rune-icon.locked    { opacity:.34; filter:grayscale(.75); }
+.rune-icon.available { opacity:.86; }
+.rune-icon.selected  { opacity:1; }
 .rune-inner { fill:none; stroke-width:1; pointer-events:none;
   stroke:color-mix(in srgb, var(--fam) 18%, transparent); }
 .rune-inner.selected { stroke:color-mix(in srgb, var(--fam) 55%, transparent); }

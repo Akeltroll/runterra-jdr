@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Rune Conquérant — Avancée</title>
+  <desc id="desc">Icône vectorielle transparente pour arbre de runes RPG, rang avancée.</desc>
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0a5"/><stop offset=".28" stop-color="#c98319"/><stop offset=".58" stop-color="#5a3210"/><stop offset=".82" stop-color="#c98319"/><stop offset="1" stop-color="#fff0a5"/></linearGradient>
+    <linearGradient id="metalDark" x1="0" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#fff0a5"/><stop offset=".16" stop-color="#c98319"/><stop offset=".55" stop-color="#5a3210"/><stop offset="1" stop-color="#05070a"/></linearGradient>
+    <linearGradient id="energy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".34" stop-color="#fff0a5"/><stop offset=".68" stop-color="#ffb51e"/><stop offset="1" stop-color="#c98319"/></linearGradient>
+    <radialGradient id="core" cx="38%" cy="34%"><stop offset="0" stop-color="#ffffff"/><stop offset=".28" stop-color="#fff0a5"/><stop offset=".64" stop-color="#ffb51e"/><stop offset="1" stop-color="#c98319"/></radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity=".42"/></filter>
+    <filter id="glow1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow3" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="22" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g id="cadre-avancee" filter="url(#shadow)"><polygon points="512,58 946,373 780,912 244,912 78,373" fill="none" stroke="url(#metal)" stroke-width="38" stroke-linejoin="round"/><polygon points="512,58 946,373 780,912 244,912 78,373" fill="none" stroke="#ffb51e" stroke-opacity=".76" stroke-width="8" stroke-linejoin="round" filter="url(#glow1)"/></g>
+  <g id="embleme-conquerant" filter="url(#shadow)">
+    <path d="M470 320C390 342 330 420 326 510c4 92 64 168 144 194l-34-82c-37-30-55-70-52-112-3-42 15-83 52-113z" fill="url(#metal)" stroke="#6b3b12" stroke-width="8"/>
+    <path d="M554 320c80 22 140 100 144 190-4 92-64 168-144 194l34-82c37-30 55-70 52-112 3-42-15-83-52-113z" fill="url(#metal)" stroke="#6b3b12" stroke-width="8"/>
+    <path d="M512 238l63 173-35 47-28 328-28-328-35-47z" fill="url(#metal)" stroke="#7b4716" stroke-width="8"/>
+    <path d="M238 512l173-63 47 35 328 28-328 28-47 35z" fill="url(#metal)" stroke="#7b4716" stroke-width="8"/>
+    <polygon points="512,434 538.52,485.48 590,512 538.52,538.52 512,590 485.48,538.52 434,512 485.48,485.48" fill="url(#core)" stroke="#fff1aa" stroke-width="8" filter="url(#glow2)"/>
+  </g>
+</svg>

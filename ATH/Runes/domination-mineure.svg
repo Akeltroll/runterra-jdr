@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Rune Domination — Mineure</title>
+  <desc id="desc">Icône vectorielle transparente pour arbre de runes RPG, rang mineure.</desc>
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#788195"/><stop offset=".28" stop-color="#252a37"/><stop offset=".58" stop-color="#08090f"/><stop offset=".82" stop-color="#252a37"/><stop offset="1" stop-color="#788195"/></linearGradient>
+    <linearGradient id="metalDark" x1="0" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#788195"/><stop offset=".16" stop-color="#252a37"/><stop offset=".55" stop-color="#08090f"/><stop offset="1" stop-color="#05070a"/></linearGradient>
+    <linearGradient id="energy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".34" stop-color="#788195"/><stop offset=".68" stop-color="#ff2338"/><stop offset="1" stop-color="#252a37"/></linearGradient>
+    <radialGradient id="core" cx="38%" cy="34%"><stop offset="0" stop-color="#ffffff"/><stop offset=".28" stop-color="#788195"/><stop offset=".64" stop-color="#ff2338"/><stop offset="1" stop-color="#252a37"/></radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity=".42"/></filter>
+    <filter id="glow1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow3" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="22" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g id="cadre-mineure" filter="url(#shadow)"><polygon points="512,72 952,512 512,952 72,512" fill="none" stroke="url(#metal)" stroke-width="22" stroke-linejoin="round"/><polygon points="512,72 952,512 512,952 72,512" fill="none" stroke="#ff2338" stroke-opacity=".48" stroke-width="4" stroke-linejoin="round"/></g>
+  <g id="embleme-domination" filter="url(#shadow)">
+    <path d="M493 758c-69-23-136-74-163-139-29-70-18-171 29-244 31-49 80-90 132-113-42 73-64 139-54 202 6 42 27 71 52 91l-47 98z" fill="url(#metalDark)" stroke="#596274" stroke-width="10"/>
+    <path d="M531 758c69-23 136-74 163-139 29-70 18-171-29-244-31-49-80-90-132-113 42 73 64 139 54 202-6 42-27 71-52 91l47 98z" fill="url(#metalDark)" stroke="#596274" stroke-width="10"/>
+    <path d="M512 278l95 158-42 299-53 69-53-69-42-299z" fill="url(#metalDark)" stroke="#3b4352" stroke-width="10"/>
+    <path d="M548 342l-91 184 67-13-48 184 108-231-64 17z" fill="url(#core)" stroke="#ff3147" stroke-width="10" stroke-linejoin="round" filter="url(#glow1)"/>
+  </g>
+</svg>

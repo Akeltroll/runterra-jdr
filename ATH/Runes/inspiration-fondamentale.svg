@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Rune Inspiration — Fondamentale</title>
+  <desc id="desc">Icône vectorielle transparente pour arbre de runes RPG, rang fondamentale.</desc>
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0a4"/><stop offset=".28" stop-color="#d29625"/><stop offset=".58" stop-color="#6d3d08"/><stop offset=".82" stop-color="#d29625"/><stop offset="1" stop-color="#fff0a4"/></linearGradient>
+    <linearGradient id="metalDark" x1="0" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#fff0a4"/><stop offset=".16" stop-color="#d29625"/><stop offset=".55" stop-color="#6d3d08"/><stop offset="1" stop-color="#05070a"/></linearGradient>
+    <linearGradient id="energy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".34" stop-color="#fff0a4"/><stop offset=".68" stop-color="#32deec"/><stop offset="1" stop-color="#d29625"/></linearGradient>
+    <radialGradient id="core" cx="38%" cy="34%"><stop offset="0" stop-color="#ffffff"/><stop offset=".30" stop-color="#8ff7ff"/><stop offset=".66" stop-color="#54d9ef"/><stop offset=".84" stop-color="#cf9eff"/><stop offset="1" stop-color="#529bdc"/></radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity=".42"/></filter>
+    <filter id="glow1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow3" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="22" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g id="cadre-fondamentale" filter="url(#shadow)"><polygon points="512,56 906,284 906,740 512,968 118,740 118,284" fill="none" stroke="url(#metal)" stroke-width="58" stroke-linejoin="round"/><polygon points="512,56 906,284 906,740 512,968 118,740 118,284" fill="none" stroke="#32deec" stroke-width="12" stroke-linejoin="round" filter="url(#glow2)"/><polygon points="512,20 524.24,43.76 548,56 524.24,68.24 512,92 499.76,68.24 476,56 499.76,43.76" fill="url(#energy)" stroke="#fff0a4" stroke-width="5" filter="url(#glow3)"/><polygon points="906,248 918.24,271.76 942,284 918.24,296.24 906,320 893.76,296.24 870,284 893.76,271.76" fill="url(#energy)" stroke="#fff0a4" stroke-width="5" filter="url(#glow3)"/><polygon points="906,704 918.24,727.76 942,740 918.24,752.24 906,776 893.76,752.24 870,740 893.76,727.76" fill="url(#energy)" stroke="#fff0a4" stroke-width="5" filter="url(#glow3)"/><polygon points="512,932 524.24,955.76 548,968 524.24,980.24 512,1004 499.76,980.24 476,968 499.76,955.76" fill="url(#energy)" stroke="#fff0a4" stroke-width="5" filter="url(#glow3)"/><polygon points="118,704 130.24,727.76 154,740 130.24,752.24 118,776 105.76,752.24 82,740 105.76,727.76" fill="url(#energy)" stroke="#fff0a4" stroke-width="5" filter="url(#glow3)"/><polygon points="118,248 130.24,271.76 154,284 130.24,296.24 118,320 105.76,296.24 82,284 105.76,271.76" fill="url(#energy)" stroke="#fff0a4" stroke-width="5" filter="url(#glow3)"/></g>
+  <g id="embleme-inspiration" filter="url(#shadow)">
+    <ellipse cx="512" cy="512" rx="230" ry="92" fill="none" stroke="url(#metal)" stroke-width="38"/>
+    <ellipse cx="512" cy="512" rx="230" ry="92" fill="none" stroke="url(#metal)" stroke-width="38" transform="rotate(60 512 512)"/>
+    <ellipse cx="512" cy="512" rx="230" ry="92" fill="none" stroke="url(#metal)" stroke-width="38" transform="rotate(-60 512 512)"/>
+    <ellipse cx="512" cy="512" rx="230" ry="92" fill="none" stroke="#32deec" stroke-opacity="0.5700000000000001" stroke-width="8" transform="rotate(60 512 512)" filter="url(#glow2)"/>
+    <polygon points="512,390 614,455 590,582 512,650 434,582 410,455" fill="url(#core)" stroke="#d8ffff" stroke-width="9" filter="url(#glow3)"/>
+    <path d="M512 406v226M426 463l157 109M598 463L441 572" stroke="#fff" stroke-opacity=".58" stroke-width="6"/>
+    <g fill="url(#core)" stroke="url(#metal)" stroke-width="14"><polygon points="512,258 542,288 512,318 482,288"/><polygon points="512,706 542,736 512,766 482,736"/><polygon points="258,512 288,482 318,512 288,542"/><polygon points="706,512 736,482 766,512 736,542"/></g>
+  </g>
+</svg>

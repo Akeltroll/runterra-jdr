@@ -35,14 +35,39 @@ const runeHexToRgb = (h) => {
   return [parseInt(v.slice(0,2),16) || 0, parseInt(v.slice(2,4),16) || 0, parseInt(v.slice(4,6),16) || 0];
 };
 const runeRgba = (h, a) => { const c = runeHexToRgb(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
-/* Points SVG d'un nœud selon son palier (losange / carré (rect) / hexagone). */
-function runeHexPoints(x, y, R) {
+/* Points SVG d'un nœud selon son palier : polygone régulier POINTE EN HAUT,
+   losange (4) / pentagone (5) / hexagone (6) — la langue des icônes d'ATH/Runes. */
+function runePolyPoints(x, y, R, n) {
   const pts = [];
-  for (let k = 0; k < 6; k++) { const a = (Math.PI / 3) * k; pts.push((x + R * Math.cos(a)).toFixed(1) + ',' + (y + R * Math.sin(a)).toFixed(1)); }
+  for (let k = 0; k < n; k++) {
+    const a = -Math.PI / 2 + (2 * Math.PI / n) * k;
+    pts.push((x + R * Math.cos(a)).toFixed(1) + ',' + (y + R * Math.sin(a)).toFixed(1));
+  }
   return pts.join(' ');
 }
-const runeDiamondPoints = (x, y, R) =>
-  [[x, y - R], [x + R, y], [x, y + R], [x - R, y]].map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+/* Géométrie par palier, calée sur les silhouettes dessinées DANS les SVG (viewBox 1024 :
+   losange r≈440, pentagone r≈465, hexagone r≈456, toutes pointe en haut).
+   `sides` = côtés du polygone ; `r` = rayon du cadre serti ; `img` = largeur de l'image,
+   choisie pour que sa silhouette tombe juste À L'INTÉRIEUR du cadre (anneau de sertissage). */
+const RUNE_TIER_GEOM = {
+  mineure:      { sides: 4, r: 25, img: 54 },
+  avancee:      { sides: 5, r: 30, img: 62 },
+  fondamentale: { sides: 6, r: 37, img: 78 },
+};
+const runeGeom = (tier) => RUNE_TIER_GEOM[tier] || RUNE_TIER_GEOM.mineure;
+
+/* Icônes de nœud : UNE image par famille x palier (15 au total), partagée par les 3 voies
+   de la famille. Clé = `famKey:tier`. Valeur vide = repli sur la gemme géométrique (le rendu
+   actuel), donc on peut livrer les fichiers un par un sans jamais casser l'arbre.
+   Un `node.img` posé sur une rune précise dans data.jsx reste prioritaire (icône unitaire). */
+const RUNE_ICON_DIR = 'ATH/Runes/';
+const RUNE_ICONS = {};
+RUNES.forEach(f => RUNE_TIER_ORDER.forEach(t => { RUNE_ICONS[f.key + ':' + t] = `${RUNE_ICON_DIR}${f.key}-${t}.svg`; }));
+/* Contour du palier : sert de gemme pleine (repli sans icône) et de cadre serti par-dessus. */
+function runeTierShape(nd, extra) {
+  const g = runeGeom(nd.tier);
+  return <polygon points={runePolyPoints(nd.x, nd.y, g.r, g.sides)} {...extra} />;
+}
 
 /* Décor figé, calculé une seule fois au chargement (déterministe). */
 /* Poussière d'étoiles : PRNG à graine fixe pour rester stable d'un rendu à l'autre. */
@@ -122,10 +147,14 @@ function RuneDefs() {
 }
 
 /* Un nœud : platine + gemme (forme du palier) + contour intérieur + reflet + marque de gravure.
-   Si node.img est défini, l'image remplace la gemme (le reste du sertissage est conservé). */
+   Avec une icône (RUNE_ICONS famille x palier, ou node.img unitaire) : l'image remplace la gemme
+   et la forme du palier repasse par-dessus en cadre vide -> le sertissage et le retour d'état
+   (verrouillé / disponible / gravé) sont conservés. Pas de découpe : les SVG d'ATH/Runes portent
+   déjà leur silhouette, la clipper rognerait leur halo. */
 function RuneNodeShape({ nd, state, capstone, onClick, onHover }) {
   const node = RUNE_INDEX[nd.id];
-  const base = nd.tier === 'fondamentale' ? 37 : 25;
+  const g = runeGeom(nd.tier);
+  const base = g.r;
   const handlers = {
     onClick: () => onClick(node),
     onMouseEnter: (e) => onHover({ kind:'node', node, capstone }, e),
@@ -134,32 +163,36 @@ function RuneNodeShape({ nd, state, capstone, onClick, onHover }) {
   const gemFill = state === 'selected' ? `url(#gem-${nd.famKey})` : 'url(#dimGem)';
   const gemFilter = state === 'selected' ? 'url(#rGlow)' : state === 'available' ? 'url(#rGlowSoft)' : 'none';
   const cls = 'rune-gem ' + state;
+  const icon = node.img || RUNE_ICONS[nd.famKey + ':' + nd.tier] || '';
   let gem;
-  if (node.img) {
-    const s = nd.tier === 'fondamentale' ? 78 : nd.tier === 'avancee' ? 62 : 54;
-    gem = <image href={node.img} x={nd.x - s / 2} y={nd.y - s / 2} width={s} height={s} className={cls} {...handlers} />;
-  } else if (nd.tier === 'avancee') {
-    gem = <rect x={nd.x - 25} y={nd.y - 25} width="50" height="50" rx="7" fill={gemFill} filter={gemFilter} className={cls} {...handlers} />;
+  if (icon) {
+    gem = (
+      <React.Fragment>
+        <image href={icon} x={nd.x - g.img / 2} y={nd.y - g.img / 2} width={g.img} height={g.img}
+          preserveAspectRatio="xMidYMid meet" className={'rune-icon ' + state} {...handlers} />
+        {/* cadre vide : `stroke` ne s'applique pas à une <image>, c'est lui qui porte l'état */}
+        {runeTierShape(nd, { fill:'none', filter:gemFilter, className:cls, ...handlers })}
+      </React.Fragment>
+    );
   } else {
-    const pts = nd.tier === 'mineure' ? runeDiamondPoints(nd.x, nd.y, 25) : runeHexPoints(nd.x, nd.y, 37);
-    gem = <polygon points={pts} fill={gemFill} filter={gemFilter} className={cls} {...handlers} />;
+    gem = runeTierShape(nd, { fill:gemFill, filter:gemFilter, className:cls, ...handlers });
   }
   const k = base * 0.58;
-  const inner = nd.tier === 'avancee'
-    ? <rect x={nd.x - k} y={nd.y - k} width={k * 2} height={k * 2} rx="4" className={'rune-inner ' + state} />
-    : <polygon points={nd.tier === 'mineure' ? runeDiamondPoints(nd.x, nd.y, k) : runeHexPoints(nd.x, nd.y, k)}
-        className={'rune-inner ' + state} />;
+  const inner = <polygon points={runePolyPoints(nd.x, nd.y, k, g.sides)} className={'rune-inner ' + state} />;
   const sx = nd.x - base * 0.26, sy = nd.y - base * 0.34;
   return (
     <React.Fragment>
       <circle cx={nd.x} cy={nd.y} r={base + 13} className={'rune-plate ' + state} />
       <circle cx={nd.x} cy={nd.y} r={base + 13} className={'rune-socket ' + state} />
       {gem}
-      {inner}
-      <ellipse cx={sx} cy={sy} rx={(base * 0.34).toFixed(1)} ry={(base * 0.15).toFixed(1)}
-        transform={`rotate(-38 ${sx.toFixed(1)} ${sy.toFixed(1)})`} className={'rune-spec ' + state} />
-      {state === 'selected' && <circle cx={nd.x} cy={nd.y} r={nd.tier === 'fondamentale' ? 7 : 4.5} className="rune-mark" />}
-      {state === 'available' && <circle cx={nd.x} cy={nd.y} r="2.6" fill={runeRgba(nd.color, 0.85)} className="rune-pip" />}
+      {/* contour intérieur + reflet : décor de gemme, masqués sous une icône qui a le sien */}
+      {!icon && inner}
+      {!icon && <ellipse cx={sx} cy={sy} rx={(base * 0.34).toFixed(1)} ry={(base * 0.15).toFixed(1)}
+        transform={`rotate(-38 ${sx.toFixed(1)} ${sy.toFixed(1)})`} className={'rune-spec ' + state} />}
+      {/* marque de gravure / pastille : au centre du nœud, donc en travers d'une icône -> sous
+          icône l'état passe par le cadre (stroke) et l'opacité de l'image */}
+      {state === 'selected' && !icon && <circle cx={nd.x} cy={nd.y} r={nd.tier === 'fondamentale' ? 7 : 4.5} className="rune-mark" />}
+      {state === 'available' && !icon && <circle cx={nd.x} cy={nd.y} r="2.6" fill={runeRgba(nd.color, 0.85)} className="rune-pip" />}
     </React.Fragment>
   );
 }
@@ -358,11 +391,13 @@ function RuneTooltip({ hover, choices, selectedSet }) {
 
 /* Légende des paliers — les coûts sont lus dans RUNE_COST (jamais réécrits en dur). */
 function RuneLegend() {
-  const shape = {
-    mineure:      <svg width="18" height="18" viewBox="0 0 18 18"><polygon points="9,2 16,9 9,16 2,9" /></svg>,
-    avancee:      <svg width="18" height="18" viewBox="0 0 18 18"><rect x="3" y="3" width="12" height="12" rx="2.5" /></svg>,
-    fondamentale: <svg width="20" height="18" viewBox="0 0 20 18"><polygon points="10,2 17,6 17,12 10,16 3,12 3,6" /></svg>,
-  };
+  /* Mêmes polygones que les nœuds (pointe en haut, 4/5/6 côtés), à l'échelle de la puce. */
+  const shape = {};
+  RUNE_TIER_ORDER.forEach(t => {
+    shape[t] = <svg width="18" height="18" viewBox="0 0 18 18">
+      <polygon points={runePolyPoints(9, 9, 7.5, runeGeom(t).sides)} />
+    </svg>;
+  });
   return (
     <div className="rune-legend">
       {RUNE_TIER_ORDER.map(t => {

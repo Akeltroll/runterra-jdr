@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Rune Volonté — Mineure</title>
+  <desc id="desc">Icône vectorielle transparente pour arbre de runes RPG, rang mineure.</desc>
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#969b95"/><stop offset=".28" stop-color="#4a514d"/><stop offset=".58" stop-color="#19211e"/><stop offset=".82" stop-color="#4a514d"/><stop offset="1" stop-color="#969b95"/></linearGradient>
+    <linearGradient id="metalDark" x1="0" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#969b95"/><stop offset=".16" stop-color="#4a514d"/><stop offset=".55" stop-color="#19211e"/><stop offset="1" stop-color="#05070a"/></linearGradient>
+    <linearGradient id="energy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".34" stop-color="#969b95"/><stop offset=".68" stop-color="#20e47c"/><stop offset="1" stop-color="#4a514d"/></linearGradient>
+    <radialGradient id="core" cx="38%" cy="34%"><stop offset="0" stop-color="#ffffff"/><stop offset=".28" stop-color="#969b95"/><stop offset=".64" stop-color="#20e47c"/><stop offset="1" stop-color="#4a514d"/></radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity=".42"/></filter>
+    <filter id="glow1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="13" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow3" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="22" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g id="cadre-mineure" filter="url(#shadow)"><polygon points="512,72 952,512 512,952 72,512" fill="none" stroke="url(#metal)" stroke-width="22" stroke-linejoin="round"/><polygon points="512,72 952,512 512,952 72,512" fill="none" stroke="#20e47c" stroke-opacity=".48" stroke-width="4" stroke-linejoin="round"/></g>
+  <g id="embleme-volonte" filter="url(#shadow)">
+    <path d="M318 382h112v380H318zM594 382h112v380H594z" fill="url(#metalDark)" stroke="#252b28" stroke-width="10"/>
+    <path d="M296 346l78-42 76 42v78H296zM574 346l76-42 78 42v78H574z" fill="url(#metal)" stroke="#303632" stroke-width="10"/>
+    <path d="M400 322l112-70 112 70v480l-112 72-112-72z" fill="url(#metalDark)" stroke="#333a36" stroke-width="12"/>
+    <path d="M430 420l82-52 82 52v264l-82 58-82-58z" fill="#12211a" stroke="#20e47c" stroke-opacity=".62" stroke-width="10"/>
+    <path d="M512 408c-54 37-78 86-55 132-45-4-72 27-62 70 14 65 92 100 151 65 50-30 74-91 42-137-19-28-51-40-82-29 30 17 42 50 27 78-15 29-58 38-83 14-23-22-22-61 4-82 8-49 31-83 58-111z" fill="url(#core)" stroke="#78ffb4" stroke-width="9" filter="url(#glow1)"/>
+    <path d="M482 547c-18 24-13 58 10 73 28 18 68 0 72-34-17 18-37 24-53 16-19-10-27-31-29-55z" fill="#123d29"/>
+  </g>
+</svg>
