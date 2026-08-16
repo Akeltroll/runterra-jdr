@@ -125,7 +125,14 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   testé) réindexe 0..n-1 et persiste l'`order` (fiche : tous ; coffre commun : staff ; Équipement : staff/joueur).
   Le drag des items de la grille porte un marqueur `x-inv-reorder` ; les cases ne réclament le drop **que** s'il
   est présent — un item glissé depuis un slot d'équipement (non marqué) remonte au conteneur `onDropItem`
-  (déséquiper), donc réorganisation et drag-vers-slot coexistent. Popovers `ItemActionMenu` / `AmountStepper` ;
+  (déséquiper), donc réorganisation et drag-vers-slot coexistent.
+  **`ItemTooltip`** = infobulle d'objet partagée (nom, description, classe d'armure, bonus de stats, poids) ;
+  `InventoryGrid` gère son propre survol et l'affiche → **fiche joueur, coffre commun et grille Équipement
+  l'ont automatiquement**. Elle sert aussi aux **slots du paperdoll** (`pages-equip.jsx`), seul endroit qui lui
+  passe `effWeight` : les 3 grilles excluent déjà les objets équipés, donc le poids de base y est toujours bon.
+  **`invWeightLabel(item, effUnit)`** = libellé de poids (unitaire, ou `unitaire × qty = total` pour une pile ;
+  `null` si l'objet ne pèse rien ; `(base N)` en vert si allégé par le Mental).
+  Popovers `ItemActionMenu` / `AmountStepper` ;
   **`ItemCatalogPicker`** (modal de sélection rapide
   depuis `ITEM_CATALOG` → `AmountStepper` → `onPick(entry,qty)` ; bouton « Objet personnalisé » = filet) ;
   constantes `INV_*`/`inv*` (styles/format/filtres/pièces).
@@ -208,20 +215,30 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   portrait via `--pw`, `paginate`), `RecapLightbox` (lecture plein écran zoomable). Visible des
   3 rôles, **lecture seule, zéro Firebase, zéro règle RTDB**. Ajouter une séance = déposer les
   `.webp` dans `recaps/seance-XX/` + une entrée `RECAPS`.
-- `pages-runes.jsx` — onglet **Runes** (`RuneTreePage`) : **constellation radiale** (les 5 familles
-  rayonnent d'un cœur central, chaque voie = chaîne de nœuds centre→bord ; formes SVG par palier
-  losange/carré/hexagone, **hook `node.img`** pour des assets futurs ; faisceaux **centre→rune** qui
-  s'illuminent quand la rune extérieure est prise ; tooltip de détail au survol des nœuds ET des cœurs
-  de famille — `RuneConstellation`/`RuneNodeShape`/`RuneCore`/`RuneTooltip`). Géométrie en **logique
-  pure testée** `runeRadialLayout(RUNES)` (game-logic ; secteurs 360/n, éventail des voies, rayons par
-  palier). Refonte **purement graphique** (logique/données inchangées ; spec/plan
-  `docs/superpowers/{specs,plans}/2026-06-30-arbre-runes-visuel*`). Arbre des 5 familles (data `RUNES`),
-  sélection stricte (budget = `level + runeBonus`, ordre Mineure→Avancée→Fondamentale), persistée
+- `pages-runes.jsx` — onglet **Runes** (`RuneTreePage`) : **constellation radiale sertie**
+  (refonte graphique hi-fi 2026-08-16 d'après un handoff du MJ, spec archivée
+  `docs/superpowers/specs/2026-08-16-arbre-runes-refonte-graphique-design.md` ; 1re version
+  `…/2026-06-30-arbre-runes-visuel*`). Les 5 familles rayonnent d'un cœur central, chaque voie =
+  chaîne de 3 nœuds centre→bord (losange / carré / hexagone selon le palier ; **hook `node.img`**
+  pour des assets futurs). Composants : `RuneConstellation` / `RuneNodeShape` / `RuneCore` /
+  `RuneTooltip` / `RuneLegend` / `RuneReminders` / `RuneDefs`.
+  ⚠️ **Géométrie : ne PAS modifier `game-logic.js`** — `runeRadialLayout` est **déjà paramétrable**,
+  le rendu actuel vient de `{size:1200, ring:165, radii:[300,415,520], pathSpreadDeg:26, startDeg:-90}`
+  → familles à −90/−18/54/126/198°.
+  Rendu : **aura extérieure adaptative** (3 calques masqués en anneau — dégradé conique ancré sur
+  l'angle de chaque famille, alpha = part relative + investissement absolu ; teinte moyenne pondérée),
+  nœuds en 5 couches (platine, gemme dégradée, contour intérieur, reflet, marque de gravure), faisceaux
+  allumés + flux animé, décor (anneau gravé 72 graduations, lignes de ley, hub, poussière d'étoiles
+  **déterministe** PRNG graine 20260816), puces de familles, HUD central points/budget, légende.
+  Les **libellés sont un calque HTML au-dessus du SVG** (les `<text>` SVG ne se mettent pas en page ici).
+  Styles dans `runeterra.css` (classes `.rune-*` + `--fam`) ; seuls les dégradés calculés sont inline.
+  Sélection stricte (budget = `level + runeBonus`, ordre Mineure→Avancée→Fondamentale), persistée
   `state/runes` (`setRuneSelected`/`setRuneChoice`/`resetRunes`). Bonus plats via `sumRuneMods`+`mergeMods`
-  → `computeEffective` (fiche/MJ/équip) ; conditionnel/actif **et sous-effets non calculés** (champ
-  `note` : létalité Sadisme, renvoi Peau épineuse) en panneau « Rappels ». Toggle AD/AP (clé `adp`).
-  **Thématique** : la *condition* est en bas du cadre famille ; le *bonus* (capstone **par voie**) est
-  affiché dans la rune **fondamentale** (rectangle en 2 sous-sections). **Stepper points bonus MJ**
+  → `computeEffective` (fiche/MJ/équip) ; seul l'**effet réactif** (renvoi de Peau épineuse) reste en
+  panneau « Rappels ». Toggle AD/AP (clé `adp`) ; **`runeDisplayName`** résout « AD ou AP » sur le choix
+  réel une fois la rune gravée. **La légende et le tooltip lisent `RUNE_COST`** (jamais de coût en dur).
+  Condition de thématique = tooltip au survol du **cœur** de famille ; capstone (bonus thématique par
+  voie) = tooltip de la rune **fondamentale**. **Stepper points bonus MJ**
   (staff only, `setField('runeBonus')`) pour tester/gérer la montée de niveau. Visible des 3 rôles,
   sélecteur de perso pour le staff. Logique pure dans `game-logic.js`.
 - `pages-competences.jsx` — onglet **Combat** (`CompetencesPage`, libellé de menu « Combat ») : cast au clic
@@ -445,6 +462,18 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   (le prototype annonçait « Fondamentale 3 pts », la règle réelle est **2**) — légende et tooltip
   lisent désormais `RUNE_COST`, plus de divergence possible. CSS `.rune-*` réécrit dans `runeterra.css`
   (7 classes mortes de l'ancienne version en grille retirées).
+- **Runes — létalité de Sadisme calculée + choix AD/AP résolu** (`ef154e1`, cache `20260816-4`) :
+  ⚠️ **Cause instructive** — l'arbre de runes date du 18/06, la **létalité n'est devenue une stat du moteur
+  que le 22/06** (refonte combat) : le `note:'+10 létalité'` de `domi_sad_1` était un **reliquat périmé**,
+  la rune apparaissait à tort dans « effets à appliquer manuellement ». Corrigé :
+  `mods:{ adp:15 }`+note → **`mods:{ adp:15, letha:10 }`**. Ça marche parce que `computeEffective` fait
+  l'**union des clés** : un mod `letha` remonte jusqu'à `eff.letha`, déjà consommé au combat (snapshot
+  dans les attaques en attente → `mitigateDamage`) et affiché sur la fiche (`STAT_LABEL.letha`).
+  **Seule `vol_dur_2` (Peau épineuse) reste un rappel** : renvoi de dégâts = effet réactif, aucune stat
+  ne peut le porter. Ajout de **`runeDisplayName`** (pages-runes) : « +15 AD ou AP » devient « +15 AD »
+  une fois la rune gravée (tooltip + rappels) ; non gravée, aucun choix n'existe → libellé inchangé.
+  👉 **Piste ouverte** : d'autres runes `kind:'reminder'` sont peut-être devenues calculables depuis
+  les refontes de juin — pas encore auditées une par une.
 - **Infobulles d'objet dans toutes les grilles d'inventaire** (`1332979`) : le tooltip n'existait que sur
   les **slots du paperdoll** ; `InventoryGrid` ne gérait aucun survol. Extraction en composant partagé
   **`ItemTooltip`** + survol géré par `InventoryGrid` → fiche joueur, coffre commun et grille Équipement
