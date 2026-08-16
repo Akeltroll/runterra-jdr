@@ -318,8 +318,17 @@ function RuneConstellation({ nodeState, choices, famPoints, spent, budget, onCli
   );
 }
 
+/* Nom d'affichage d'une rune : une rune « AD ou AP » (mods.adp) montre le choix RÉEL
+   une fois gravée (« +15 AD et 10 létalité »). Tant qu'elle n'est pas gravée, aucun choix
+   n'est fait : on garde « AD ou AP ». Sans le motif, le nom est rendu tel quel. */
+function runeDisplayName(node, choices, selectedSet) {
+  if (!node || !(node.mods && node.mods.adp != null) || !selectedSet[node.id]) return node.name;
+  const pick = (choices[node.id] || 'ad') === 'ap' ? 'AP' : 'AD';
+  return node.name.replace('AD ou AP', pick);
+}
+
 /* Popover de détail (survol d'un nœud ou d'un cœur de famille). */
-function RuneTooltip({ hover }) {
+function RuneTooltip({ hover, choices, selectedSet }) {
   if (!hover) return null;
   const style = { '--fam': hover.fam,
     left: Math.min(hover.x + 16, window.innerWidth - 292),
@@ -338,7 +347,7 @@ function RuneTooltip({ hover }) {
   return (
     <div className="rune-tooltip" style={style}>
       <div className="rt-tier">{RUNE_PATH_NAME[node.id]} · {RUNE_TIER_LABEL[node.tier] || node.tier}</div>
-      <div className="rt-name">{node.name}</div>
+      <div className="rt-name">{runeDisplayName(node, choices || {}, selectedSet || {})}</div>
       <div className="rt-desc">{node.desc}</div>
       {node.note ? <div className="rt-note">⚠ {node.note}</div> : null}
       {hover.capstone ? <div className="rt-cap"><span>Bonus thématique</span>{hover.capstone}</div> : null}
@@ -364,12 +373,14 @@ function RuneLegend() {
   );
 }
 
-function RuneReminders({ selectedIds }) {
+function RuneReminders({ selectedIds, choices }) {
   // Nœuds dont un effet n'est pas calculé : runes 'reminder' OU bonus calculé + sous-effet (`note`).
   const items = selectedIds.map(id => RUNE_INDEX[id]).filter(n => n && (n.kind === 'reminder' || n.note));
   if (!items.length) return null;
   const famColor = {};
   RUNE_LAYOUT.families.forEach(f => { famColor[f.key] = f.color; });
+  // Ces nœuds sont gravés par construction : le choix AD/AP est donc résolu.
+  const sel = {}; selectedIds.forEach(id => { sel[id] = true; });
   return (
     <div className="rune-reminders">
       <div className="rr-head">Rappels — effets à appliquer manuellement</div>
@@ -377,7 +388,7 @@ function RuneReminders({ selectedIds }) {
         {items.map(n => (
           <div key={n.id} className="rr-item" style={{ '--fam': famColor[n.familyKey] || 'var(--gold)' }}>
             <span className="rr-dot" />
-            <span><b>{n.name}</b> — {n.kind === 'reminder' ? n.desc : n.note}</span>
+            <span><b>{runeDisplayName(n, choices || {}, sel)}</b> — {n.kind === 'reminder' ? n.desc : n.note}</span>
           </div>
         ))}
       </div>
@@ -468,8 +479,9 @@ function RuneBody({ char, staff }) {
       <RuneConstellation nodeState={nodeState} choices={choices} famPoints={famPoints}
         spent={spent} budget={budget} onClick={onClick} onChoice={setRuneChoice} onHover={onHover} />
       <RuneLegend />
-      <RuneReminders selectedIds={selectedIds} />
-      <RuneTooltip hover={hover ? { ...hover, fam: hoverFam || 'var(--gold)' } : null} />
+      <RuneReminders selectedIds={selectedIds} choices={choices} />
+      <RuneTooltip hover={hover ? { ...hover, fam: hoverFam || 'var(--gold)' } : null}
+        choices={choices} selectedSet={selectedSet} />
     </div>
   );
 }
