@@ -428,9 +428,28 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
 - **Dépôt réaligné et nettoyé** (voir « Branches » ci-dessus) : `main` contient **toutes** les features,
   les 7 anciennes branches fusionnées ont été supprimées, `Woolost` et `JB` créées depuis `main`.
   Cache `20260816-1`. **141 tests verts** (game-logic 130 + auth 11), tous les `.jsx` compilent.
-- **Arbre de runes visuel (chantier B) fusionné** (merge `60ef261`) — constellation radiale.
-  Seul conflit au merge : le token de cache d'`index.html` (résolu par un token neuf).
-  ⏳ **Validation visuelle MJ en attente.**
+- **Arbre de runes — refonte graphique hi-fi FAITE et VALIDÉE** (`37f7938`, cache `20260816-3`) :
+  intégration d'un **design handoff du MJ** (constellation radiale sertie). **Purement graphique** —
+  `RUNES`, `buildRuneIndex`, `runeRadialLayout`, `runeBudget`/`runeSpent`, `canSelectRune`/`canDeselectRune`,
+  `useCharState` et `state/runes` strictement **inchangés** (zéro test modifié, zéro règle RTDB).
+  ⚠️ **Point clé à retenir** : `runeRadialLayout` étant **déjà paramétrable**, la géométrie du handoff
+  s'obtient par options — `{size:1200, ring:165, radii:[300,415,520], pathSpreadDeg:26, startDeg:-90}`
+  → familles à −90/−18/54/126/198° — **sans toucher `game-logic.js`**.
+  Ajouts de rendu : aura extérieure adaptative (3 calques masqués en anneau ; dégradé conique ancré sur
+  l'angle de chaque famille, alpha = part relative + investissement absolu), nœuds sertis en 5 couches,
+  faisceaux allumés + flux animé, décor (anneau gravé, lignes de ley, hub, poussière d'étoiles
+  déterministe PRNG graine 20260816), puces de familles, HUD central, légende des paliers.
+  Libellés en **calque HTML au-dessus du SVG** (les `<text>` SVG ne se mettent pas en page ici).
+  **Le handoff livrait des placeholders — corrigés vers le réel** : familles Conquérant/Domination/
+  Sorcellerie/Volonté/Inspiration avec leurs `fam.color` de `RUNES` ; et surtout le coût des paliers
+  (le prototype annonçait « Fondamentale 3 pts », la règle réelle est **2**) — légende et tooltip
+  lisent désormais `RUNE_COST`, plus de divergence possible. CSS `.rune-*` réécrit dans `runeterra.css`
+  (7 classes mortes de l'ancienne version en grille retirées).
+- **Infobulles d'objet dans toutes les grilles d'inventaire** (`1332979`) : le tooltip n'existait que sur
+  les **slots du paperdoll** ; `InventoryGrid` ne gérait aucun survol. Extraction en composant partagé
+  **`ItemTooltip`** + survol géré par `InventoryGrid` → fiche joueur, coffre commun et grille Équipement
+  en héritent. Pas de prop `effWeight` sur la grille : **les trois grilles excluent déjà les objets
+  équipés**, donc le poids de base y est toujours le bon.
 - **Poids des items affiché dans les descriptions** (`d054ed0` + `35776d7`) : helper partagé
   `invWeightLabel(item, effUnit)` (components.jsx) → poids unitaire, ou `unitaire × qty = total`
   pour une pile ; `null` si l'item ne pèse rien. Branché sur tooltip Équipement, détail du coffre
@@ -575,9 +594,8 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
 ## Chantiers en cours / backlog
 - **Lot améliorations graphiques** (brainstormé 2026-06-28, chantiers indépendants — chacun sa spec/plan) :
   **A — Refonte fiche joueur = FAIT** (voir État actuel 2026-06-29).
-  **B — Arbre de runes en vrai arbre visuel = FAIT** (merge `60ef261`, 2026-08-16) : constellation radiale
-  (`RuneConstellation`/`RuneNodeShape`/`RuneCore`/`RuneTooltip`, géométrie pure testée `runeRadialLayout`).
-  ⏳ **Reste la validation visuelle du MJ** (jamais regardée en vrai à la date du merge). Reste :
+  **B — Arbre de runes en vrai arbre visuel = FAIT, refondu et VALIDÉ par le MJ** (2026-08-16) :
+  constellation radiale, puis **refonte graphique hi-fi** (handoff MJ) — voir État actuel 2026-08-16. Reste :
   **C — Hub d'accueil vivant** (remplacer la page Accueil mockup `pages-lobby.jsx` — boutons « Rejoindre/Créer
   session » + code `VX-7K2` factices, invisible des joueurs — par un vrai tableau de bord : roster du groupe
   PV/mana live, séance en cours, dernier récap, état du combat) ; **D — Passe
