@@ -418,66 +418,168 @@ input, select { font-family: inherit; }
   cursor:pointer; line-height:1; width:20px; }
 .recap-lb .lb-zoom span { font-family:var(--font-mono); font-size:12px; color:var(--ink-faint); min-width:42px; text-align:center; }
 
-/* ====== Arbre de runes ====== */
-.rune-page { padding:20px 24px; }
-.rune-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; }
-.rune-points { font-family:var(--font-mono); font-size:14px; color:var(--gold-pale); }
-.rune-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
-@media (max-width:1100px){ .rune-grid{ grid-template-columns:1fr; } }
-.rune-family { border:1px solid var(--line); border-radius:10px; padding:14px; background:var(--bg-panel); }
-.rune-family h3 { margin:0 0 4px; font-size:16px; }
-.rune-family .theme { font-size:11px; color:var(--ink-faint); margin-bottom:12px; }
-.rune-paths { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; align-items:start; }
-.rune-path { display:flex; flex-direction:column; align-items:stretch; }
-.rune-path .pname { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); margin-bottom:10px; text-align:center; min-height:28px; }
-.rune-node { position:relative; border:1px solid var(--line-strong); border-radius:8px; padding:8px 6px; text-align:center; cursor:pointer; background:var(--bg-inset); transition:box-shadow .15s, background .15s, opacity .15s; }
-.rune-node + .rune-node { margin-top:20px; }
-.rune-node + .rune-node::before { content:''; position:absolute; top:-20px; left:50%; width:2px; height:20px; background:var(--line-strong); transform:translateX(-50%); }
-.rune-node.locked { opacity:.4; cursor:not-allowed; }
-.rune-node.available { box-shadow:0 0 0 1px var(--fam), 0 0 12px -3px var(--fam); }
-.rune-node.selected { background:color-mix(in srgb, var(--fam) 22%, var(--bg-inset)); border-color:var(--fam); box-shadow:0 0 14px -2px var(--fam); }
-.rune-node .ntier { font-size:9px; text-transform:uppercase; color:var(--ink-faint); letter-spacing:.05em; }
-.rune-node .nname { font-size:12px; color:var(--ink); font-weight:600; line-height:1.2; }
-.rune-node .ndesc { font-size:10px; color:var(--ink-faint); line-height:1.3; margin-top:3px; }
-.rune-adp { display:inline-flex; gap:3px; margin-top:6px; }
-.rune-adp button { font-size:10px; padding:1px 7px; border-radius:4px; border:1px solid var(--line-strong); background:var(--bg-panel-2); color:var(--ink-faint); cursor:pointer; }
-.rune-adp button.on { background:var(--fam); color:#1a1410; border-color:var(--fam); font-weight:700; }
-.rune-capstone-sub { margin-top:8px; padding-top:7px; border-top:1px dashed var(--fam); display:flex; flex-direction:column; gap:2px; }
-.rune-capstone-sub .cap-lbl { font-size:8px; text-transform:uppercase; letter-spacing:.05em; color:var(--fam); }
-.rune-capstone-sub .cap-txt { font-size:10px; color:var(--gold-pale); line-height:1.3; }
-.rune-theme-cond { margin-top:14px; padding-top:10px; border-top:1px solid var(--line); font-size:11px; color:var(--ink-faint); text-align:center; line-height:1.4; }
-.rune-reminders { margin-top:22px; border-top:1px solid var(--line); padding-top:14px; }
-.rune-reminders ul { margin:0; padding-left:18px; }
-.rune-reminders li { font-size:12px; color:var(--ink); margin-bottom:5px; line-height:1.4; }
+/* ====== Arbre de runes — constellation radiale ======
+   Refonte graphique (handoff hi-fi 2026-08-16). Les valeurs dynamiques (couleur de
+   famille, aura) arrivent par la variable `--fam` ou en style inline calculé ;
+   tout le statique vit ici. */
+.rune-page { padding:22px 26px 44px; color:var(--ink);
+  background-color:#07070C;
+  background-image:
+    radial-gradient(90% 70% at 50% 46%, rgba(56,36,84,0.30) 0%, rgba(20,14,30,0.12) 42%, rgba(7,7,12,0) 72%),
+    radial-gradient(120% 90% at 50% -12%, rgba(200,155,60,0.07) 0%, rgba(12,11,17,0) 55%),
+    url("data:image/svg+xml,%3Csvg width='56' height='100' viewBox='0 0 56 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23C89B3C' stroke-opacity='0.05' stroke-width='1'%3E%3Cpath d='M28 0L56 16v33L28 65 0 49V16z'/%3E%3Cpath d='M28 50l28 16v33L28 115 0 99V66z'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(180deg,#0B0A11,#07070C);
+  background-position:center center, center top, center top, center; }
 
-/* --- Arbre de runes — constellation radiale (SVG) --- */
-.rune-constellation { position:relative; width:100%; max-width:780px; margin:10px auto 0; aspect-ratio:1; }
+/* --- En-tête --- */
+.rune-head { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between;
+  gap:16px; max-width:1080px; margin:0 auto 6px; }
+.rune-head .rh-over { font-family:var(--font-mono); font-size:10px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--ink-faint); }
+.rune-head h2 { margin:0; font-family:'Cinzel',Georgia,serif; font-size:27px; font-weight:700;
+  letter-spacing:.03em; color:var(--gold-pale); line-height:1.1; }
+.rune-head .rh-sub { font-size:12px; color:var(--ink-faint); }
+.rune-stepper { display:flex; align-items:center; gap:6px; padding:6px 10px;
+  border:1px solid var(--line); border-radius:999px; background:var(--bg-inset); }
+.rune-stepper button { width:22px; height:22px; border-radius:50%; border:1px solid var(--line-strong);
+  background:var(--bg-panel-2); color:var(--ink-dim); font-size:13px; line-height:1; cursor:pointer;
+  transition:border-color .2s ease, color .2s ease; }
+.rune-stepper button:hover:not(:disabled) { border-color:var(--gold-deep,#8A6A22); color:var(--gold-bright,#E4C56B); }
+.rune-stepper button:disabled { opacity:.4; cursor:not-allowed; }
+.rune-stepper .rs-val { font-family:var(--font-mono); font-size:11px; color:var(--ink-faint); letter-spacing:.06em; }
+
+/* --- Puces de familles --- */
+.rune-chips { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px;
+  max-width:1080px; margin:14px auto 0; }
+.rune-chip { display:flex; align-items:center; gap:8px; padding:6px 12px 6px 6px; border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--fam) 20%, transparent); background:var(--bg-inset);
+  color:var(--ink-faint); transition:all .2s ease; }
+.rune-chip.invested { border-color:color-mix(in srgb, var(--fam) 55%, transparent);
+  background:color-mix(in srgb, var(--fam) 10%, transparent); color:var(--ink); }
+.rune-chip .rc-dot { width:22px; height:22px; border-radius:50%; display:grid; place-items:center;
+  font-family:'Cinzel',serif; font-size:12px; font-weight:700; color:var(--fam);
+  background:color-mix(in srgb, var(--fam) 12%, transparent);
+  border:1px solid color-mix(in srgb, var(--fam) 45%, transparent); }
+.rune-chip .rc-name { font-size:11.5px; letter-spacing:.04em; }
+.rune-chip .rc-pts { font-family:var(--font-mono); font-size:11px; opacity:.75; }
+
+/* --- Scène de constellation --- */
+.rune-scene { position:relative; width:100%; max-width:min(940px, max(620px, 88vh));
+  margin:2px auto 0; aspect-ratio:1; container-type:inline-size; }
 .rune-sky { width:100%; height:100%; display:block; overflow:visible; }
-.rune-ring { fill:none; stroke:rgba(160,128,72,0.16); stroke-width:1.5; stroke-dasharray:3 8; }
-.rune-beam { stroke:rgba(160,128,72,0.16); stroke-width:2.5; transition:stroke .3s ease, stroke-width .3s ease; }
-.rune-beam.lit { stroke:var(--fam); stroke-width:5; stroke-linecap:round; filter:drop-shadow(0 0 5px var(--fam)); }
-.rune-glyph { fill:#15110c; stroke:rgba(160,128,72,0.32); stroke-width:2.5; cursor:pointer;
-  transition:fill .25s ease, stroke .25s ease, filter .25s ease; }
-.rune-glyph.locked { opacity:.4; }
-.rune-glyph.available { stroke:var(--fam); stroke-width:3; animation:runeGlow 2.2s ease-in-out infinite; }
-.rune-glyph.selected { fill:color-mix(in srgb, var(--fam) 36%, #15110c); stroke:var(--fam); stroke-width:3.5;
-  filter:drop-shadow(0 0 6px var(--fam)); }
-@keyframes runeGlow { 0%,100%{ filter:drop-shadow(0 0 1px var(--fam)); } 50%{ filter:drop-shadow(0 0 6px var(--fam)); } }
+/* Les 3 calques d'aura extérieure : masqués en anneau, l'effet ne vit qu'AUTOUR de la roue. */
+.rune-aura { position:absolute; inset:-18%; border-radius:50%; pointer-events:none;
+  will-change:transform, opacity;
+  -webkit-mask-image:radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 30%, rgba(0,0,0,.35) 40%, rgba(0,0,0,.9) 50%, rgba(0,0,0,.55) 66%, rgba(0,0,0,0) 84%);
+  mask-image:radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 30%, rgba(0,0,0,.35) 40%, rgba(0,0,0,.9) 50%, rgba(0,0,0,.55) 66%, rgba(0,0,0,0) 84%); }
+.rune-aura.ring  { filter:blur(30px); animation:auraBreath 11s ease-in-out infinite; transition:background .6s ease; }
+.rune-aura.conic { filter:blur(84px);  animation:auraBreath 7s ease-in-out infinite;  transition:opacity .6s ease; }
+.rune-aura.shimmer { filter:blur(46px); opacity:.9; animation:auraSpin 64s linear infinite;
+  background:conic-gradient(from 0deg, rgba(255,246,226,0) 0deg, rgba(255,246,226,.05) 40deg,
+    rgba(255,246,226,0) 90deg, rgba(198,168,255,.05) 170deg, rgba(255,246,226,0) 240deg,
+    rgba(255,246,226,.045) 310deg, rgba(255,246,226,0) 360deg); }
+
+/* --- Faisceaux cœur -> nœuds --- */
+.rune-beam { stroke:color-mix(in srgb, var(--fam) 13%, transparent); stroke-width:1.4;
+  stroke-linecap:round; transition:stroke .3s ease, stroke-width .3s ease; }
+.rune-beam.lit { stroke:color-mix(in srgb, var(--fam) 55%, transparent); stroke-width:2; }
+.rune-beam-glow { stroke:var(--fam); stroke-width:4.5; stroke-linecap:round; }
+.rune-beam-flow { stroke:#FFF6E2; stroke-width:1.6; stroke-linecap:round; stroke-dasharray:5 35;
+  animation:runeFlow 1.6s linear infinite; }
+
+/* --- Nœuds : platine, gemme, contour intérieur, reflet, marque --- */
+.rune-plate { stroke:none; fill:rgba(4,4,8,.55); }
+.rune-plate.selected { fill:color-mix(in srgb, var(--fam) 7%, transparent); }
+.rune-socket { fill:none; stroke-width:1; stroke-dasharray:1 6; }
+.rune-socket.locked    { stroke:color-mix(in srgb, var(--fam)  8%, transparent); }
+.rune-socket.available { stroke:color-mix(in srgb, var(--fam) 17%, transparent); }
+.rune-socket.selected  { stroke:color-mix(in srgb, var(--fam) 32%, transparent); stroke-dasharray:0; }
+.rune-gem { cursor:pointer; transition:stroke .25s ease, stroke-width .25s ease, opacity .25s ease; }
+.rune-gem.locked    { stroke:color-mix(in srgb, var(--fam) 26%, transparent); stroke-width:1.2; opacity:.7; }
+.rune-gem.available { stroke:color-mix(in srgb, var(--fam) 72%, transparent); stroke-width:1.8; }
+.rune-gem.selected  { stroke:var(--fam); stroke-width:2.6; }
+.rune-inner { fill:none; stroke-width:1; pointer-events:none;
+  stroke:color-mix(in srgb, var(--fam) 18%, transparent); }
+.rune-inner.selected { stroke:color-mix(in srgb, var(--fam) 55%, transparent); }
+.rune-spec { fill:#FFFFFF; pointer-events:none; }
+.rune-spec.locked { opacity:.06; } .rune-spec.available { opacity:.14; } .rune-spec.selected { opacity:.42; }
+.rune-mark { fill:#FFF3DC; pointer-events:none; }
+.rune-pip { pointer-events:none; animation:runeBreath 2.4s ease-in-out infinite; }
+
+/* --- Cœurs de famille + anneau gravé --- */
 .rune-core { cursor:help; }
-.rune-core-disc { fill:#0e0b08; stroke:var(--fam); stroke-width:3; filter:drop-shadow(0 0 8px var(--fam)); }
-.rune-core-txt { fill:var(--fam); font-family:'Cinzel',serif; font-size:26px; font-weight:700; pointer-events:none; }
-.rune-adp-layer { position:absolute; inset:0; pointer-events:none; }
-.rune-adp-layer .rune-adp { position:absolute; transform:translate(-50%,0); margin-top:0; pointer-events:auto; }
-/* Tooltip de détail au survol */
-.rune-tooltip { position:fixed; z-index:300; width:260px; pointer-events:none;
-  background:var(--bg-panel-2,#181410); border:1px solid var(--line-gold,rgba(160,128,72,0.5));
-  border-radius:8px; padding:10px 12px; box-shadow:0 8px 30px rgba(0,0,0,0.6); color:var(--ink,#e9dcc4); }
-.rune-tooltip .rt-tier { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); }
-.rune-tooltip .rt-name { font-size:14px; font-weight:700; color:var(--gold-pale); margin:1px 0 4px; }
-.rune-tooltip .rt-desc { font-size:12px; color:var(--ink-soft); line-height:1.35; }
-.rune-tooltip .rt-note { font-size:11px; color:var(--silver,#bcae8f); margin-top:5px; line-height:1.3; }
-.rune-tooltip .rt-cap { margin-top:7px; padding-top:6px; border-top:1px dashed var(--fam); font-size:11px; color:var(--gold-pale); line-height:1.3; }
-.rune-tooltip .rt-cap span { display:block; font-size:8px; text-transform:uppercase; letter-spacing:.05em; color:var(--fam); margin-bottom:1px; }
+.rune-core-outer { fill:#0B0A10; stroke:color-mix(in srgb, var(--fam) 28%, transparent); stroke-width:1; }
+.rune-core-inner { fill:#100D14; stroke:var(--fam); stroke-width:2.5; }
+.rune-etch { fill:none; stroke:rgba(200,155,60,0.11); stroke-width:1; }
+.rune-etch.faint { stroke:rgba(200,155,60,0.05); }
+.rune-depth-1 { fill:none; stroke:rgba(200,155,60,0.05);  stroke-width:1; }
+.rune-depth-2 { fill:none; stroke:rgba(200,155,60,0.055); stroke-width:1; }
+.rune-depth-3 { fill:none; stroke:rgba(200,155,60,0.07);  stroke-width:1; }
+.rune-ring    { fill:none; stroke:rgba(200,155,60,0.22); stroke-width:1.5; stroke-dasharray:2 10; }
+.rune-ley     { stroke:rgba(200,155,60,0.09); stroke-width:1; }
+.rune-hub-disc { fill:url(#runeHubGrad); stroke:rgba(200,155,60,0.35); stroke-width:1.5; }
+.rune-hub-dash { fill:none; stroke:rgba(200,155,60,0.16); stroke-width:1; stroke-dasharray:1 7; }
+
+/* --- Calque HTML au-dessus du SVG (les <text> SVG ne se mettent pas en page ici) --- */
+.rune-labels { position:absolute; inset:0; pointer-events:none; }
+.rune-hud { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  display:flex; flex-direction:column; align-items:center; gap:2px; }
+.rune-hud .rh-lbl { font-family:var(--font-mono); font-size:clamp(10px,1.15cqw,13px);
+  letter-spacing:.28em; color:var(--ink-faint); }
+.rune-hud .rh-spent { font-family:'Cinzel',serif; font-size:clamp(34px,4cqw,52px); font-weight:700;
+  color:var(--gold-pale); line-height:1.05; }
+.rune-hud .rh-budget { font-family:var(--font-mono); font-size:clamp(12px,1.4cqw,17px); color:var(--gold); }
+.rune-core-txt { position:absolute; transform:translate(-50%,-50%); font-family:'Cinzel',serif;
+  font-size:clamp(20px,2.4cqw,30px); font-weight:700; color:var(--fam); pointer-events:none; line-height:1; }
+.rune-fam-label { position:absolute; transform:translate(-50%,-50%); white-space:nowrap;
+  font-family:var(--font-mono); font-size:clamp(11px,1.25cqw,16px); letter-spacing:.24em; line-height:1;
+  color:color-mix(in srgb, var(--fam) 72%, transparent); }
+.rune-fam-label.invested { color:color-mix(in srgb, var(--fam) 95%, transparent); }
+.rune-adp { position:absolute; transform:translate(-50%,0); display:flex; gap:4px; pointer-events:auto; }
+.rune-adp button { padding:3px 9px; border-radius:4px; font-size:10px; font-weight:700; letter-spacing:.06em;
+  font-family:var(--font-mono); cursor:pointer; border:1px solid var(--line-strong);
+  background:var(--bg-panel); color:var(--ink-faint); }
+.rune-adp button.on { border-color:var(--fam); background:var(--fam); color:#12100A; }
+
+/* --- Légende des paliers --- */
+.rune-legend { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:22px;
+  max-width:1080px; margin:2px auto 0; font-family:var(--font-mono); font-size:10.5px;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+.rune-legend span { display:inline-flex; align-items:center; gap:8px; }
+.rune-legend svg polygon, .rune-legend svg rect { fill:none; stroke:var(--gold-deep,#8A6A22); stroke-width:1.6; }
+
+/* --- Rappels --- */
+.rune-reminders { max-width:940px; margin:26px auto 0; border-top:1px solid var(--line); padding-top:14px; }
+.rune-reminders .rr-head { font-family:var(--font-mono); font-size:10px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-faint); margin-bottom:10px; }
+.rune-reminders .rr-list { display:flex; flex-direction:column; gap:7px; }
+.rune-reminders .rr-item { display:flex; gap:10px; align-items:baseline; font-size:12.5px; color:var(--ink-dim); }
+.rune-reminders .rr-dot { width:6px; height:6px; border-radius:50%; margin-top:6px; flex:none; background:var(--fam); }
+.rune-reminders .rr-item b { color:var(--gold-pale); font-weight:600; }
+
+/* --- Infobulle --- */
+.rune-tooltip { position:fixed; z-index:300; width:272px; pointer-events:none;
+  background:linear-gradient(180deg,#15131B,#0B0A10);
+  border:1px solid color-mix(in srgb, var(--fam) 50%, transparent); border-radius:9px; padding:12px 14px;
+  box-shadow:0 18px 50px rgba(0,0,0,.75), 0 0 0 1px rgba(0,0,0,.5); }
+.rune-tooltip .rt-tier { font-family:var(--font-mono); font-size:9px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-faint); }
+.rune-tooltip .rt-name { font-family:'Cinzel',serif; font-size:15px; font-weight:700;
+  color:var(--gold-pale); margin:2px 0 5px; letter-spacing:.02em; }
+.rune-tooltip .rt-desc { font-size:12.5px; line-height:1.42; color:var(--ink-dim); }
+.rune-tooltip .rt-note { font-size:11.5px; color:var(--ink-dim); margin-top:6px; line-height:1.35; }
+.rune-tooltip .rt-cap { margin-top:8px; padding-top:7px;
+  border-top:1px dashed color-mix(in srgb, var(--fam) 45%, transparent);
+  font-size:11.5px; line-height:1.35; color:var(--gold-pale); }
+.rune-tooltip .rt-cap span { display:block; font-family:var(--font-mono); font-size:8.5px;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--fam); margin-bottom:3px; }
+.rune-tooltip .rt-cost { margin-top:7px; font-family:var(--font-mono); font-size:10.5px;
+  color:var(--ink-faint); letter-spacing:.06em; }
+
+@keyframes runeFlow   { to { stroke-dashoffset:-40; } }
+@keyframes runeBreath { 0%,100% { opacity:.45; } 50% { opacity:1; } }
+@keyframes auraSpin   { to { transform:rotate(360deg); } }
+@keyframes auraBreath { 0%,100% { opacity:.72; transform:scale(1); } 50% { opacity:1; transform:scale(1.035); } }
 
 /* Vue MJ — pulsation du cadre des cartes joueurs selon les PV (orange < 50%, rouge < 25%) */
 @keyframes mjPulseWarn {
