@@ -162,6 +162,10 @@ function EquipBody({ char }) {
   const carryForce = (state.attrs && state.attrs.force != null ? state.attrs.force : (char.attrs ? char.attrs.force : 0)) || 0;
   const carryMental = (state.attrs && state.attrs.mental != null ? state.attrs.mental : (char.attrs ? char.attrs.mental : 0)) || 0;
   const carryHab = (state.attrs && state.attrs.hab != null ? state.attrs.hab : (char.attrs ? char.attrs.hab : 0)) || 0;
+  // Poids unitaire effectif d'un objet : l'armure du slot `armure` est allégée par le Mental
+  // (même règle que carriedWeight) ; null ailleurs = poids de base. Alimente les infobulles.
+  const effWeightOf = (it) => (it && equipment.armure && equipment.armure === it.id)
+    ? armorEffectiveWeight(it.weight, carryMental) : null;
   const weightCarried = carriedWeight(itemsById, carryMental, equipment);
   const weightCap = carryCapacity(carryForce, carryMental, effLevel, equipment, itemsById);
   const wStatus = weightStatus(weightCarried, weightCap, carryHab);
@@ -436,50 +440,8 @@ function EquipBody({ char }) {
         </div>
       </div>
 
-      {/* ===== TOOLTIP ===== */}
-      {tip && (() => {
-        const it = tip.item;
-        const cs = invCatStyle(it);
-        const modRows = Object.keys(it.mods || {}).map(k => ({ k:(STAT_LABEL[k] || k), v:(it.mods[k] > 0 ? '+' : '') + it.mods[k] }));
-        // Armure équipée : le poids compté par la jauge est allégé par le Mental (cf. carriedWeight).
-        const tipEffW = (equipment.armure && equipment.armure === it.id)
-          ? armorEffectiveWeight(it.weight, carryMental) : null;
-        const tipW = invWeightLabel(it, tipEffW);
-        return (
-          <div style={{ position:'fixed', left:Math.min(tip.x + 16, window.innerWidth - 255) + 'px',
-            top:Math.min(tip.y + 16, window.innerHeight - 190) + 'px', zIndex:9999, width:242, padding:'13px 15px',
-            pointerEvents:'none', background:'linear-gradient(180deg,rgba(22,16,13,0.97),rgba(12,9,7,0.98))',
-            border:'1px solid ' + cs.border, borderRadius:4, boxShadow:'0 10px 32px rgba(0,0,0,0.85),0 0 18px ' + cs.glow,
-            fontFamily:"'EB Garamond',serif" }}>
-            <div style={{ fontFamily:"'Cinzel',serif", fontSize:14, fontWeight:600, color:'#e9dcc4' }}>{it.name}</div>
-            <div style={{ fontSize:12.5, color:'#9a8b76', fontStyle:'italic', marginTop:2 }}>{it.sub || (it.cat + (it.qty > 1 ? ' · ×' + it.qty : ''))}</div>
-            {it.armorClass && (
-              <div style={{ fontSize:11.5, color:'#c8a35a', marginTop:3, fontFamily:"'Cinzel',serif", letterSpacing:'0.3px' }}>
-                Armure {(ARMOR_CLASSES.find(c => c.value === it.armorClass) || {}).label || it.armorClass}
-              </div>
-            )}
-            {modRows.length > 0 && (
-              <React.Fragment>
-                <div style={{ height:1, background:'rgba(160,128,72,0.22)', margin:'8px 0' }} />
-                {modRows.map(st => (
-                  <div key={st.k} style={{ display:'flex', justifyContent:'space-between', fontSize:12.5, padding:'2px 0' }}>
-                    <span style={{ color:'#9a8b76' }}>{st.k}</span><span style={{ color:'#9fd07a' }}>{st.v}</span>
-                  </div>
-                ))}
-              </React.Fragment>
-            )}
-            {tipW && (
-              <React.Fragment>
-                <div style={{ height:1, background:'rgba(160,128,72,0.22)', margin:'8px 0' }} />
-                <div style={{ display:'flex', justifyContent:'space-between', fontSize:12.5, padding:'2px 0' }}>
-                  <span style={{ color:'#9a8b76' }}>⚖ Poids</span>
-                  <span style={{ color: tipEffW != null ? '#9fd07a' : '#c9b990' }}>{tipW}</span>
-                </div>
-              </React.Fragment>
-            )}
-          </div>
-        );
-      })()}
+      {/* ===== TOOLTIP (slots du paperdoll ; la grille gère la sienne) ===== */}
+      {tip && <ItemTooltip item={tip.item} x={tip.x} y={tip.y} effWeight={effWeightOf(tip.item)} />}
 
       {/* ===== POPOVERS : menu d'actions / stepper de quantité / éditeur d'item ===== */}
       {menu && <ItemActionMenu item={menu.item} x={menu.x} y={menu.y} actions={menu.actions} onClose={() => setMenu(null)} />}

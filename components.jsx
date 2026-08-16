@@ -391,7 +391,62 @@ const invThumbStyle = (item, inset) => ({
 
 /* Grille d'inventaire dark-fantasy réutilisable (page Équipement + coffre commun).
    N'gère PAS les actions : remonte les clics au parent via onItemClick/onCoinClick. */
+/* Infobulle d'objet dark-fantasy, partagée : nom, description, classe d'armure, bonus de
+   stats, poids. Positionnée en `fixed` sur le curseur (x, y) et non cliquable.
+   `effWeight` = poids unitaire effectif (armure équipée allégée par le Mental) ou null. */
+function ItemTooltip({ item, x, y, effWeight }) {
+  if (!item) return null;
+  const cs = invCatStyle(item);
+  const modRows = Object.keys(item.mods || {})
+    .map(k => ({ k:(STAT_LABEL[k] || k), v:(item.mods[k] > 0 ? '+' : '') + item.mods[k] }));
+  const wTxt = invWeightLabel(item, effWeight);
+  const armorLabel = item.armorClass
+    ? ((window.ARMOR_CLASSES || []).find(c => c.value === item.armorClass) || {}).label || item.armorClass
+    : null;
+  const sep = <div style={{ height:1, background:'rgba(160,128,72,0.22)', margin:'8px 0' }} />;
+  return (
+    <div style={{ position:'fixed', left:Math.min(x + 16, window.innerWidth - 255) + 'px',
+      top:Math.min(y + 16, window.innerHeight - 190) + 'px', zIndex:9999, width:242, padding:'13px 15px',
+      pointerEvents:'none', background:'linear-gradient(180deg,rgba(22,16,13,0.97),rgba(12,9,7,0.98))',
+      border:'1px solid ' + cs.border, borderRadius:4, boxShadow:'0 10px 32px rgba(0,0,0,0.85),0 0 18px ' + cs.glow,
+      fontFamily:"'EB Garamond',serif" }}>
+      <div style={{ fontFamily:"'Cinzel',serif", fontSize:14, fontWeight:600, color:'#e9dcc4' }}>{item.name}</div>
+      <div style={{ fontSize:12.5, color:'#9a8b76', fontStyle:'italic', marginTop:2 }}>
+        {item.sub || (item.cat + (item.qty > 1 ? ' · ×' + item.qty : ''))}
+      </div>
+      {armorLabel && (
+        <div style={{ fontSize:11.5, color:'#c8a35a', marginTop:3, fontFamily:"'Cinzel',serif", letterSpacing:'0.3px' }}>
+          Armure {armorLabel}
+        </div>
+      )}
+      {modRows.length > 0 && (
+        <React.Fragment>
+          {sep}
+          {modRows.map(st => (
+            <div key={st.k} style={{ display:'flex', justifyContent:'space-between', fontSize:12.5, padding:'2px 0' }}>
+              <span style={{ color:'#9a8b76' }}>{st.k}</span><span style={{ color:'#9fd07a' }}>{st.v}</span>
+            </div>
+          ))}
+        </React.Fragment>
+      )}
+      {wTxt && (
+        <React.Fragment>
+          {sep}
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12.5, padding:'2px 0' }}>
+            <span style={{ color:'#9a8b76' }}>⚖ Poids</span>
+            <span style={{ color: effWeight != null ? '#9fd07a' : '#c9b990' }}>{wTxt}</span>
+          </div>
+        </React.Fragment>
+      )}
+    </div>
+  );
+}
+
 function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinClick, onAdd, onDropItem, onReorderItem, capacity = 120, title = 'INVENTAIRE', minCells = 49, grow = false }) {
+  // Infobulle au survol d'un objet de la grille (état interne : chaque grille gère la sienne).
+  // Pas de poids effectif ici : toutes les grilles excluent les objets équipés (seuls concernés
+  // par l'allègement au Mental), donc le poids de base est toujours le bon.
+  const [tip, setTip] = useState(null);   // { item, x, y }
   const ordVal = (it) => typeof it.order === 'number' ? it.order : Number.MAX_SAFE_INTEGER;
   const list = items
     ? Object.values(items).filter(it => it.qty == null || it.qty > 0).sort((a, b) => ordVal(a) - ordVal(b))
@@ -457,8 +512,11 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
                 display:'flex', alignItems:'center', justifyContent:'center', overflow:'visible' }}>
                 {item && (
                   <div draggable="true"
-                    onDragStart={(e) => { e.dataTransfer.setData('text', item.id); e.dataTransfer.setData('x-inv-reorder', item.id); }}
+                    onDragStart={(e) => { e.dataTransfer.setData('text', item.id); e.dataTransfer.setData('x-inv-reorder', item.id); setTip(null); }}
                     onClick={(e) => onItemClick && onItemClick(item, e)}
+                    onMouseEnter={(e) => setTip({ item, x:e.clientX, y:e.clientY })}
+                    onMouseMove={(e) => setTip(t => t ? { ...t, x:e.clientX, y:e.clientY } : t)}
+                    onMouseLeave={() => setTip(null)}
                     style={{ ...invThumbStyle(item, '3px'), cursor:'grab' }}>
                     {!item.img && (item.ic || '◆')}
                   </div>
@@ -489,6 +547,7 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
           {list.length} / {capacity}
         </span>
       </div>
+      {tip && <ItemTooltip item={tip.item} x={tip.x} y={tip.y} />}
     </div>
   );
 }
@@ -803,6 +862,6 @@ Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
   ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
-  InventoryGrid, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invWeightLabel, invThumbStyle,
+  InventoryGrid, ItemTooltip, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invWeightLabel, invThumbStyle,
   AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar,
 });
