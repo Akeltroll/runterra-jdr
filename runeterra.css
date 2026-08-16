@@ -450,6 +450,35 @@ input, select { font-family: inherit; }
 .rune-reminders ul { margin:0; padding-left:18px; }
 .rune-reminders li { font-size:12px; color:var(--ink); margin-bottom:5px; line-height:1.4; }
 
+/* --- Arbre de runes — constellation radiale (SVG) --- */
+.rune-constellation { position:relative; width:100%; max-width:780px; margin:10px auto 0; aspect-ratio:1; }
+.rune-sky { width:100%; height:100%; display:block; overflow:visible; }
+.rune-ring { fill:none; stroke:rgba(160,128,72,0.16); stroke-width:1.5; stroke-dasharray:3 8; }
+.rune-beam { stroke:rgba(160,128,72,0.16); stroke-width:2.5; transition:stroke .3s ease, stroke-width .3s ease; }
+.rune-beam.lit { stroke:var(--fam); stroke-width:5; stroke-linecap:round; filter:drop-shadow(0 0 5px var(--fam)); }
+.rune-glyph { fill:#15110c; stroke:rgba(160,128,72,0.32); stroke-width:2.5; cursor:pointer;
+  transition:fill .25s ease, stroke .25s ease, filter .25s ease; }
+.rune-glyph.locked { opacity:.4; }
+.rune-glyph.available { stroke:var(--fam); stroke-width:3; animation:runeGlow 2.2s ease-in-out infinite; }
+.rune-glyph.selected { fill:color-mix(in srgb, var(--fam) 36%, #15110c); stroke:var(--fam); stroke-width:3.5;
+  filter:drop-shadow(0 0 6px var(--fam)); }
+@keyframes runeGlow { 0%,100%{ filter:drop-shadow(0 0 1px var(--fam)); } 50%{ filter:drop-shadow(0 0 6px var(--fam)); } }
+.rune-core { cursor:help; }
+.rune-core-disc { fill:#0e0b08; stroke:var(--fam); stroke-width:3; filter:drop-shadow(0 0 8px var(--fam)); }
+.rune-core-txt { fill:var(--fam); font-family:'Cinzel',serif; font-size:26px; font-weight:700; pointer-events:none; }
+.rune-adp-layer { position:absolute; inset:0; pointer-events:none; }
+.rune-adp-layer .rune-adp { position:absolute; transform:translate(-50%,0); margin-top:0; pointer-events:auto; }
+/* Tooltip de détail au survol */
+.rune-tooltip { position:fixed; z-index:300; width:260px; pointer-events:none;
+  background:var(--bg-panel-2,#181410); border:1px solid var(--line-gold,rgba(160,128,72,0.5));
+  border-radius:8px; padding:10px 12px; box-shadow:0 8px 30px rgba(0,0,0,0.6); color:var(--ink,#e9dcc4); }
+.rune-tooltip .rt-tier { font-size:9px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); }
+.rune-tooltip .rt-name { font-size:14px; font-weight:700; color:var(--gold-pale); margin:1px 0 4px; }
+.rune-tooltip .rt-desc { font-size:12px; color:var(--ink-soft); line-height:1.35; }
+.rune-tooltip .rt-note { font-size:11px; color:var(--silver,#bcae8f); margin-top:5px; line-height:1.3; }
+.rune-tooltip .rt-cap { margin-top:7px; padding-top:6px; border-top:1px dashed var(--fam); font-size:11px; color:var(--gold-pale); line-height:1.3; }
+.rune-tooltip .rt-cap span { display:block; font-size:8px; text-transform:uppercase; letter-spacing:.05em; color:var(--fam); margin-bottom:1px; }
+
 /* Vue MJ — pulsation du cadre des cartes joueurs selon les PV (orange < 50%, rouge < 25%) */
 @keyframes mjPulseWarn {
   0%, 100% { border-color: var(--line); box-shadow: none; }
