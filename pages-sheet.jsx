@@ -22,16 +22,18 @@ function ResourceStack({ char, eff, hp, mana, shield }) {
   );
 }
 
-/* ---- Grille de stats secondaires avec décomposition base / +mod / +stuff ---- */
+/* ---- Grille de stats avec décomposition base / +mod / +stuff ----
+   Deux vues commutables : PRINCIPALES (offensif/défensif de base) et SECONDAIRES
+   (léthalités + drains). Les deux vues font 6 cases pour que le panneau ne
+   « saute » pas à la bascule ; la 6e case des secondaires est réservée. */
+const STAT_VIEWS = {
+  principales: ['ad', 'ap', 'armure', 'resmag', 'crit', 'dcrit'],
+  secondaires: ['letha', 'lethaMag', 'vol', 'sapience', 'omni'],
+};
 function SecondaryStats({ breakdown }) {
   const b = breakdown || {};
-  const items = [
-    'ad', 'ap', 'armure', 'resmag', 'crit', 'dcrit',
-    ...((b.letha && b.letha.effective > 0) ? ['letha'] : []),
-    ...((b.lethaMag && b.lethaMag.effective > 0) ? ['lethaMag'] : []),
-    ...((b.sapience && b.sapience.effective > 0) ? ['sapience'] : []),
-    'omni', 'vol',
-  ];
+  const [view, setView] = useState('principales');
+  const items = STAT_VIEWS[view];
   // Stats exprimées en points de % (la sapience EST un %, cf. lifestealHeal).
   const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'omni' || k === 'vol' || k === 'sapience';
   const detail = (d) => {
@@ -42,7 +44,16 @@ function SecondaryStats({ breakdown }) {
     return parts.join(' · ');
   };
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+    <div className="col gap-3">
+      <div className="row gap-1" style={{ justifyContent:'flex-end' }}>
+        {Object.keys(STAT_VIEWS).map(v => (
+          <button key={v} className={'btn btn-sm ' + (view === v ? 'btn-gold' : 'btn-ghost')}
+            onClick={() => setView(v)} style={{ textTransform:'capitalize', fontSize:11, padding:'4px 10px' }}>
+            {v}
+          </button>
+        ))}
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
       {items.map((k) => {
         const d = b[k] || { effective:0, base:0, buff:0, mod:0, stuff:0 };
         const bonus = d.effective - d.base;
@@ -74,6 +85,11 @@ function SecondaryStats({ breakdown }) {
           </div>
         );
       })}
+      {/* Case réservée : garde la grille sur 3 lignes pleines dans les deux vues. */}
+      {items.length % 2 === 1 && (
+        <div style={{ borderRadius:8, minHeight:60, border:'1px dashed var(--line)', opacity:.5 }} />
+      )}
+      </div>
     </div>
   );
 }
