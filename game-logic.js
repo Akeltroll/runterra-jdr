@@ -346,6 +346,14 @@
     return { ok:true };
   }
 
+  /* Clés de rune « au choix AD/AP » : [statSiAD, statSiAP]. Le choix est porté par
+     la rune (choices[nodeId]), donc toutes les clés d'une même rune suivent le MÊME
+     choix — ex. Sadisme (adp + lethaAdp) : AD → +AD et léthalité physique ;
+     AP → +AP et léthalité magique. */
+  var ADP_KEYS = {
+    adp:      ['ad', 'ap'],
+    lethaAdp: ['letha', 'lethaMag'],
+  };
   function sumRuneMods(selectedIds, choices, index) {
     selectedIds = selectedIds || []; choices = choices || {}; index = index || {};
     var out = {};
@@ -355,11 +363,18 @@
       for (var k in e.mods) {
         var v = Number(e.mods[k]) || 0; if (!v) continue;
         var stat = k;
-        if (k === 'adp') stat = (choices[e.id] === 'ap') ? 'ap' : 'ad';
+        var pair = ADP_KEYS[k];
+        if (pair) stat = (choices[e.id] === 'ap') ? pair[1] : pair[0];
         out[stat] = (out[stat] || 0) + v;
       }
     }
     return out;
+  }
+  /* Une rune propose-t-elle un choix AD/AP ? (pilote l'affichage du toggle) */
+  function runeHasAdpChoice(node) {
+    if (!node || !node.mods) return false;
+    for (var k in ADP_KEYS) if (node.mods[k] != null) return true;
+    return false;
   }
 
   function mergeMods(a, b) {
@@ -922,7 +937,7 @@
     ARMOR_CLASSES, armorWeightReduction, armorEffectiveWeight,
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
-    canSelectRune, canDeselectRune, sumRuneMods, mergeMods,
+    canSelectRune, canDeselectRune, sumRuneMods, mergeMods, ADP_KEYS, runeHasAdpChoice,
     mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, enemyPublicView,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,

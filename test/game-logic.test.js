@@ -323,6 +323,39 @@ test('sumRuneMods ne somme que les plats et résout adp', () => {
   assert.deepEqual(L.sumRuneMods(['b'], {}, RIDX), {});                      // reminder ignoré
 });
 
+test('sumRuneMods : lethaAdp suit le MÊME choix AD/AP que la rune (Sadisme)', () => {
+  const fam = [{ key:'d', name:'D', color:'#fff', theme:'t', capstone:'c', paths:[
+    { key:'s', name:'S', nodes:[
+      { id:'sad', tier:'mineure', name:'+15 AD ou AP et 10 léthalité', desc:'', mods:{ adp:15, lethaAdp:10 } },
+    ]},
+  ]}];
+  const idx = L.buildRuneIndex(fam);
+  // AD choisi → AD + léthalité PHYSIQUE
+  assert.deepEqual(L.sumRuneMods(['sad'], { sad:'ad' }, idx), { ad:15, letha:10 });
+  // AP choisi → AP + léthalité MAGIQUE (les deux clés suivent le même choix)
+  assert.deepEqual(L.sumRuneMods(['sad'], { sad:'ap' }, idx), { ap:15, lethaMag:10 });
+  // sans choix explicite → défaut AD
+  assert.deepEqual(L.sumRuneMods(['sad'], {}, idx), { ad:15, letha:10 });
+});
+
+test('runeHasAdpChoice détecte toute clé « au choix AD/AP »', () => {
+  assert.equal(L.runeHasAdpChoice({ mods:{ adp:30 } }), true);
+  assert.equal(L.runeHasAdpChoice({ mods:{ lethaAdp:10 } }), true);
+  assert.equal(L.runeHasAdpChoice({ mods:{ hp:50 } }), false);
+  assert.equal(L.runeHasAdpChoice({ kind:'reminder' }), false);
+  assert.equal(L.runeHasAdpChoice(null), false);
+});
+
+test('mitigateDamage : la léthalité magique réduit la rés. magique (miroir du physique)', () => {
+  // Même formule que le physique : eff = max(0, RM − léth), réduction = eff/(eff+120).
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }, 0), 50);
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }, 60), 67);  // eff 60 → 33 % réduit
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }, 120), 100); // eff 0
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }, 999), 100); // borné à 0
+  // La léthalité magique n'agit PAS sur l'armure (le type pilote la stat visée).
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120, resmag: 0 }, 0), 50);
+});
+
 test('mergeMods additionne deux objets de mods', () => {
   assert.deepEqual(L.mergeMods({ hp:50, ad:10 }, { ad:20, ap:5 }), { hp:50, ad:30, ap:5 });
 });

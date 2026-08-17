@@ -19,7 +19,8 @@ function Avatar({ char, size = 42, radius = 9 }) {
 /* --- Glyphe de stat (abréviation mono, dev-friendly) --- */
 const STAT_GLYPH = {
   ad:'AD', ap:'AP', armure:'AR', resmag:'RM', crit:'%C', dcrit:'%D',
-  sapience:'SP', vol:'VV', omni:'OV', hp:'HP', mana:'MN', shield:'BO', letha:'LT',
+  sapience:'SP', vol:'VV', omni:'OV', hp:'HP', mana:'MN', shield:'BO',
+  letha:'LP', lethaMag:'LM',
 };
 
 /* --- Barre de ressource (HP / Mana / Bouclier) avec flash de perte --- */
@@ -76,16 +77,16 @@ function StatChip({ k, value, suffix='', magic=false }) {
 }
 const STAT_LABEL = {
   ad:'Dégâts (AD)', ap:'Puissance (AP)', hp:'PV max', mana:'Mana max', armure:'Armure', resmag:'Rés. Magique',
-  crit:'% Critique', dcrit:'% Dégâts Crit', sapience:'Sapience', vol:'% Vol de vie', omni:'% Omnivamp',
-  letha:'Léthalité',
+  crit:'% Critique', dcrit:'% Dégâts Crit', sapience:'% Sapience', vol:'% Vol de vie', omni:'% Omnivamp',
+  letha:'Léthalité physique', lethaMag:'Léthalité magique',
 };
 /* --- Famille d'une stat : 'phys' (chaud) / 'mag' (froid) / 'neut' (les deux) ---
    Pilote le code couleur des cartes de stats (tokens CSS --stat-{famille}-*).
    Neutre = stat qui s'applique aux deux types de dégâts (crit, omnivamp) ou
    qui n'est ni physique ni magique (PV, mana). */
 const STAT_FAMILY = {
-  ad:'phys', armure:'phys', letha:'phys', vol:'phys',
-  ap:'mag',  resmag:'mag',  sapience:'mag',
+  ad:'phys', armure:'phys', letha:'phys',    vol:'phys',
+  ap:'mag',  resmag:'mag',  lethaMag:'mag',  sapience:'mag',
   crit:'neut', dcrit:'neut', omni:'neut', hp:'neut', mana:'neut',
 };
 const statFamily = (k) => STAT_FAMILY[k] || 'neut';
@@ -94,7 +95,7 @@ const statFamily = (k) => STAT_FAMILY[k] || 'neut';
 const STAT_LABEL_SHORT = {
   ad:'AD', ap:'AP', hp:'PV max', mana:'Mana max', armure:'Armure', resmag:'Rés. Mag.',
   crit:'Critique', dcrit:'Dégâts Crit', sapience:'Sapience', vol:'Vol de vie', omni:'Omnivamp',
-  letha:'Léthalité',
+  letha:'Léth. phys.', lethaMag:'Léth. mag.',
 };
 
 /* --- Buff / Débuff badge (toggle + tooltip) --- */
@@ -637,10 +638,11 @@ const MOD_STATS = [
   { k:'resmag',   label:'Rés. Mag' },
   { k:'crit',     label:'% Crit',   pct:true },
   { k:'dcrit',    label:'% D.Crit', pct:true },
-  { k:'sapience', label:'Sapience' },
+  { k:'sapience', label:'Sapience %', pct:true },
   { k:'vol',      label:'Vol vie %', pct:true },
   { k:'omni',     label:'Omnivamp %', pct:true },
-  { k:'letha',    label:'Léthalité' },
+  { k:'letha',    label:'Léth. phys.' },
+  { k:'lethaMag', label:'Léth. mag.' },
 ];
 
 function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {

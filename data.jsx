@@ -251,7 +251,7 @@ const RUNES = [
         { id:'domi_mob_3', tier:'fondamentale', name:'Déplacement éclair', desc:'+30 AD ou AP et +5 % Crit par MS bonus', kind:'reminder' },
       ]},
       { key:'sad', name:'Sadisme', capstone:'Effet +50 % par kill (max 3)', nodes:[
-        { id:'domi_sad_1', tier:'mineure', name:'+15 AD ou AP et 10 létalité', desc:'Bonus passif permanent (AD ou AP au choix)', mods:{ adp:15, letha:10 } },
+        { id:'domi_sad_1', tier:'mineure', name:'+15 AD ou AP et 10 léthalité', desc:"Bonus passif permanent. Le choix AD/AP pilote aussi la léthalité : AD → léthalité physique (réduit l'armure), AP → léthalité magique (réduit la rés. magique).", mods:{ adp:15, lethaAdp:10 } },
         { id:'domi_sad_2', tier:'avancee', name:'Écorchage', desc:"+30 létalité sur la cible (toute l'équipe si cible à 100 % HP)", kind:'reminder' },
         { id:'domi_sad_3', tier:'fondamentale', name:'Torture enivrante', desc:'Dégâts +50 % si cible ≤ 50 % HP, et 10 % Omni', kind:'reminder' },
       ]},

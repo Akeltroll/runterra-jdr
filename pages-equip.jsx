@@ -189,7 +189,7 @@ function EquipBody({ char }) {
     { k:'Rés. Magique', v:sval('resmag', eff.resmag),   col:scol('resmag') },
     { k:'% Crit',       v:sval('crit', eff.crit, true), col:scol('crit') },
     { k:'% D. Crit',    v:sval('dcrit', eff.dcrit, true), col:scol('dcrit') },
-    { k:'Sapience',     v:sval('sapience', eff.sapience), col:scol('sapience') },
+    { k:'Sapience',     v:sval('sapience', eff.sapience, true), col:scol('sapience') },
   ];
   const survie = [
     { k:'PV max',     v:sval('hp', eff.hp),       col:scol('hp')   },

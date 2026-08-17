@@ -334,7 +334,7 @@ function RuneConstellation({ nodeState, choices, famPoints, spent, budget, onCli
         })}
         {RUNE_LAYOUT.families.map(fam => fam.nodes.map(nd => {
           const node = RUNE_INDEX[nd.id];
-          if (!(node.mods && node.mods.adp != null) || nodeState(nd.id) !== 'selected') return null;
+          if (!runeHasAdpChoice(node) || nodeState(nd.id) !== 'selected') return null;
           return (
             <div key={nd.id} className="rune-adp" style={{ '--fam': fam.color,
               left:(nd.x / S * 100) + '%', top:((nd.y + 42) / S * 100) + '%' }}
@@ -355,7 +355,7 @@ function RuneConstellation({ nodeState, choices, famPoints, spent, budget, onCli
    une fois gravée (« +15 AD et 10 létalité »). Tant qu'elle n'est pas gravée, aucun choix
    n'est fait : on garde « AD ou AP ». Sans le motif, le nom est rendu tel quel. */
 function runeDisplayName(node, choices, selectedSet) {
-  if (!node || !(node.mods && node.mods.adp != null) || !selectedSet[node.id]) return node.name;
+  if (!node || !runeHasAdpChoice(node) || !selectedSet[node.id]) return node.name;
   const pick = (choices[node.id] || 'ad') === 'ap' ? 'AP' : 'AD';
   return node.name.replace('AD ou AP', pick);
 }

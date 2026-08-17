@@ -220,8 +220,8 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
           {field('Rés. magique', 'resmag')}
           {field('% Crit', 'crit')}
           {field('% Dég. Crit', 'dcrit')}
-          {field('Léth. AD', 'lethaAD')}
-          {field('Léth. AP', 'lethaAP')}
+          {field('Léth. phys.', 'lethaAD')}
+          {field('Léth. mag.', 'lethaAP')}
         </div>
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => onRemove(enemy.id)} style={{ marginRight:'auto', color:'var(--debuff-bright)' }}>Supprimer</button>
@@ -334,12 +334,12 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
             <span className="overline">Dégâts</span>
             <input style={ENEMY_FLD} value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
           </label>
-          <label className="col" style={{ gap:4, width:84 }} title="Léthalité AD — réduit l'armure (dégât physique)">
-            <span className="overline" style={{ color: type === 'physique' ? 'var(--gold-bright)' : undefined }}>Léth. AD</span>
+          <label className="col" style={{ gap:4, width:84 }} title="Léthalité physique — réduit l'armure de la cible (dégât physique)">
+            <span className="overline" style={{ color: type === 'physique' ? 'var(--stat-phys)' : undefined }}>Léth. phys.</span>
             <input style={ENEMY_FLD} value={lethaAD} onChange={e => setLethaAD(e.target.value)} />
           </label>
-          <label className="col" style={{ gap:4, width:84 }} title="Léthalité AP — réduit la résistance magique (dégât magique)">
-            <span className="overline" style={{ color: type === 'magique' ? 'var(--gold-bright)' : undefined }}>Léth. AP</span>
+          <label className="col" style={{ gap:4, width:84 }} title="Léthalité magique — réduit la résistance magique de la cible (dégât magique)">
+            <span className="overline" style={{ color: type === 'magique' ? 'var(--stat-mag)' : undefined }}>Léth. mag.</span>
             <input style={ENEMY_FLD} value={lethaAP} onChange={e => setLethaAP(e.target.value)} />
           </label>
         </div>
@@ -374,7 +374,15 @@ function PendingHitRow({ hit, enemies, onApply, onReject }) {
   const rolled = hit.didCrit ? (hit.critDmg != null ? hit.critDmg : hit.computedDmg) : hit.computedDmg;
   const [dmg, setDmg] = useState(String(rolled || 0));
   const [type, setType] = useState(hit.type || 'physique');
-  const [letha, setLetha] = useState(String(hit.letha || 0));
+  // Deux léthalités snapshotées au cast ; le champ visible suit le type choisi par le MJ
+  // (physique → réduit l'armure, magique → réduit la rés. magique, brut → sans objet).
+  const [lethaP, setLethaP] = useState(String(hit.letha || 0));
+  const [lethaM, setLethaM] = useState(String(hit.lethaMag || 0));
+  const isBrut = type === 'brut';
+  const isMag = type === 'magique';
+  const lethaVal = isMag ? lethaM : lethaP;
+  const setLethaVal = isMag ? setLethaM : setLethaP;
+  const lethaNum = isBrut ? 0 : Math.max(0, parseInt(lethaVal, 10) || 0);
   const info = critInfo(hit.crit || 0);
   return (
     <div className="panel" style={{ padding:'10px 14px', display:'flex', flexDirection:'column', gap:8 }}>
@@ -391,16 +399,22 @@ function PendingHitRow({ hit, enemies, onApply, onReject }) {
       </div>
       <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>
         <input style={{ ...ENEMY_FLD, width:80 }} value={dmg} onChange={e => setDmg(e.target.value)} title="Dégâts (ajuste au d20 de toucher)" />
-        <label className="row gap-1" style={{ alignItems:'center', fontSize:11 }} title="Léthalité (réduit AR/RM)">
-          <span className="faint">Léth.</span>
-          <input style={{ ...ENEMY_FLD, width:56 }} value={letha} onChange={e => setLetha(e.target.value)} />
+        <label className="row gap-1" style={{ alignItems:'center', fontSize:11, opacity: isBrut ? .4 : 1 }}
+          title={isBrut ? 'Dégâts bruts : aucune mitigation, la léthalité ne sert pas'
+            : (isMag ? 'Léthalité magique (réduit la rés. magique de la cible)'
+                     : "Léthalité physique (réduit l'armure de la cible)")}>
+          <span style={{ color:`var(--stat-${isMag ? 'mag' : 'phys'})`, fontWeight:600 }}>
+            {isMag ? 'Léth. mag.' : 'Léth. phys.'}
+          </span>
+          <input style={{ ...ENEMY_FLD, width:56 }} value={isBrut ? '0' : lethaVal} disabled={isBrut}
+            onChange={e => setLethaVal(e.target.value)} />
         </label>
         <div className="row gap-1">
           {['physique','magique','brut'].map(t => (
             <button key={t} className={'btn btn-sm ' + (type===t ? 'btn-gold' : 'btn-ghost')} onClick={() => setType(t)} style={{ textTransform:'capitalize' }}>{t}</button>
           ))}
         </div>
-        <button className="btn btn-sm btn-gold" disabled={!enemy} onClick={() => onApply(hit, enemy, Math.max(0, parseInt(dmg,10)||0), type, Math.max(0, parseInt(letha,10)||0))} style={{ marginLeft:'auto' }}>Appliquer</button>
+        <button className="btn btn-sm btn-gold" disabled={!enemy} onClick={() => onApply(hit, enemy, Math.max(0, parseInt(dmg,10)||0), type, lethaNum)} style={{ marginLeft:'auto' }}>Appliquer</button>
         <button className="btn btn-sm btn-ghost" onClick={() => onReject(hit.id)}>Rejeter</button>
       </div>
     </div>
@@ -412,8 +426,9 @@ function PendingHitsPanel({ enemies }) {
   if (!hits.length) return null;
   const apply = async (hit, enemy, finalDmg, type, letha) => {
     const r = applyHitToEnemy(enemy, finalDmg, type, letha || 0);
+    const lethaTag = letha > 0 ? `, léth. ${type === 'magique' ? 'mag.' : 'phys.'} ${letha}` : '';
     toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
-    pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
+    pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}${lethaTag}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
     // Vol de vie / Sapience / Omnivamp : soin de l'attaquant sur les dégâts infligés.
     // Séparation par source : attaque de base → vol/sapience ; compétence → omnivamp.
     const heal = lifestealHeal(r.applied, type, { omni: hit.omni || 0, vol: hit.vol || 0, sapience: hit.sapience || 0 }, hit.skillId === 'basic');

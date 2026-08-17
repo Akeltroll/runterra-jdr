@@ -28,10 +28,12 @@ function SecondaryStats({ breakdown }) {
   const items = [
     'ad', 'ap', 'armure', 'resmag', 'crit', 'dcrit',
     ...((b.letha && b.letha.effective > 0) ? ['letha'] : []),
+    ...((b.lethaMag && b.lethaMag.effective > 0) ? ['lethaMag'] : []),
     ...((b.sapience && b.sapience.effective > 0) ? ['sapience'] : []),
     'omni', 'vol',
   ];
-  const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'omni' || k === 'vol';
+  // Stats exprimées en points de % (la sapience EST un %, cf. lifestealHeal).
+  const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'omni' || k === 'vol' || k === 'sapience';
   const detail = (d) => {
     const parts = [];
     if (d.buff)  parts.push(`${d.buff  > 0 ? '+' : ''}${d.buff} buff`);
@@ -145,7 +147,7 @@ function SurvivePanel({ fatigue, eau, setField }) {
 
 /* ---- Panneau modificateurs (MJ) ---- */
 function ModifiersPanel({ modifiers, setMod }) {
-  const MOD_STATS = [['hp','HP'],['mana','Mana'],['ad','AD'],['ap','AP'],['armure','Armure'],['resmag','Rés.Mag'],['crit','%Crit'],['dcrit','%D.Crit'],['letha','Léthalité'],['sapience','Sapience'],['vol','Vol vie%'],['omni','Omnivamp%']];
+  const MOD_STATS = [['hp','HP'],['mana','Mana'],['ad','AD'],['ap','AP'],['armure','Armure'],['resmag','Rés.Mag'],['crit','%Crit'],['dcrit','%D.Crit'],['letha','Léth.phys'],['lethaMag','Léth.mag'],['sapience','Sapience%'],['vol','Vol vie%'],['omni','Omnivamp%']];
   return (
     <div className="panel">
       <div className="panel-head"><h3>Modificateurs</h3><span className="overline">ajustements MJ</span></div>
