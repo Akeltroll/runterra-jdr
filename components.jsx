@@ -882,5 +882,5 @@ Object.assign(window, {
   ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL, STAT_LABEL_SHORT, STAT_FAMILY, statFamily,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
   InventoryGrid, ItemTooltip, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invWeightLabel, invThumbStyle,
-  AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar,
+  AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar, MOD_STATS,
 });

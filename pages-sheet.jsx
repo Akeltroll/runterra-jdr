@@ -161,16 +161,17 @@ function SurvivePanel({ fatigue, eau, setField }) {
   );
 }
 
-/* ---- Panneau modificateurs (MJ) ---- */
+/* ---- Panneau modificateurs (MJ) ----
+   Liste de stats PARTAGÉE avec l'éditeur d'item (`MOD_STATS`, components.jsx) :
+   une nouvelle stat s'ajoute à un seul endroit. */
 function ModifiersPanel({ modifiers, setMod }) {
-  const MOD_STATS = [['hp','HP'],['mana','Mana'],['ad','AD'],['ap','AP'],['armure','Armure'],['resmag','Rés.Mag'],['crit','%Crit'],['dcrit','%D.Crit'],['letha','Léth.phys'],['lethaMag','Léth.mag'],['sapience','Sapience%'],['vol','Vol vie%'],['omni','Omnivamp%']];
   return (
     <div className="panel">
       <div className="panel-head"><h3>Modificateurs</h3><span className="overline">ajustements MJ</span></div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, padding:'14px 16px' }}>
-        {MOD_STATS.map(([k, lbl]) => (
+        {MOD_STATS.map(({ k, label }) => (
           <label key={k} className="col" style={{ gap:3 }}>
-            <span className="overline" style={{ fontSize:9 }}>{lbl}</span>
+            <span className="overline" style={{ fontSize:9, color:`var(--stat-${statFamily(k)})` }}>{label}</span>
             <input type="number" value={(modifiers && modifiers[k]) || 0}
               onChange={(e) => setMod(k, parseInt(e.target.value) || 0)}
               style={{ background:'var(--bg-inset)', color:'var(--gold-pale)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'5px 8px', fontFamily:'var(--font-mono)', fontSize:12, textAlign:'right', width:'100%' }} />

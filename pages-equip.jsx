@@ -182,21 +182,26 @@ function EquipBody({ char }) {
     { k:'Mental',         v:eAttrs.mental, col:'#e9dcc4' },
     { k:'Magie/Cosmique', v:eAttrs.magie,  col:'#e9dcc4' },
   ];
+  /* `f` = famille de stat (chaud/froid) → colore le LIBELLÉ. La couleur de la VALEUR
+     (`col`) reste réservée au code « bonus / buff de compétence » : les deux codes
+     couleur cohabitent sans se marcher dessus. */
   const combat = [
-    { k:'Dégâts (AD)',  v:sval('ad', eff.ad),           col:scol('ad')   },
-    { k:'Puissance',    v:sval('ap', eff.ap),           col:scol('ap')   },
-    { k:'Armure',       v:sval('armure', eff.armure),   col:scol('armure') },
-    { k:'Rés. Magique', v:sval('resmag', eff.resmag),   col:scol('resmag') },
-    { k:'% Crit',       v:sval('crit', eff.crit, true), col:scol('crit') },
-    { k:'% D. Crit',    v:sval('dcrit', eff.dcrit, true), col:scol('dcrit') },
-    { k:'Sapience',     v:sval('sapience', eff.sapience, true), col:scol('sapience') },
+    { k:'AD',           f:'phys', v:sval('ad', eff.ad),               col:scol('ad')     },
+    { k:'AP',           f:'mag',  v:sval('ap', eff.ap),               col:scol('ap')     },
+    { k:'Armure',       f:'phys', v:sval('armure', eff.armure),       col:scol('armure') },
+    { k:'Rés. Magique', f:'mag',  v:sval('resmag', eff.resmag),       col:scol('resmag') },
+    { k:'% Crit',                 v:sval('crit', eff.crit, true),     col:scol('crit')   },
+    { k:'% D. Crit',              v:sval('dcrit', eff.dcrit, true),   col:scol('dcrit')  },
+    { k:'Léth. phys.',  f:'phys', v:sval('letha', eff.letha),         col:scol('letha')  },
+    { k:'Léth. mag.',   f:'mag',  v:sval('lethaMag', eff.lethaMag),   col:scol('lethaMag') },
   ];
   const survie = [
     { k:'PV max',     v:sval('hp', eff.hp),       col:scol('hp')   },
     { k:'Mana max',   v:sval('mana', eff.mana),   col:scol('mana') },
     { k:'Bouclier',   v:invFmt(char.shieldMax), col:'#e9dcc4' },
-    { k:'Vol de vie', v:sval('vol', eff.vol, true),  col:scol('vol')  },
-    { k:'Omnivamp',   v:sval('omni', eff.omni, true), col:scol('omni') },
+    { k:'Vol de vie', f:'phys', v:sval('vol', eff.vol, true),           col:scol('vol')      },
+    { k:'Sapience',   f:'mag',  v:sval('sapience', eff.sapience, true), col:scol('sapience') },
+    { k:'Omnivamp',              v:sval('omni', eff.omni, true),        col:scol('omni')     },
   ];
 
   /* --- Consommables : utilisation au clic (appelée par openItemMenu) --- */
@@ -363,7 +368,7 @@ function EquipBody({ char }) {
                   textAlign:'center', paddingBottom:5, marginBottom:5, borderBottom:'1px solid rgba(160,128,72,0.13)' }}>{title}</div>
                 {rows.map(st => (
                   <div key={st.k} style={{ display:'flex', justifyContent:'space-between', fontSize:11.5, padding:'2px 0' }}>
-                    <span style={{ color:'#9a8b76' }}>{st.k}</span><span style={{ color:st.col }}>{st.v}</span>
+                    <span style={{ color: st.f ? `var(--stat-${st.f})` : '#9a8b76' }}>{st.k}</span><span style={{ color:st.col }}>{st.v}</span>
                   </div>
                 ))}
               </div>

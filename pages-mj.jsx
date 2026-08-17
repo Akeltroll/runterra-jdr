@@ -310,7 +310,7 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
       }
     }
     const critTag = cr.didCrit ? ' 🎲 CRIT' : '';
-    const lethaTag = lethaNum > 0 ? `, léth. ${lethaNum}` : '';
+    const lethaTag = lethaNum > 0 ? `, léth. ${type === 'magique' ? 'mag.' : 'phys.'} ${lethaNum}` : '';
     toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}${critTag}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
       res.ko ? 'debuff' : 'gold');
     pushLog(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}${critTag}${lethaTag}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`, res.ko ? 'debuff' : 'gold');

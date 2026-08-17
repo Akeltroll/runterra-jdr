@@ -325,7 +325,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     hpCur, manaCur, shield (valeurs ABSOLUES), fatigue (0-5), eau (0-5)
     xp:        0   ← progression DANS le niveau courant (entier ≥ 0, < xpToNext(level)) ; via addXp ; montée auto → level
     buffs:     { [buffId]: true }
-    modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, sapience }
+    modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, letha, lethaMag, sapience, vol, omni }
+               ↑ liste unique `MOD_STATS` (components.jsx), partagée éditeur d'item + panneau Modificateurs MJ
+               letha = léthalité PHYSIQUE (réduit l'armure) ; lethaMag = léthalité MAGIQUE (réduit la rés. mag.)
+               sapience/vol/omni sont des POURCENTAGES (cf. lifestealHeal), pas des valeurs plates
     inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods, weight, carry, order } }   ← perso, éditable (order = rangement manuel, cf. planReorder)
     invInit:   true   ← marqueur de migration (amorçage unique de l'inventaire)
     equipment: { [slotKey]: itemId }   ← paperdoll (page Équipement), temps réel ; slotKey ∈ EQUIP_SLOTS (12 slots, armure fusionnée + ceinture)
@@ -347,7 +350,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 /campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, crit, dcrit, lethaAD, lethaAP, reveal, revealPct } ; lecture inscrits, écriture staff
                                               crit (%) + dcrit (% dég. crit, défaut 200) + lethaAD/lethaAP (léthalité physique/magique) = crit/léthalité ennemi→joueur (rollCrit au lancement ; léthalité AD→armure si physique, AP→rés. mag si magique, via mitigateDamage)
                                               reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
-/campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, crit, dcrit, targetId, ts } ; crit roulé au cast ; le MJ ajuste+applique
+/campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, lethaMag, crit, dcrit, vol, sapience, omni, hpMax, targetId, ts } ; crit roulé au cast ; le MJ ajuste+applique
+                                              letha/lethaMag = les DEUX léthalités snapshotées au cast ; le champ MJ affiché suit le type choisi (physique→letha, magique→lethaMag, brut→0)
 /campaign/runeterra/combat/log/{id}   ← journal de combat PARTAGÉ { id, ts, text, kind:'gold'|'buff'|'debuff' } ; lecture+écriture tout inscrit ; ~30 derniers ; vidé par « ⟲ Combat »
 ```
 `type` = emplacement d'équipement (`EQUIP_TYPES` : helmet/chest/ring/weapon/accessory/…) ;
@@ -440,6 +444,46 @@ supprime pas** `Woolost`/`JB` : on les resynchronise sur `main` (`git merge main
 d'une base propre. Les anciennes branches de fonctionnalité (auth-comptes-roles, inventaire,
 arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, catalogue-editable)
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
+
+## État actuel (2026-08-17)
+- **Lisibilité + code couleur + stats manquantes (fiche joueur)** — cache `20260817-5`, **144 tests verts**,
+  **aucune règle RTDB à republier** (ni `state/modifiers` ni `pendingHits` ne valident les clés de stats).
+  Livré en 4 étapes :
+  1. **Lisibilité de la grille de stats** (`SecondaryStats`, pages-sheet) : libellés 9px mono capitales
+     très espacées → **13px gras** ; `Dégâts (AD)`/`Puissance (AP)` → **`AD`/`AP`** via un nouveau
+     **`STAT_LABEL_SHORT`** (components.jsx) — `STAT_LABEL` (long) reste pour les infobulles d'objet,
+     `StatChip` et la page Équipement.
+  2. **Code couleur chaud/froid** : tokens `--stat-{phys|mag|neut}[-ink|-line|-wash]` (runeterra.css) +
+     table **`STAT_FAMILY`/`statFamily`** (components.jsx, partagée). Chaud = braise (#E27242) : AD, Armure,
+     Léth. phys., Vol de vie ; froid = azur (#7FD4F5) : AP, Rés. Mag., Léth. mag., Sapience ; or = les deux
+     camps (Crit, Dég. Crit, Omnivamp). ⚠️ **Règle à tenir** : la famille se porte sur le **liseré + libellé**,
+     jamais sur la valeur chiffrée — celle-ci est déjà prise par le code « bonus/malus » (vert `--buff` /
+     rouge `--hp`) et par `--skillbuff`. Trois codes couleur cohabitent, chacun son support.
+  3. **Léthalité magique** (`lethaMag`) — la seule stat réellement manquante. `letha` reste = **physique**
+     (aucune migration : items/modifs/runes déjà en base gardent leur sens). `mitigateDamage` **inchangé**
+     (il reçoit un scalaire ; l'appelant choisit selon le type) → zéro test de mitigation réécrit.
+     Les deux léthalités sont snapshotées au cast ; le champ MJ de `PendingHitRow` **suit le type choisi**
+     (grisé en « brut »), symétrique de `EnemyAttackModal`. Vocabulaire unifié partout :
+     « Léth. phys. » / « Léth. mag. » (les ennemis gardent leurs clés `lethaAD`/`lethaAP`, seuls les
+     libellés changent).
+     **Rune Sadisme** : `mods:{ adp:15, letha:10 }` → **`{ adp:15, lethaAdp:10 }`**. Nouveau mécanisme
+     **`ADP_KEYS`** (game-logic) = clés « au choix AD/AP » résolues par `sumRuneMods` ; toutes les clés d'une
+     même rune suivent le **même** choix → AD ⇒ +AD et léthalité physique, AP ⇒ +AP et léthalité magique.
+     `runeHasAdpChoice` remplace les tests en dur `mods.adp != null` (toggle + `runeDisplayName`).
+  4. **Bascule Principales ↔ Secondaires** sur la fiche (`STAT_VIEWS`, état local, **zéro persistance,
+     zéro Firebase**) : principales = AD/AP/Armure/Rés. Mag./Crit/Dég. Crit ; secondaires = Léth. phys./
+     Léth. mag./Vol de vie/Sapience/Omnivamp + 1 case réservée (les 2 vues font 6 cases → pas de saut de
+     panneau). Fin du masquage `effective > 0` : une stat à 0 s'affiche désormais (elle existe, elle est nulle).
+  ⚠️ **Bug corrigé au passage** : la **sapience est un POURCENTAGE** (`lifestealHeal` fait `applied*pct/100`)
+  mais était saisie/affichée comme une valeur plate (pas de `pct:true`, pas de `%` sur fiche ni Équipement) —
+  un MJ qui saisissait 30 croyait donner du plat et donnait 30 %. Corrigé sur les 3 sites.
+  **Dette ramassée** : les deux listes `MOD_STATS` dupliquées (éditeur d'item + panneau Modificateurs MJ)
+  sont **fusionnées en une seule** (components.jsx, exportée) — une nouvelle stat s'ajoute à un seul endroit.
+  ✅ **Tranché par le MJ (2026-08-17)** : `computeStats` ne dérive **que 8 stats** des caracs, et **c'est
+  définitif** — la **léthalité** (`letha`/`lethaMag`) et les **soins liés aux dégâts** (`vol`, `sapience`,
+  `omni`) **ne proviendront jamais** de Force/Habileté/Mental/Magie. Elles viennent exclusivement de
+  l'**équipement**, des **runes** et des **modificateurs** ; elles valent donc 0 par défaut, et c'est normal.
+  Ne pas les ajouter au socle de `computeStats` (rappel écrit aussi en commentaire au-dessus de la fonction).
 
 ## État actuel (2026-08-16)
 - **Dépôt réaligné et nettoyé** (voir « Branches » ci-dessus) : `main` contient **toutes** les features,

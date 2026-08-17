@@ -851,7 +851,10 @@
 
   /* --- Moteur de stats refondu (info-mj/SPECIFICATION) ---
      8 stats dérivées de 4 caracs + niveau. Magnitude escaladée, crit linéaire.
-     Sans Sapience (retirée du socle). */
+     ⚠️ RÈGLE MJ (2026-08-17, figée) : la léthalité (letha/lethaMag) et les soins liés
+     aux dégâts (vol de vie, sapience, omnivamp) ne dérivent JAMAIS des caractéristiques.
+     Elles viennent exclusivement de l'équipement, des runes et des modificateurs — ne
+     pas les ajouter ici. C'est aussi pour ça que la Sapience a été retirée du socle. */
   function computeStats(F, H, M, C, level) {
     F = Math.max(0, F | 0); H = Math.max(0, H | 0);
     M = Math.max(0, M | 0); C = Math.max(0, C | 0);
