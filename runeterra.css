@@ -37,6 +37,24 @@
   --silver:        #8BE0FF;   /* reflets magiques / stats AP */
   --silver-deep:   #2E5C6E;
 
+  /* ---- COULEURS : FAMILLE DE STAT (physique = chaud / magique = froid) ----
+     Support dédié : liseré gauche + libellé + valeur des cartes de stats.
+     ⚠️ Ne PAS réutiliser ces tokens pour « bonus/malus » (vert --buff / rouge
+     --hp) ni pour les buffs de compétence (--skillbuff) : ces trois codes
+     couleur coexistent sur la fiche et doivent garder des supports distincts. */
+  --stat-phys:      #E27242;   /* braise : AD, Armure, Léthalité phys., Vol de vie */
+  --stat-phys-ink:  #F2C9A8;   /* valeur chiffrée (chaud pâle, ne concurrence pas le delta) */
+  --stat-phys-line: rgba(226,114,66,0.34);
+  --stat-phys-wash: rgba(226,114,66,0.09);
+  --stat-mag:       #7FD4F5;   /* azur : AP, Rés. Magique, Léthalité mag., Sapience */
+  --stat-mag-ink:   #BFE8FA;
+  --stat-mag-line:  rgba(127,212,245,0.32);
+  --stat-mag-wash:  rgba(127,212,245,0.08);
+  --stat-neut:      #C89B3C;   /* or : stats des deux camps (Crit, Dég. Crit, Omnivamp) */
+  --stat-neut-ink:  #F0E6D3;
+  --stat-neut-line: rgba(200,155,60,0.30);
+  --stat-neut-wash: rgba(200,155,60,0.07);
+
   /* ---- COULEURS : ÉTATS ---- */
   --buff:          #1E7A4F;   /* buff positif (vert arcanique) */
   --buff-bright:   #34C77F;

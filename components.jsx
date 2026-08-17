@@ -79,6 +79,17 @@ const STAT_LABEL = {
   crit:'% Critique', dcrit:'% Dégâts Crit', sapience:'Sapience', vol:'% Vol de vie', omni:'% Omnivamp',
   letha:'Léthalité',
 };
+/* --- Famille d'une stat : 'phys' (chaud) / 'mag' (froid) / 'neut' (les deux) ---
+   Pilote le code couleur des cartes de stats (tokens CSS --stat-{famille}-*).
+   Neutre = stat qui s'applique aux deux types de dégâts (crit, omnivamp) ou
+   qui n'est ni physique ni magique (PV, mana). */
+const STAT_FAMILY = {
+  ad:'phys', armure:'phys', letha:'phys', vol:'phys',
+  ap:'mag',  resmag:'mag',  sapience:'mag',
+  crit:'neut', dcrit:'neut', omni:'neut', hp:'neut', mana:'neut',
+};
+const statFamily = (k) => STAT_FAMILY[k] || 'neut';
+
 /* Libellés courts (fiche joueur : la valeur porte déjà le %) */
 const STAT_LABEL_SHORT = {
   ad:'AD', ap:'AP', hp:'PV max', mana:'Mana max', armure:'Armure', resmag:'Rés. Mag.',
@@ -866,7 +877,7 @@ function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose, staff }) 
 
 Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
-  ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL, STAT_LABEL_SHORT,
+  ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL, STAT_LABEL_SHORT, STAT_FAMILY, statFamily,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
   InventoryGrid, ItemTooltip, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invWeightLabel, invThumbStyle,
   AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar,

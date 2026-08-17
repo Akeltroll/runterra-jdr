@@ -26,11 +26,10 @@ function ResourceStack({ char, eff, hp, mana, shield }) {
 function SecondaryStats({ breakdown }) {
   const b = breakdown || {};
   const items = [
-    ['ad', false], ['ap', true], ['armure', false], ['resmag', true],
-    ['crit', false], ['dcrit', false],
-    ...((b.letha && b.letha.effective > 0) ? [['letha', false]] : []),
-    ...((b.sapience && b.sapience.effective > 0) ? [['sapience', false]] : []),
-    ['omni', true], ['vol', false],
+    'ad', 'ap', 'armure', 'resmag', 'crit', 'dcrit',
+    ...((b.letha && b.letha.effective > 0) ? ['letha'] : []),
+    ...((b.sapience && b.sapience.effective > 0) ? ['sapience'] : []),
+    'omni', 'vol',
   ];
   const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'omni' || k === 'vol';
   const detail = (d) => {
@@ -42,17 +41,20 @@ function SecondaryStats({ breakdown }) {
   };
   return (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-      {items.map(([k, magic]) => {
+      {items.map((k) => {
         const d = b[k] || { effective:0, base:0, buff:0, mod:0, stuff:0 };
         const bonus = d.effective - d.base;
         const bonusCol = bonus > 0 ? 'var(--buff)' : 'var(--hp)';
+        const fam = statFamily(k);   // 'phys' (chaud) / 'mag' (froid) / 'neut'
         return (
           <div key={k} style={{ padding:'10px 12px', borderRadius:8, minHeight:60, boxSizing:'border-box',
             display:'flex', flexDirection:'column', justifyContent:'center',
-            background:'linear-gradient(180deg, var(--bg-panel-2), var(--bg-inset))',
-            border:'1px solid ' + (magic ? 'var(--silver-deep)' : 'var(--line-gold)') }}>
+            background:`linear-gradient(90deg, var(--stat-${fam}-wash), transparent 62%),`
+                     + ' linear-gradient(180deg, var(--bg-panel-2), var(--bg-inset))',
+            border:`1px solid var(--stat-${fam}-line)`,
+            borderLeft:`3px solid var(--stat-${fam})` }}>
             <div className="row" style={{ justifyContent:'space-between', alignItems:'baseline', gap:8 }}>
-              <span style={{ fontSize:13, fontWeight:700, letterSpacing:'.03em', color:'var(--ink)' }}>
+              <span style={{ fontSize:13, fontWeight:700, letterSpacing:'.03em', color:`var(--stat-${fam})` }}>
                 {STAT_LABEL_SHORT[k] || STAT_LABEL[k]}
               </span>
               <span style={{ display:'flex', alignItems:'baseline', gap:4 }}>
@@ -61,7 +63,7 @@ function SecondaryStats({ breakdown }) {
                     {d.base} <span style={{ color: bonusCol, fontWeight:700 }}>{bonus > 0 ? '+' : '−'}{Math.abs(bonus)}</span> =
                   </span>
                 )}
-                <span className="mono" style={{ fontSize:18, fontWeight:700, color: magic ? 'var(--silver)' : 'var(--gold-pale)' }}>{d.effective}{pct(k) ? '%' : ''}</span>
+                <span className="mono" style={{ fontSize:18, fontWeight:700, color:`var(--stat-${fam}-ink)` }}>{d.effective}{pct(k) ? '%' : ''}</span>
               </span>
             </div>
             <div className={bonus !== 0 ? 'dim' : 'faint'} style={{ fontSize:11, fontFamily:'var(--font-mono)', marginTop:3 }}>
