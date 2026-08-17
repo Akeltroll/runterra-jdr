@@ -79,6 +79,12 @@ const STAT_LABEL = {
   crit:'% Critique', dcrit:'% Dégâts Crit', sapience:'Sapience', vol:'% Vol de vie', omni:'% Omnivamp',
   letha:'Léthalité',
 };
+/* Libellés courts (fiche joueur : la valeur porte déjà le %) */
+const STAT_LABEL_SHORT = {
+  ad:'AD', ap:'AP', hp:'PV max', mana:'Mana max', armure:'Armure', resmag:'Rés. Mag.',
+  crit:'Critique', dcrit:'Dégâts Crit', sapience:'Sapience', vol:'Vol de vie', omni:'Omnivamp',
+  letha:'Léthalité',
+};
 
 /* --- Buff / Débuff badge (toggle + tooltip) --- */
 function BuffBadge({ buff, on, onToggle, compact=false }) {
@@ -860,7 +866,7 @@ function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose, staff }) 
 
 Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
-  ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL,
+  ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL, STAT_LABEL_SHORT,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
   InventoryGrid, ItemTooltip, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invWeightLabel, invThumbStyle,
   AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar,

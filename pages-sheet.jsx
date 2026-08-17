@@ -47,22 +47,24 @@ function SecondaryStats({ breakdown }) {
         const bonus = d.effective - d.base;
         const bonusCol = bonus > 0 ? 'var(--buff)' : 'var(--hp)';
         return (
-          <div key={k} style={{ padding:'9px 11px', borderRadius:8, minHeight:54, boxSizing:'border-box',
+          <div key={k} style={{ padding:'10px 12px', borderRadius:8, minHeight:60, boxSizing:'border-box',
             display:'flex', flexDirection:'column', justifyContent:'center',
             background:'linear-gradient(180deg, var(--bg-panel-2), var(--bg-inset))',
             border:'1px solid ' + (magic ? 'var(--silver-deep)' : 'var(--line-gold)') }}>
-            <div className="row" style={{ justifyContent:'space-between', alignItems:'baseline' }}>
-              <span className="overline" style={{ fontSize:9 }}>{STAT_LABEL[k]}</span>
+            <div className="row" style={{ justifyContent:'space-between', alignItems:'baseline', gap:8 }}>
+              <span style={{ fontSize:13, fontWeight:700, letterSpacing:'.03em', color:'var(--ink)' }}>
+                {STAT_LABEL_SHORT[k] || STAT_LABEL[k]}
+              </span>
               <span style={{ display:'flex', alignItems:'baseline', gap:4 }}>
                 {bonus !== 0 && (
-                  <span className="mono faint" style={{ fontSize:11 }}>
+                  <span className="mono dim" style={{ fontSize:12 }}>
                     {d.base} <span style={{ color: bonusCol, fontWeight:700 }}>{bonus > 0 ? '+' : '−'}{Math.abs(bonus)}</span> =
                   </span>
                 )}
-                <span className="mono" style={{ fontSize:17, fontWeight:700, color: magic ? 'var(--silver)' : 'var(--gold-pale)' }}>{d.effective}{pct(k) ? '%' : ''}</span>
+                <span className="mono" style={{ fontSize:18, fontWeight:700, color: magic ? 'var(--silver)' : 'var(--gold-pale)' }}>{d.effective}{pct(k) ? '%' : ''}</span>
               </span>
             </div>
-            <div className="faint" style={{ fontSize:10, fontFamily:'var(--font-mono)', marginTop:2 }}>
+            <div className={bonus !== 0 ? 'dim' : 'faint'} style={{ fontSize:11, fontFamily:'var(--font-mono)', marginTop:3 }}>
               {bonus !== 0 ? detail(d) : 'aucun bonus'}
             </div>
           </div>
