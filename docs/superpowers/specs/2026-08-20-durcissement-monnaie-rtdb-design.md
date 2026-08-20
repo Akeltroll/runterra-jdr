@@ -1,0 +1,259 @@
+# Monnaie — durcissement des règles RTDB + traçabilité
+
+> **Statut : À FAIRE.** Document de reprise écrit le 2026-08-20 en fin de session, à froid.
+> Rien de ce qui suit n'est commencé. Il n'y a **aucun travail en cours** : le dépôt est propre,
+> `main` et `Woolost` sont à jour sur `c99879b`.
+>
+> **À lire avant de coder.** Ce document contient le contexte, deux chantiers indépendants,
+> le patch de règles prêt à coller, et surtout **trois pièges** qui coûteraient une soirée
+> à redécouvrir (§6).
+
+---
+
+## 1. D'où ça vient
+
+Session du 2026-08-20. Le MJ demandait de pouvoir modifier librement l'argent des joueurs et
+du coffre commun. En auditant les chemins d'écriture des pièces avant d'implémenter, **trois
+constats** sont sortis. Les deux premiers ont été livrés le jour même (commit `c99879b`), le
+troisième — celui-ci — a été laissé de côté faute de temps et parce qu'il touche à la console
+Firebase :
+
+1. ✅ **Livré** — impossible de *retirer* des pièces (`grantCoins` est additif et ignore les
+   négatifs, `moveCoins` n'est qu'un transfert borné). → `writeCoins`/`setCharCoins`/
+   `setSharedCoins` + composant `CoinEditor`.
+2. ✅ **Livré** — libellés de monnaies désalignés du guide d'économie. → Cuivre/Argent/Or/Platine
+   + change de monnaie MJ (`planCoinConvert`).
+3. ⬜ **Ce document** — les règles RTDB laissent un joueur écrire n'importe quoi sur sa propre
+   bourse, et **aucun mouvement de pièces n'est journalisé nulle part**.
+
+Le point 3 se décompose en deux chantiers **indépendants** : §3 (règles) et §4 (journal). Ils
+peuvent être faits dans n'importe quel ordre, mais voir §5 pour la recommandation.
+
+---
+
+## 2. Le problème, précisément
+
+### 2.1 Les règles ne valident rien sous un personnage
+
+`database.rules.json`, nœud `campaign/runeterra/characters` (lignes 66-71) :
+
+```json
+"characters": {
+  "$charId": {
+    ".read":  "auth != null && root.child('users').child(auth.uid).child('charId').val() === $charId",
+    ".write": "auth != null && (… role === 'mj' || role === 'admin' || users/$uid/charId === $charId)"
+  }
+}
+```
+
+Il y a un `.write`, mais **aucun `.validate` dans tout le sous-arbre**. Conséquence : un joueur
+propriétaire de sa fiche peut y écrire n'importe quelle valeur, de n'importe quel type —
+`coins: { or: 999999 }`, une valeur négative, une chaîne, une clé inventée.
+
+Le `Math.max(0, value | 0)` de l'app (`data-state.jsx:290`, `writeCoins`) **n'est pas une
+protection** : c'est du JavaScript dans le navigateur du joueur. Une console devtools ou un
+appel REST avec son propre jeton d'auth le contourne en dix secondes. Les règles sont la seule
+barrière réelle.
+
+À comparer avec `sharedCoins` (lignes 25-31), qui **est** validé :
+
+```json
+"sharedCoins": {
+  ".read":  "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+  ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+  "$coin":  { ".validate": "newData.isNumber() && newData.val() >= 0" }
+}
+```
+
+L'asymétrie n'est pas voulue : elle vient de l'ordre historique d'écriture des règles.
+
+### 2.2 Aucune trace des mouvements d'argent
+
+Vérifié en listant tous les appels : `pushLog` n'est **jamais** appelé sur un chemin de pièces.
+Le journal partagé (`combat/log`) ne reçoit que du combat et des changements de niveau.
+
+Concrètement : **un joueur peut vider le coffre commun sans laisser la moindre trace**, et le
+MJ ne dispose d'aucun historique pour reconstituer ce qui s'est passé. C'est, dans une campagne
+entre gens qui se connaissent, le risque réellement gênant — bien plus que la triche délibérée.
+
+---
+
+## 3. Chantier A — durcir les règles
+
+### 3.1 Niveau 1 — valider le type et le signe (recommandé)
+
+Aligne `characters/$charId/state/coins` sur ce que `sharedCoins` fait déjà. **Aucun changement
+d'application**, uniquement le fichier de règles. Patch à appliquer dans `database.rules.json`,
+en remplacement du bloc `characters` cité en §2.1 :
+
+```json
+"characters": {
+  "$charId": {
+    ".read":  "auth != null && root.child('users').child(auth.uid).child('charId').val() === $charId",
+    ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('charId').val() === $charId)",
+    "state": {
+      "coins": {
+        "$coin": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0"
+        }
+      }
+    }
+  }
+}
+```
+
+⚠️ **Recopier le `.write` à l'identique** (il est tronqué ici pour la lisibilité — prendre la
+version exacte du fichier). Une règle `.write` réécrite de mémoire est le meilleur moyen de
+verrouiller tout le monde.
+
+Ce que ça bloque : valeurs négatives, décimales, chaînes, booléens. Ce que ça **ne bloque pas** :
+un joueur qui s'écrit `or: 999999`, qui est un entier positif parfaitement valide. Voir §3.2.
+
+### 3.2 Niveau 2 — empêcher réellement de se servir (déconseillé en l'état)
+
+Pour interdire l'auto-enrichissement il faudrait réserver l'écriture de `coins` au staff. **Ça
+casse un usage légitime** : `moveCoins` (`data-state.jsx:315`) écrit sur la fiche du joueur
+quand il prend au coffre commun ou y dépose — c'est le fonctionnement normal, voulu.
+
+Et on ne peut pas s'en sortir par une règle plus fine : un transfert fait **deux écritures sur
+des sous-arbres distincts** (`sharedCoins` et `characters/$charId/coins`), non atomiques. Les
+règles RTDB n'évaluent qu'une écriture à la fois et ne peuvent donc pas vérifier que le
+transfert conserve la somme. Une économie infalsifiable demanderait de router les transferts
+par des **Cloud Functions** — un changement d'architecture disproportionné ici (le projet est
+volontairement zéro-build, zéro backend).
+
+**Recommandation : rester au niveau 1 et investir dans le chantier B.** Rendre visible coûte
+presque rien et couvre le vrai risque ; bloquer coûte cher et casse des usages réels.
+
+### 3.3 Procédure de publication (le point qui n'est pas automatique)
+
+`database.rules.json` est **une copie de référence versionnée, pas la source active**. Vérifié
+le 2026-08-20 : le dépôt n'a ni `firebase.json`, ni `.firebaserc`, ni workflow CI. GitHub Pages
+ne sert que des fichiers statiques et ne parle jamais à Firebase. **Rien ne déploie ce fichier.**
+
+Publier = console Firebase → Realtime Database → onglet **Règles** → coller → **Publier**.
+
+Trois propriétés à connaître :
+
+- **Tout-ou-rien** : la publication remplace le document entier. Avant de coller, **comparer ce
+  qui est en ligne avec le fichier du dépôt** — s'ils ont divergé (une règle publiée à la main
+  et jamais reportée dans le dépôt), la publication l'écraserait silencieusement.
+- **Effet immédiat**, pour tous les clients connectés. Pas de cache, pas de jeton `?v=` qui
+  amortit — contrairement au code. Une règle fautive verrouille tout le monde dans la seconde.
+- **Rollback** : la console garde un historique des règles publiées, on peut y revenir. Malgré
+  tout, garder l'ancien JSON dans le presse-papier avant de publier.
+
+Test après publication, dans cet ordre :
+1. Un compte **joueur** ouvre sa fiche, prend des pièces au coffre commun → doit fonctionner.
+2. Le même dépose des pièces au commun → doit fonctionner.
+3. Le **MJ** édite une bourse via `CoinEditor`, y compris un « Tout à 0 » → doit fonctionner.
+4. Devtools sur un compte joueur : `set({or:-5})` sur sa propre bourse → doit être **refusé**
+   (`PERMISSION_DENIED`). C'est le test qui prouve que le durcissement sert à quelque chose.
+
+---
+
+## 4. Chantier B — journaliser les mouvements de pièces
+
+### 4.1 Les points d'accroche (tous dans `data-state.jsx`)
+
+Après la session du 2026-08-20, **quatre** fonctions écrivent des pièces. Toutes sont des
+orchestrateurs déjà isolés — c'est le bon endroit pour brancher le journal, une seule fois
+chacun, plutôt que dans les pages appelantes :
+
+| Fonction | Ligne | Rôle | À journaliser |
+|---|---|---|---|
+| `grantCoins(charId, patch)` | 222 | don additif (clôture de séance) | oui — récompense |
+| `writeCoins(path, patch)` | 290 | écriture absolue (édition MJ) | oui — mais voir §4.3 |
+| `setCharCoins` / `setSharedCoins` | 299-300 | façades de `writeCoins` | via `writeCoins` |
+| `moveCoins(from, to, …)` | 315 | transfert perso ↔ commun | **oui — le plus important** |
+
+`moveCoins` est le cas critique : c'est le seul que **les joueurs** déclenchent, et c'est celui
+du coffre commun.
+
+Deux setters `setCoin` (lignes 32 et 280) existent encore et ne sont **branchés à aucune UI**
+(code mort depuis l'origine). Soit les supprimer à cette occasion, soit les faire passer par
+`writeCoins` — ne pas les laisser comme une voie d'écriture non journalisée.
+
+### 4.2 Le mécanisme existant
+
+`pushLog(text, kind)` — `data-state.jsx:172`. Écrit dans `combat/log`, garde ~30 entrées,
+`kind ∈ 'gold' | 'buff' | 'debuff'`. Les règles autorisent déjà **tout inscrit** à y écrire
+(`.validate` sur `text` string), donc **réutiliser `combat/log` ne demande aucune nouvelle
+règle RTDB, donc aucune republication en console**. C'est l'argument fort pour ce choix.
+
+### 4.3 Trois décisions à prendre avec le MJ avant de coder
+
+1. **Même journal que le combat, ou journal d'économie séparé ?** `combat/log` est vidé par le
+   bouton « ⟲ Combat » (`resetCombat`) et plafonné à ~30 entrées — un historique d'argent y
+   serait effacé à chaque fin de combat, ce qui ruine l'intérêt. Un nœud `campaign/runeterra/
+   economyLog` séparé serait plus juste, **mais c'est un nouveau nœud, donc une nouvelle règle,
+   donc une republication en console** (§3.3). Arbitrage à faire : simplicité contre durabilité.
+2. **Quoi écrire pour une édition MJ ?** `writeCoins` reçoit des valeurs absolues ; le delta
+   n'est intéressant que comparé à l'état d'avant, qu'il ne lit pas (c'est un `updatePath`
+   direct, sans `getSnapshot`). Soit on journalise la valeur finale (« bourse de X fixée à … »),
+   soit on passe `writeCoins` en async avec un `getSnapshot` préalable pour calculer le delta,
+   à l'image de `grantCoins`. La seconde est plus utile et plus coûteuse.
+3. **Le change de monnaie doit-il apparaître ?** Il se fait sur le brouillon de `CoinEditor` et
+   ne produit qu'une écriture finale via `setCharCoins` — il serait donc journalisé comme une
+   simple édition, en perdant l'information « c'était une conversion ». Acceptable ou non.
+
+---
+
+## 5. Ordre recommandé
+
+**B puis A.** Le journal (B) traite le risque réel — un mouvement d'argent invisible — alors
+que le durcissement (A) ne bloque que les valeurs aberrantes, cas rare et sans gravité.
+
+Et surtout, **B dans sa version simple ne demande aucune intervention en console** (§4.2),
+donc peut être livré comme n'importe quelle autre fonctionnalité, sans dépendre de la
+disponibilité de qui a les accès Firebase. A, lui, est bloqué sur cette étape manuelle.
+
+Si les deux sont faits dans la même session : coder B, puis appliquer A au fichier de règles,
+puis **une seule** publication en console.
+
+---
+
+## 6. Pièges connus
+
+- ⚠️ **Un `.validate` s'applique à TOUTES les écritures qui traversent le nœud, y compris celles
+  de l'admin.** Or `ExportImportPanel` (`components.jsx:312`) fait un `setPath(CAMPAIGN, …)` :
+  il réécrit **tout** le sous-arbre de campagne d'un coup. Une vieille sauvegarde JSON contenant
+  une valeur de pièce non entière, négative ou absente **ferait échouer l'import entier** après
+  le durcissement. À tester explicitement avec une sauvegarde exportée *avant* le changement.
+- ⚠️ **Les clés Firebase des monnaies sont `cuiv`/`arg`/`or`/`plat`** et signifient
+  cuivre/argent/or/platine. Ne pas se fier aux anciens libellés (Fer/Bronze/Or/Mythril), qui
+  avaient dérivé et ont été corrigés le 2026-08-20. **Aucun renommage de clé n'a eu lieu** — ne
+  pas en introduire.
+- ⚠️ **Ne jamais éditer un fichier accentué via PowerShell 5.1** (`Get-Content -Raw` +
+  `Out-File`) : il relit l'UTF-8 en ANSI et réécrit un BOM + des accents cassés. Utiliser l'outil
+  Edit ou `perl -i -pe`. (Rappel de `CLAUDE.md`, valable pour `database.rules.json` comme pour
+  le reste.)
+- Un `.validate` ne s'applique **pas aux suppressions** (`newData` est null) : effacer une
+  dénomination restera possible. C'est le comportement voulu.
+- Si le chantier touche du code : **bumper le jeton de cache** dans `index.html` (`window.APPV`
+  + les `?v=`), sinon les joueurs gardent l'ancien code. Dernier jeton posé : `20260817-8`.
+
+---
+
+## 7. Vérification
+
+- `node --test test/game-logic.test.js test/auth.test.js` → **150 tests** au moment de l'écriture
+  (game-logic 139 + auth 11). Les 6 tests de `planCoinConvert` sont en fin de fichier.
+- `npx esbuild fichier.jsx > /dev/null` pour chaque `.jsx` touché (⚠️ **pas** de `--loader=jsx`).
+- Un changement de règles ne se teste pas par les tests unitaires : utiliser le simulateur de la
+  console Firebase, puis la séquence manuelle de §3.3.
+
+---
+
+## 8. Références
+
+- `database.rules.json` — lignes 25-31 (`sharedCoins`, le modèle à suivre) et 66-71
+  (`characters`, la cible du durcissement).
+- `data-state.jsx` — `pushLog:172`, `grantCoins:222`, `writeCoins:290`,
+  `setCharCoins:299`, `setSharedCoins:300`, `moveCoins:315`.
+- `components.jsx` — `CoinEditor` (éditeur de bourse MJ), `INV_COINS` (source unique des 4
+  monnaies), `ExportImportPanel:312` (le piège du §6).
+- `game-logic.js` — `COIN_VALUE` + `planCoinConvert` (taux officiels, conversion pure testée).
+- `info-mj/Économie - guide des joueurs.md` — source de vérité des règles d'économie (privé,
+  gitignored).
+- `CLAUDE.md` — section « État actuel (2026-08-20) » pour le détail de ce qui a été livré.

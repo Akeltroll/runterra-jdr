@@ -712,6 +712,14 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   (`MOD_STATS`, 11 stats) visible si `cat==='Équipement'`. 39 tests verts.
 
 ## Chantiers en cours / backlog
+- **Monnaie : durcissement des règles RTDB + journal des mouvements de pièces** — ⬜ à faire,
+  **document de reprise complet** : `docs/superpowers/specs/2026-08-20-durcissement-monnaie-rtdb-design.md`
+  (contexte, patch de règles prêt à coller, points d'accroche du journal, 3 pièges dont l'import de
+  sauvegarde cassé par un `.validate`). Deux chantiers indépendants : **B (journal)** ne demande
+  **aucune republication de règles** si on réutilise `combat/log` → à faire en premier ; **A (durcir
+  `characters/$charId/state/coins`)** est bloqué sur une **publication manuelle en console Firebase**
+  (le dépôt n'a ni CI ni `firebase.json` : `database.rules.json` est une copie de référence, rien ne
+  la déploie).
 - **Lot améliorations graphiques** (brainstormé 2026-06-28, chantiers indépendants — chacun sa spec/plan) :
   **A — Refonte fiche joueur = FAIT** (voir État actuel 2026-06-29).
   **B — Arbre de runes en vrai arbre visuel = FAIT, refondu et VALIDÉ par le MJ** (2026-08-16) :
