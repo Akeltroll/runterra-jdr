@@ -189,6 +189,7 @@ function FicheInventoryColumn({ char, state, eff, canEdit, force, setInvItem, re
   const [menu, setMenu] = useState(null);       // { item, x, y, actions }
   const [editing, setEditing] = useState(null);  // item édité (modal)
   const [catCat, setCatCat] = useState(null);     // picker catalogue
+  const [purse, setPurse] = useState(false);      // éditeur de bourse (MJ)
   const inv = state.inventory || {};
   // Les items actuellement équipés (arme/armure/accessoires) ne sont plus "dans le sac" :
   // on les retire de la grille affichée (l'inventaire complet reste pour l'ajout/stacking).
@@ -234,8 +235,13 @@ function FicheInventoryColumn({ char, state, eff, canEdit, force, setInvItem, re
       <div className="panel" style={{ padding:0, overflow:'hidden' }}>
         <InventoryGrid items={visibleInv} coins={state.coins || char.coins} filter={filter} setFilter={setFilter}
           minCells={14} grow={true} onItemClick={openMenu} onReorderItem={reorderInv}
+          onCoinClick={canEdit ? () => setPurse(true) : undefined}
           onAdd={canEdit ? (cat) => setCatCat(cat) : undefined} />
       </div>
+      {purse && (
+        <CoinEditor title={`Bourse — ${char.name}`} coins={state.coins || char.coins || {}} onClose={() => setPurse(false)}
+          onApply={(patch) => { setCharCoins(char.id, patch); toast(`Bourse de <b>${char.name}</b> mise à jour`, 'gold'); }} />
+      )}
       {canEdit && <ModifiersPanel modifiers={state.modifiers} setMod={setMod} />}
       {menu && <ItemActionMenu {...menu} onClose={() => setMenu(null)} />}
       {editing && (

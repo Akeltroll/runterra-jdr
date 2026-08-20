@@ -94,6 +94,9 @@ function CommonInventoryPage() {
   const [editing, setEditing] = useState(null);
   const [destPick, setDestPick] = useState(null);   // { x, y, onDest } pour le MJ
   const [catalog, setCatalog] = useState(false);    // ouverture du catalogue d'ajout
+  const [coinMenu, setCoinMenu] = useState(null);   // { name, x, y, actions } — clic sur une pièce (staff)
+  const [purse, setPurse] = useState(false);        // éditeur de bourse du coffre (MJ)
+  const toast = useToast();
 
   const charInv = (id) => (all && all[id] && all[id].state && all[id].state.inventory) || {};
   const charCoins = (id) => (all && all[id] && all[id].state && all[id].state.coins) || { plat:0, or:0, arg:0, cuiv:0 };
@@ -119,10 +122,23 @@ function CommonInventoryPage() {
     else takeItem(sel, 1, dest);
   }, e, {});
 
-  const openCoinMenu = (key, e) => {
+  // Retrait du coffre vers une fiche (flux commun joueur/MJ).
+  const takeCoinFlow = (key, x, y) => {
     const max = (sharedCoins && sharedCoins[key]) || 0;
     if (max <= 0) return;
-    resolveDest((dest) => setStepper({ kind:'coin', coinKey:key, dest, x:e.clientX, y:e.clientY, max }), e, {});
+    resolveDest((dest) => setStepper({ kind:'coin', coinKey:key, dest, x, y, max }),
+      { clientX:x, clientY:y }, {});
+  };
+  // Joueur : clic = prendre. Staff : menu (prendre / éditer librement la bourse du coffre).
+  const openCoinMenu = (key, e) => {
+    const x = e.clientX, y = e.clientY;
+    if (!staff) return takeCoinFlow(key, x, y);
+    const max = (sharedCoins && sharedCoins[key]) || 0;
+    const coin = INV_COINS.find(c => c.key === key);
+    const actions = [];
+    if (max > 0) actions.push({ label:'Prendre…', onClick:() => takeCoinFlow(key, x, y) });
+    actions.push({ label:'Modifier la bourse (MJ)', onClick:() => setPurse(true) });
+    setCoinMenu({ name:`${coin ? coin.label : key} — ${invFmt(max)}`, x, y, actions });
   };
   const addItem = () => { const it = makeItem({ cat:'Butin', name:'Nouvel objet' }); setItem(it.id, it); setSelectedId(it.id); setEditing(it); };
   const staff = isStaff(role);
@@ -152,6 +168,14 @@ function CommonInventoryPage() {
         </div>
       </div>
 
+      {coinMenu && (
+        <ItemActionMenu item={{ name:coinMenu.name }} x={coinMenu.x} y={coinMenu.y}
+          actions={coinMenu.actions} onClose={() => setCoinMenu(null)} />
+      )}
+      {purse && (
+        <CoinEditor title="Bourse du coffre commun" coins={sharedCoins || {}} onClose={() => setPurse(false)}
+          onApply={(patch) => { setSharedCoins(patch); toast('Bourse du <b>coffre commun</b> mise à jour', 'gold'); }} />
+      )}
       {destPick && (
         <ItemActionMenu item={{ name:'Donner à…' }} x={destPick.x} y={destPick.y}
           actions={CHARACTERS.map(c => ({ label:c.name, onClick:() => destPick.onDest(c.id) }))}

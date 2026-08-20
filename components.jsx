@@ -379,12 +379,21 @@ const INV_FILTERS = [
   { key:'all', label:'Tout' }, { key:'Équipement', label:'Équip.' },
   { key:'Consommables', label:'Conso.' }, { key:'Butin', label:'Butin' },
 ];
+/* Les 4 monnaies du guide d'économie, dans l'ordre de valeur CROISSANTE.
+   Taux de change : voir COIN_VALUE / planCoinConvert (game-logic) — 100 cuivre
+   = 1 argent, 100 argent = 1 or, 10 or = 1 platine. */
 const INV_COINS = [
-  { key:'cuiv', label:'Fer',     img:'ATH/Items/piece-fer.webp',     col:'#b0b0b0' },
-  { key:'arg',  label:'Bronze',  img:'ATH/Items/piece-bronze.webp',  col:'#cd9a6a' },
+  { key:'cuiv', label:'Cuivre',  img:'ATH/Items/piece-bronze.webp',  col:'#c98a5b' },
+  { key:'arg',  label:'Argent',  img:'ATH/Items/piece-argent.webp',  col:'#c9d2da' },
   { key:'or',   label:'Or',      img:'ATH/Items/piece-or.webp',      col:'#eccf8f' },
-  { key:'plat', label:'Mythril', img:'ATH/Items/piece-mythril.webp', col:'#b8d4e8' },
+  { key:'plat', label:'Platine', img:'ATH/Items/piece-mythril.webp', col:'#e6eef5' },
 ];
+const invCoin = (key) => INV_COINS.find(c => c.key === key) || INV_COINS[0];
+/* Pastille de pièce (icône seule) — même rendu partout : grille, éditeur, cartes MJ. */
+function CoinIcon({ coin, size = 26 }) {
+  return <div style={{ width:size, height:size, flex:`0 0 ${size}px`,
+    background:`url(${coin.img}) center/contain no-repeat` }} />;
+}
 const invFmt = (n) => Number(n || 0).toLocaleString('fr-FR');
 /* Libellé de poids d'un item : unitaire, + le total de la pile si qty > 1.
    Renvoie null si l'item ne pèse rien (rien à afficher).
@@ -554,7 +563,7 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
         {INV_COINS.map(c => (
           <div key={c.key} onClick={onCoinClick ? (e) => onCoinClick(c.key, e) : undefined}
             style={{ display:'flex', alignItems:'center', gap:4, cursor:onCoinClick ? 'pointer' : 'default' }}>
-            <div style={{ width:30, height:30, flex:'0 0 30px', background:`url(${c.img}) center/contain no-repeat` }} />
+            <CoinIcon coin={c} size={30} />
             <span style={{ fontFamily:"'EB Garamond',serif", fontSize:13, color:c.col, minWidth:32 }}>
               {invFmt((coins && coins[c.key]) || 0)}
             </span>
@@ -594,6 +603,124 @@ function AmountStepper({ max, x, y, label, confirmLabel = 'Valider', onConfirm, 
         <div className="row gap-2" style={{ marginTop:10, justifyContent:'space-between' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => setN(max)}>Max ({max})</button>
           <button className="btn btn-sm btn-gold" onClick={() => { onConfirm(clamp(n)); onClose(); }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* --- Éditeur de bourse (MJ) ------------------------------------------------
+   Saisie LIBRE des 4 dénominations, en valeur ABSOLUE (pré-remplie avec
+   l'existant) : on fixe le contenu de la bourse, donc on peut aussi bien
+   ajouter que retirer — contrairement à grantCoins (additif) et à moveCoins
+   (transfert borné). Le delta est affiché par ligne pour rendre la manip
+   lisible avant validation ; onApply ne reçoit que les dénominations
+   réellement modifiées. */
+function CoinEditor({ title, coins, onApply, onClose }) {
+  const cur = (k) => Math.max(0, ((coins && coins[k]) || 0) | 0);
+  const [draft, setDraft] = useState(() => {
+    const o = {}; INV_COINS.forEach(c => { o[c.key] = String(cur(c.key)); }); return o;
+  });
+  const val = (k) => Math.max(0, parseInt(draft[k], 10) || 0);
+  const set = (k, v) => setDraft(d => ({ ...d, [k]: String(Math.max(0, v)) }));
+  // Change de monnaie : opère sur le BROUILLON (résultat visible dans les champs,
+  // annulable, une seule écriture au « Appliquer » final).
+  const [cvFrom, setCvFrom] = useState('cuiv');
+  const [cvTo, setCvTo] = useState('arg');
+  const [cvN, setCvN] = useState('');
+  const draftCoins = {}; INV_COINS.forEach(c => { draftCoins[c.key] = val(c.key); });
+  const cvWanted = Math.max(0, parseInt(cvN, 10) || 0);
+  const cvPlan = planCoinConvert(draftCoins, cvFrom, cvTo, cvN === '' ? draftCoins[cvFrom] : cvWanted);
+  const pickFrom = (k) => { setCvFrom(k); if (k === cvTo) setCvTo((INV_COINS.find(c => c.key !== k) || {}).key); };
+  const doConvert = () => {
+    if (!cvPlan) return;
+    setDraft(d => ({ ...d, [cvFrom]: String(cvPlan.patch[cvFrom]), [cvTo]: String(cvPlan.patch[cvTo]) }));
+    setCvN('');
+  };
+  const rateLabel = () => {
+    const vf = COIN_VALUE[cvFrom], vt = COIN_VALUE[cvTo];
+    if (!vf || !vt || vf === vt) return '';
+    return vt > vf ? `${invFmt(vt / vf)} ${invCoin(cvFrom).label} = 1 ${invCoin(cvTo).label}`
+                   : `1 ${invCoin(cvFrom).label} = ${invFmt(vf / vt)} ${invCoin(cvTo).label}`;
+  };
+  const patch = {};
+  INV_COINS.forEach(c => { if (val(c.key) !== cur(c.key)) patch[c.key] = val(c.key); });
+  const nChanged = Object.keys(patch).length;
+  const apply = () => { if (nChanged) onApply(patch); onClose(); };
+  useEffect(() => {   // pas de tableau de deps : on rebinde à chaque rendu pour garder `patch` frais
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Enter') apply();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+  const fld = { width:78, textAlign:'right', background:'var(--bg-inset,#0d0a08)', color:'inherit',
+    border:'1px solid var(--line-strong,rgba(160,128,72,0.4))', borderRadius:6, padding:'6px 8px', fontSize:13 };
+  return (
+    <div className="modal-scrim" onClick={onClose}
+      style={{ position:'fixed', inset:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:220 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width:'min(430px,92vw)', background:'var(--bg-deep,#12100c)',
+        border:'1px solid var(--line-gold,rgba(160,128,72,0.5))', borderRadius:12, padding:16,
+        boxShadow:'0 10px 40px rgba(0,0,0,0.7)', color:'var(--ink,#e9dcc4)' }}>
+        <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+          <h3 style={{ fontSize:16, color:'var(--gold-pale,#eccf8f)' }}>{title}</h3>
+          <button className="btn btn-sm btn-ghost" onClick={onClose}>✕</button>
+        </div>
+        <p className="dim" style={{ fontSize:11, marginBottom:12 }}>Valeurs finales : ce que contiendra la bourse après validation.</p>
+        <div className="col gap-2">
+          {INV_COINS.map(c => {
+            const d = val(c.key) - cur(c.key);
+            return (
+              <div key={c.key} className="row gap-2" style={{ alignItems:'center' }}>
+                <CoinIcon coin={c} size={26} />
+                <span style={{ flex:1, fontFamily:"'EB Garamond',serif", fontSize:14, color:c.col }}>{c.label}</span>
+                <span className="mono" style={{ width:52, textAlign:'right', fontSize:11,
+                  color: d > 0 ? 'var(--buff-bright,#34c77f)' : d < 0 ? 'var(--debuff-bright,#e85a52)' : 'transparent' }}>
+                  {d > 0 ? '+' : d < 0 ? '−' : ''}{invFmt(Math.abs(d))}
+                </span>
+                <button className="btn btn-sm btn-ghost" onClick={() => set(c.key, val(c.key) - 1)}>−</button>
+                <input type="number" min="0" value={draft[c.key]} style={fld}
+                  onChange={(e) => setDraft(d2 => ({ ...d2, [c.key]: e.target.value }))}
+                  onBlur={() => set(c.key, val(c.key))} />
+                <button className="btn btn-sm btn-ghost" onClick={() => set(c.key, val(c.key) + 1)}>+</button>
+              </div>
+            );
+          })}
+        </div>
+        {/* --- Change de monnaie (MJ) : applique le plan pur au brouillon --- */}
+        <div style={{ marginTop:14, paddingTop:12, borderTop:'1px solid var(--line,rgba(160,128,72,0.2))' }}>
+          <div className="overline" style={{ marginBottom:8 }}>Change de monnaie</div>
+          <div className="row gap-2" style={{ alignItems:'center' }}>
+            <input type="number" min="0" value={cvN} placeholder="tout" onChange={(e) => setCvN(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); doConvert(); } }}
+              style={{ ...fld, width:64, textAlign:'center' }} />
+            <select value={cvFrom} onChange={(e) => pickFrom(e.target.value)} style={{ ...fld, width:'auto', flex:1, textAlign:'left' }}>
+              {INV_COINS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+            <span className="faint" style={{ fontSize:14 }}>→</span>
+            <select value={cvTo} onChange={(e) => setCvTo(e.target.value)} style={{ ...fld, width:'auto', flex:1, textAlign:'left' }}>
+              {INV_COINS.filter(c => c.key !== cvFrom).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className="row gap-2" style={{ marginTop:8, alignItems:'center' }}>
+            <span className="mono faint" style={{ flex:1, fontSize:11 }}>
+              {rateLabel()}
+              {cvPlan
+                ? ` · −${invFmt(cvPlan.spent)} → +${invFmt(cvPlan.gained)}`
+                : ' · montant insuffisant'}
+            </span>
+            <button className="btn btn-sm btn-ghost" disabled={!cvPlan} onClick={doConvert}>Convertir</button>
+          </div>
+        </div>
+        <div className="row gap-2" style={{ marginTop:14, justifyContent:'space-between', alignItems:'center' }}>
+          <button className="btn btn-sm btn-ghost" style={{ color:'var(--debuff-bright,#e0463f)' }}
+            title="Mettre toutes les dénominations à zéro"
+            onClick={() => { const o = {}; INV_COINS.forEach(c => { o[c.key] = '0'; }); setDraft(o); }}>Tout à 0</button>
+          <div className="row gap-2">
+            <button className="btn btn-sm btn-ghost" onClick={onClose}>Annuler</button>
+            <button className="btn btn-sm btn-gold" disabled={!nChanged} onClick={apply}>Appliquer</button>
+          </div>
         </div>
       </div>
     </div>
@@ -881,6 +1008,6 @@ Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
   ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL, STAT_LABEL_SHORT, STAT_FAMILY, statFamily,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
-  InventoryGrid, ItemTooltip, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invFmt, invWeightLabel, invThumbStyle,
-  AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar, MOD_STATS,
+  InventoryGrid, ItemTooltip, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invCoin, CoinIcon, invFmt, invWeightLabel, invThumbStyle,
+  AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar, MOD_STATS, CoinEditor,
 });

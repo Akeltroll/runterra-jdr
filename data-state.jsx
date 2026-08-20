@@ -214,6 +214,9 @@ async function removeXp(charId, loss) {
   return res;
 }
 
+/* Les 4 dénominations, dans l'ordre de valeur croissante (source unique). */
+const COIN_KEYS = ['cuiv', 'arg', 'or', 'plat'];
+
 /* Don d'argent (orchestrateur, écriture staff) : AJOUTE le patch aux pièces du joueur
    (récompense, pas un transfert depuis le coffre). Dénominations < 0 ignorées. */
 async function grantCoins(charId, patch) {
@@ -221,7 +224,7 @@ async function grantCoins(charId, patch) {
   const st = (await window.RTDB.getSnapshot(p)) || {};
   const cur = st.coins || {};
   const next = {};
-  for (const k of ['plat', 'or', 'arg', 'cuiv']) {
+  for (const k of COIN_KEYS) {
     const add = Math.max(0, (patch && patch[k]) | 0);
     if (add) next[k] = (cur[k] || 0) + add;
   }
@@ -278,6 +281,23 @@ function useSharedCoins() {
     window.RTDB.updatePath(SHARED_COINS, { [key]: Math.max(0, value | 0) }), []);
   return { coins, setCoin };
 }
+
+/* Écriture LIBRE d'une bourse (édition MJ) : valeurs ABSOLUES, clampées à un entier >= 0.
+   Seules les dénominations présentes dans `patch` sont écrites (les autres restent
+   intactes : updatePath = merge). Renvoie le patch réellement écrit — l'appelant s'en
+   sert pour son toast. Contrairement à grantCoins (additif, positif seulement), cette
+   voie permet de FIXER une valeur, donc aussi d'en retirer. */
+function writeCoins(path, patch) {
+  const next = {};
+  for (const k of COIN_KEYS) {
+    if (!patch || patch[k] == null) continue;
+    next[k] = Math.max(0, patch[k] | 0);
+  }
+  if (Object.keys(next).length) window.RTDB.updatePath(path, next);
+  return next;
+}
+const setCharCoins   = (charId, patch) => writeCoins(`${charPath(charId)}/coins`, patch);
+const setSharedCoins = (patch)         => writeCoins(SHARED_COINS, patch);
 
 /* Transfert d'item entre deux collections RTDB ({id:item}). Utilise la logique
    pure planItemTransfer puis applique les deux patches en temps réel.
@@ -362,4 +382,5 @@ Object.assign(window, {
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   usePendingHits, applyHitToEnemy, healCharacter, PENDING_HITS,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
+  COIN_KEYS, setCharCoins, setSharedCoins,
 });

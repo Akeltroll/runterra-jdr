@@ -70,7 +70,9 @@ function MJCompactCard({ c, st, turn, onFull }) {
   const L = mjLive(c, st, turn);
   const toast = useToast();
   const [xpIn, setXpIn] = useState('');
+  const [purse, setPurse] = useState(false);   // éditeur de bourse (MJ)
   const effLevel = (st && st.level != null ? st.level : c.level) || 1;
+  const coins = (st && st.coins) || c.coins || { plat:0, or:0, arg:0, cuiv:0 };
   // < 25% PV → pulsation rouge ; < 50% → orange ; sinon bordure normale.
   const hpCls = L.hpPct < 25 ? 'mj-card-danger' : L.hpPct < 50 ? 'mj-card-warn' : '';
   const stats = [['ad', L.eff.ad], ['ap', L.eff.ap], ['armure', L.eff.armure], ['resmag', L.eff.resmag]];
@@ -132,6 +134,24 @@ function MJCompactCard({ c, st, turn, onFull }) {
           }}>− XP</button>
         </div>
       </div>
+      {/* bourse — lecture live + édition libre MJ (valeurs absolues, ajout comme retrait) */}
+      <div className="row gap-2" style={{ padding:'0 16px 12px', alignItems:'center', flexWrap:'wrap' }}>
+        {INV_COINS.map(cn => (
+          <div key={cn.key} className="row" style={{ alignItems:'center', gap:3 }} title={cn.label}>
+            <CoinIcon coin={cn} size={20} />
+            <span className="mono" style={{ fontSize:12, color:cn.col }}>{invFmt(coins[cn.key])}</span>
+          </div>
+        ))}
+        <div style={{ flex:1 }} />
+        <button className="btn btn-sm btn-ghost" title="Modifier la bourse" onClick={() => setPurse(true)}>💰 Bourse</button>
+      </div>
+      {purse && (
+        <CoinEditor title={`Bourse — ${c.name}`} coins={coins} onClose={() => setPurse(false)}
+          onApply={(patch) => {
+            setCharCoins(c.id, patch);
+            toast(`Bourse de <b>${c.name}</b> mise à jour`, 'gold');
+          }} />
+      )}
       {/* stats clés */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding:'0 16px 14px' }}>
         {stats.map(([k, v]) => (

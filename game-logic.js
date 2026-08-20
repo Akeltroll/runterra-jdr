@@ -176,6 +176,36 @@
     return { patch: fillStacks(items, entry, qty) };
   }
 
+  /* --- Monnaie : dénominations et conversion (guide d'économie du MJ) ---------
+     Chaîne officielle : 100 cuivre = 1 argent, 100 argent = 1 or, 10 or = 1 platine.
+     Les valeurs sont exprimées en CUIVRE (unité de base) ; tous les rapports entre
+     deux dénominations voisines ou non sont donc des entiers dans les deux sens. */
+  var COIN_VALUE = { cuiv: 1, arg: 100, or: 10000, plat: 100000 };
+
+  /* Plan de conversion PUR : convertit `n` pièces de `fromKey` vers `toKey`.
+       - vers le bas (or → cuivre) : exact, tout le montant demandé est converti ;
+       - vers le haut (cuivre → argent) : seuls les multiples entiers passent, le
+         reste est LAISSÉ dans la bourse (jamais perdu, jamais arrondi en faveur
+         de personne).
+     `n` est borné au solde disponible. Renvoie null si la conversion ne donne
+     rien (clés inconnues ou identiques, solde nul, montant sous le seuil du
+     premier échange) ; sinon { spent, gained, unit, patch } où `unit` = combien
+     de `fromKey` valent UN `toKey`, et `patch` = valeurs ABSOLUES des 2 clés. */
+  function planCoinConvert(coins, fromKey, toKey, n) {
+    var vf = COIN_VALUE[fromKey], vt = COIN_VALUE[toKey];
+    if (!vf || !vt || fromKey === toKey) return null;
+    var have = Math.max(0, ((coins && coins[fromKey]) || 0) | 0);
+    var want = Math.min(Math.max(0, n | 0), have);
+    var spent, gained;
+    if (vf >= vt) { gained = want * (vf / vt); spent = want; }        // vers le bas : exact
+    else { var unit = vt / vf; gained = Math.floor(want / unit); spent = gained * unit; }
+    if (spent <= 0 || gained <= 0) return null;
+    var patch = {};
+    patch[fromKey] = have - spent;
+    patch[toKey] = (((coins && coins[toKey]) || 0) | 0) + gained;
+    return { spent: spent, gained: gained, unit: vt / vf, patch: patch };
+  }
+
   /* --- Système de poids porté (affichage seul ; le MJ arbitre la surcharge) --- */
   var CARRY_BASE = 30;        // capacité de base commune (plancher garanti) — spec poids/encombrement
   var CARRY_PER_FORCE = 5;    // capacité gagnée par point de Force
@@ -936,6 +966,7 @@
     applyHealMods, buildDefaultState, makeItem, newItemId,
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd, buildCatalogSeed, catalogArray,
+    COIN_VALUE, planCoinConvert,
     CARRY_BASE, CARRY_PER_FORCE, carriedWeight, carryCapacity, weightStatus, comfortPct,
     ARMOR_CLASSES, armorWeightReduction, armorEffectiveWeight,
     paginate,

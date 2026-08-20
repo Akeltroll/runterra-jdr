@@ -1035,3 +1035,47 @@ test('carouselTransforms : active = dernier index, wrap correct', () => {
   assert.equal(t[0].offset, 1);
   assert.equal(t[3].offset, -1);
 });
+
+/* --- Monnaie : conversion entre dénominations --- */
+test('planCoinConvert : vers le haut, seuls les multiples passent et le reste est laissé', () => {
+  const r = L.planCoinConvert({ cuiv: 250, arg: 3 }, 'cuiv', 'arg', 250);
+  assert.equal(r.spent, 200);
+  assert.equal(r.gained, 2);
+  assert.equal(r.unit, 100);
+  assert.deepEqual(r.patch, { cuiv: 50, arg: 5 });   // 50 cuivres non convertis, jamais perdus
+});
+
+test('planCoinConvert : vers le bas, conversion exacte', () => {
+  assert.deepEqual(L.planCoinConvert({ or: 2 }, 'or', 'cuiv', 1).patch, { or: 1, cuiv: 10000 });
+  assert.deepEqual(L.planCoinConvert({ plat: 1 }, 'plat', 'arg', 1).patch, { plat: 0, arg: 1000 });
+  assert.deepEqual(L.planCoinConvert({ arg: 5 }, 'arg', 'cuiv', 5).patch, { arg: 0, cuiv: 500 });
+});
+
+test('planCoinConvert : taux officiels de la chaîne (100/100/10)', () => {
+  assert.equal(L.planCoinConvert({ cuiv: 100 }, 'cuiv', 'arg', 100).gained, 1);
+  assert.equal(L.planCoinConvert({ arg: 100 }, 'arg', 'or', 100).gained, 1);
+  assert.equal(L.planCoinConvert({ or: 10 }, 'or', 'plat', 10).gained, 1);
+  assert.equal(L.planCoinConvert({ cuiv: 100000 }, 'cuiv', 'plat', 100000).gained, 1);
+});
+
+test('planCoinConvert : montant borné au solde disponible', () => {
+  const r = L.planCoinConvert({ cuiv: 150 }, 'cuiv', 'arg', 9999);
+  assert.equal(r.spent, 100);
+  assert.deepEqual(r.patch, { cuiv: 50, arg: 1 });
+});
+
+test('planCoinConvert : renvoie null quand rien ne peut être converti', () => {
+  assert.equal(L.planCoinConvert({ cuiv: 50 }, 'cuiv', 'arg', 50), null);   // sous le seuil
+  assert.equal(L.planCoinConvert({ cuiv: 0 }, 'cuiv', 'arg', 100), null);   // solde nul
+  assert.equal(L.planCoinConvert({ cuiv: 100 }, 'cuiv', 'cuiv', 100), null); // même dénomination
+  assert.equal(L.planCoinConvert({ cuiv: 100 }, 'cuiv', 'xxx', 100), null);  // clé inconnue
+  assert.equal(L.planCoinConvert(null, 'cuiv', 'arg', 100), null);           // bourse absente
+  assert.equal(L.planCoinConvert({ cuiv: 100 }, 'cuiv', 'arg', -5), null);   // montant négatif
+});
+
+test('planCoinConvert : aller-retour sans perte sur un multiple exact', () => {
+  const up = L.planCoinConvert({ cuiv: 10000 }, 'cuiv', 'or', 10000);
+  assert.deepEqual(up.patch, { cuiv: 0, or: 1 });
+  const down = L.planCoinConvert(up.patch, 'or', 'cuiv', 1);
+  assert.deepEqual(down.patch, { or: 0, cuiv: 10000 });
+});

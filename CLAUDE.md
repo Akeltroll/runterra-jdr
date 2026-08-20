@@ -53,6 +53,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   equipment, itemsById)` (= `CARRY_BASE`(10) + `force×CARRY_PER_FORCE`(5) + Σ `item.carry` des items équipés —
   **la ceinture = un item avec `carry`**), `weightStatus(carried, cap)` (`{pct, over}`, affichage seul, le
   MJ arbitre la surcharge). Items : champs `weight` (poids unitaire) + `carry` (bonus de capacité).
+  **Monnaie** : `COIN_VALUE` (valeurs en cuivre : cuiv 1 / arg 100 / or 10 000 / plat 100 000 — soit
+  100 cuivre = 1 argent, 100 argent = 1 or, 10 or = 1 platine, cf. `info-mj/Économie - guide des joueurs.md`)
+  + `planCoinConvert(coins, from, to, n)` (pur, testé : conversion **dans les deux sens** ; vers le bas =
+  exact, vers le haut = seuls les multiples entiers passent et **le reste est laissé dans la bourse**,
+  jamais arrondi ni perdu ; `n` borné au solde ; renvoie `null` si rien n'est convertible).
   Combat (vue MJ) : `mitigateDamage`
   (armure/resmag, AR-120, **léthalité** réduit AR/RM sans passer sous 0, brut sans réduction) +
   `applyDamageToPools` (bouclier puis HP, KO) — reproduit le moteur Excel. **Visibilité PV ennemis** :
@@ -97,7 +102,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `{level, xp}`, `pushLog` au level-up, retourne `{level, xp, levelsGained}` pour le toast appelant) +
   miroir `removeXp(charId, loss)` (async, écriture staff : `getSnapshot`→`applyXpLoss`→écrit `{level, xp}`,
   retourne `{levelsLost}` — corrige une saisie d'XP erronée ; bouton « −XP » côté MJ) ;
-  `grantCoins(charId, patch)` (don additif d'argent : `getSnapshot`→ajoute `{plat,or,arg,cuiv}`→écrit ; récompense de séance).
+  `grantCoins(charId, patch)` (don additif d'argent : `getSnapshot`→ajoute `{plat,or,arg,cuiv}`→écrit ; récompense de séance) ;
+  **`setCharCoins(charId, patch)` / `setSharedCoins(patch)`** (écriture LIBRE d'une bourse : valeurs **absolues**
+  clampées ≥ 0, merge par dénomination via `writeCoins` — c'est la seule voie qui permet de **retirer** des pièces ;
+  alimente l'éditeur MJ `CoinEditor`). `COIN_KEYS` = les 4 dénominations (source unique).
   `useSharedTurn` (tour partagé ; `resetCombat` **async** : efface counters/cooldowns/`skillBuffs`/`combat/log`
   ET **ramène PV/bouclier aux caps de base** via `computeEffective` sans skillBuffs). **Plateau partagé** :
   `useMJEnemies` (ennemis Firebase), `usePendingHits` (file d'attaques), orchestrateur `applyHitToEnemy`
@@ -132,7 +140,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   passe `effWeight` : les 3 grilles excluent déjà les objets équipés, donc le poids de base y est toujours bon.
   **`invWeightLabel(item, effUnit)`** = libellé de poids (unitaire, ou `unitaire × qty = total` pour une pile ;
   `null` si l'objet ne pèse rien ; `(base N)` en vert si allégé par le Mental).
-  Popovers `ItemActionMenu` / `AmountStepper` ;
+  Popovers `ItemActionMenu` / `AmountStepper` ; **`CoinEditor`** (modal d'édition de bourse réservé au MJ :
+  les 4 dénominations en **valeur absolue** pré-remplie + delta coloré par ligne + « Tout à 0 » ; `onApply` ne
+  reçoit que les dénominations modifiées → `setCharCoins`/`setSharedCoins` ; contient aussi le **change de
+  monnaie** — `planCoinConvert` appliqué au **brouillon**, donc prévisualisé dans les champs, annulable, et
+  écrit en une seule fois au « Appliquer ») ; `INV_COINS` = **source unique** des 4 monnaies (libellé, image,
+  couleur), `invCoin(key)` + **`CoinIcon`** (pastille partagée grille/éditeur/cartes MJ) ;
   **`ItemCatalogPicker`** (modal de sélection rapide
   depuis `ITEM_CATALOG` → `AmountStepper` → `onPick(entry,qty)` ; bouton « Objet personnalisé » = filet) ;
   constantes `INV_*`/`inv*` (styles/format/filtres/pièces).
@@ -445,6 +458,40 @@ d'une base propre. Les anciennes branches de fonctionnalité (auth-comptes-roles
 arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, catalogue-editable)
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
+## État actuel (2026-08-20)
+- **Édition libre des bourses par le MJ** — cache `20260817-7`, **144 tests verts**, **aucune règle RTDB à
+  republier** (les chemins `coins` et `sharedCoins` étaient déjà ouverts au staff).
+  Avant ce lot, les pièces ne pouvaient qu'être **transférées** (`moveCoins`) ou **données** (`grantCoins`,
+  additif, ignore les négatifs) : aucun moyen d'en retirer à un joueur sans passer par le coffre, et
+  `setCoin` (édition libre) existait dans `data-state.jsx` mais n'était **branché à aucune UI** (code mort).
+  Livré : `writeCoins`/`setCharCoins`/`setSharedCoins` (valeurs absolues, clamp ≥ 0) + composant partagé
+  **`CoinEditor`**, câblé sur **4 points d'entrée** :
+  1. **Carte joueur de la vue MJ** (`MJCompactCard`) — nouvelle ligne « bourse » en lecture live + bouton
+     « 💰 Bourse ». C'est le chemin le plus court : tout se fait depuis le tableau de bord.
+  2. **Page Équipement** — clic sur une pièce : le joueur garde « envoyer au commun » en direct, le staff
+     obtient un menu (« Envoyer au commun… » / « Modifier la bourse (MJ) »).
+  3. **Inventaire commun** — même schéma (« Prendre… » / « Modifier la bourse (MJ) ») ; édite `sharedCoins`.
+  4. **Fiche joueur** — clic sur la bourse du pied de `InventoryGrid`, **staff uniquement** (`canEdit`) ;
+     inerte pour un joueur, comme avant.
+  ⚠️ **Toujours aucune trace au journal** : aucun `pushLog` sur les mouvements/éditions de pièces (ni ici,
+  ni sur `moveCoins`/`grantCoins`). Un joueur peut toujours se servir dans le coffre commun sans laisser
+  d'historique — chantier suivant si le MJ le demande.
+  ⚠️ **Rappel de sécurité inchangé** : `characters/$charId` n'a **aucune `.validate` sur `coins`**, donc un
+  joueur peut écrire n'importe quoi sur SA bourse via la console (l'app clampe, les règles non).
+- **Monnaies alignées sur le guide d'économie + change** — cache `20260817-8`, **150 tests verts**, aucune
+  règle RTDB. Les **clés Firebase ne bougent pas** (`cuiv`/`arg`/`or`/`plat` — elles signifiaient déjà
+  cuivre/argent/or/platine) : ce sont les **libellés** qui avaient dérivé (Fer/Bronze/Or/Mythril) et qui
+  redeviennent **Cuivre / Argent / Or / Platine**. Zéro migration de données.
+  - **Ordre** : `INV_COINS` était déjà de la plus faible à la plus forte valeur — conservé tel quel.
+  - **Couleurs** : cuivre `#c98a5b`, **argent `#c9d2da` (argenté)**, or `#eccf8f`, **platine `#e6eef5`
+    (blanc métallique clair)**.
+  - **Nouvel asset `ATH/Items/piece-argent.webp`** : il n'existait aucune pièce d'argent. Dérivée de
+    `piece-fer.webp` (étirement de niveaux + teinte froide) pour garder une **gravure distincte** des
+    3 autres. `piece-fer.webp` n'est plus référencé (conservé comme source).
+  - **Change de monnaie réservé au MJ** (décision du MJ, 2026-08-20) : il vit **dans `CoinEditor`**, donc
+    partout où le MJ peut déjà éditer une bourse (4 points d'entrée) et nulle part ailleurs — les joueurs
+    passent par le MJ. Montant vide = « tout ce qui est convertible ».
+
 ## État actuel (2026-08-17)
 - **Lisibilité + code couleur + stats manquantes (fiche joueur)** — cache `20260817-5`, **144 tests verts**,
   **aucune règle RTDB à republier** (ni `state/modifiers` ni `pendingHits` ne valident les clés de stats).
@@ -734,6 +781,14 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   (type/tenue/portée/propriétés) + descriptions des propriétés + règle de maîtrise.
 - `info-mj/Codes App Script.md` — moteur de calcul du Google Sheet (référence ; pas le
   contenu compétences/runes).
+- `info-mj/Économie - guide des joueurs.md` — économie du monde côté joueurs : 4 monnaies
+  (cuivre/argent/or/platine), poids de la bourse, prix courants, potions, soins, **6 échelons
+  d'équipement** (§9, grille de prix armes/armures), sertissage, revente, voyage, régions.
+- `info-mj/Économie - dotation de départ (options).md` — dotation de création des PJ, 3 options
+  chiffrées. **Décision MJ : option 1 « Dépouillé », 25 ar** ; en attente = la contrainte de choix
+  d'arme (§2.1, 3 armes sur 10 accessibles à 25 ar).
+  ⚠️ Contenu de **règles**, pas de dev : rien n'est branché dans l'app (les prix ne sont pas dans
+  `ITEM_CATALOG`). À rapprocher du backlog « équipement en stats finales » si on l'implémente.
 - Specs/plans liés : `docs/superpowers/specs/2026-06-16-competences-design.md`,
   `…-inventaire-design.md`, `docs/superpowers/plans/2026-06-16-inventaire.md`.
 

@@ -73,6 +73,8 @@ function EquipBody({ char }) {
   const [stepper, setStepper] = useState(null);    // { kind:'item'|'coin', ... } — saisie quantité
   const [editing, setEditing] = useState(null);    // item en cours d'édition (modal)
   const [catalog, setCatalog] = useState(false);   // ouverture du catalogue d'ajout
+  const [coinMenu, setCoinMenu] = useState(null); // { name, x, y, actions } — clic sur une pièce (staff)
+  const [purse, setPurse] = useState(false);      // éditeur de bourse du perso (MJ)
 
   // Migration unique de l'inventaire (marqueur invInit), idempotente — identique
   // à la fiche, au cas où le joueur ouvre Équipement avant sa fiche.
@@ -249,10 +251,17 @@ function EquipBody({ char }) {
     }
     setMenu({ item, x:e.clientX, y:e.clientY, actions });
   };
+  // Joueur : clic = déposer au commun. Staff : menu (déposer / éditer librement la bourse).
   const openCoinMenu = (key, e) => {
     const max = coins[key] || 0;
-    if (max <= 0) return;
-    setStepper({ kind:'coin', dir:'toCommon', coinKey:key, max, x:e.clientX, y:e.clientY });
+    const x = e.clientX, y = e.clientY;
+    const deposit = () => setStepper({ kind:'coin', dir:'toCommon', coinKey:key, max, x, y });
+    if (!staff) { if (max > 0) deposit(); return; }
+    const coin = INV_COINS.find(c => c.key === key);
+    const actions = [];
+    if (max > 0) actions.push({ label:'Envoyer au commun…', onClick:deposit });
+    actions.push({ label:'Modifier la bourse (MJ)', onClick:() => setPurse(true) });
+    setCoinMenu({ name:`${coin ? coin.label : key} — ${invFmt(max)}`, x, y, actions });
   };
   const addItem = () => { const it = makeItem({ cat:'Butin', name:'Nouvel objet' }); setInvItem(it.id, it); setEditing(it); };
 
@@ -450,6 +459,14 @@ function EquipBody({ char }) {
 
       {/* ===== POPOVERS : menu d'actions / stepper de quantité / éditeur d'item ===== */}
       {menu && <ItemActionMenu item={menu.item} x={menu.x} y={menu.y} actions={menu.actions} onClose={() => setMenu(null)} />}
+      {coinMenu && (
+        <ItemActionMenu item={{ name:coinMenu.name }} x={coinMenu.x} y={coinMenu.y}
+          actions={coinMenu.actions} onClose={() => setCoinMenu(null)} />
+      )}
+      {purse && (
+        <CoinEditor title={`Bourse — ${char.name}`} coins={coins} onClose={() => setPurse(false)}
+          onApply={(patch) => { setCharCoins(char.id, patch); toast(`Bourse de <b>${char.name}</b> mise à jour`, 'gold'); }} />
+      )}
       {stepper && stepper.kind === 'item' && (
         <AmountStepper max={stepper.item.qty} x={stepper.x} y={stepper.y}
           label={`Envoyer combien de « ${stepper.item.name} » au commun ?`} confirmLabel="Envoyer"
