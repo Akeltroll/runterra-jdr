@@ -192,12 +192,18 @@ const useToast = () => React.useContext(ToastCtx);
 /* --- Journal de combat (partagé, lecture seule) --- */
 function CombatLog({ canClear }) {
   const { entries, clearLog } = useCombatLog();
+  const toast = useToast();
   const COL = { gold: 'var(--gold-pale)', buff: 'var(--buff-bright)', debuff: 'var(--debuff-bright)' };
+  // Un refus de purge (droits insuffisants) echouait sans rien afficher : on le dit.
+  const doClear = () => clearLog().catch((e) => {
+    console.error('Purge du journal refusee :', e);
+    toast('Journal non vide : droits insuffisants', 'debuff');
+  });
   return (
     <div className="panel" style={{ padding:'12px 14px' }}>
       <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
         <div className="overline">Journal de combat</div>
-        {canClear && entries.length > 0 && <button className="btn btn-sm btn-ghost" onClick={clearLog}>Vider</button>}
+        {canClear && entries.length > 0 && <button className="btn btn-sm btn-ghost" onClick={doClear}>Vider</button>}
       </div>
       {entries.length === 0
         ? <div style={{ fontSize:12, color:'var(--ink-faint)' }}>Aucun événement.</div>

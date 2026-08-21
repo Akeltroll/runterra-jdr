@@ -29,6 +29,7 @@ const JOURNAL_SECTIONS = [
 function JournalPage() {
   const combat = useCombatLog();
   const eco = useEconomyLog();
+  const toast = useToast();
   const [section, setSection] = useState('combat');
   const [filtre, setFiltre] = useState('tous');
 
@@ -41,7 +42,12 @@ function JournalPage() {
   const clear = () => {
     if (section === 'monnaie' && !window.confirm(
       "Vider l'historique des mouvements de pièces ? Ce journal n'est jamais purgé automatiquement : c'est la seule trace des transferts depuis le coffre commun.")) return;
-    src.clearLog();
+    src.clearLog().catch((e) => {
+      // Purger un journal est une ecriture SUR LE NOEUD : longtemps refusee au role
+      // `mj`, et silencieuse. Desormais visible.
+      console.error('Purge du journal refusee :', e);
+      toast('Journal non vide : droits insuffisants', 'debuff');
+    });
   };
 
   return (

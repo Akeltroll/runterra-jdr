@@ -554,6 +554,7 @@ function SessionRewardsModal({ onDone, onCancel, onLoot }) {
 }
 
 function MJPage({ go }) {
+  const toast = useToast();
   const all = useAllCharStates();
   const [selected, setSelected] = useState('rathael');
   const [full, setFull] = useState(null);
@@ -598,7 +599,7 @@ function MJPage({ go }) {
               <span className="mono" style={{ fontSize:13, color:'var(--gold-pale)', whiteSpace:'nowrap' }}>⏱ Tour {turn}</span>
               <button className="btn btn-sm btn-ghost" onClick={prevTurn} title="Tour précédent" style={{ padding:'4px 8px' }}>◂</button>
               <button className="btn btn-sm btn-gold" onClick={nextTurn} style={{ whiteSpace:'nowrap' }}>Fin de tour ▸</button>
-              <button className="btn btn-sm btn-ghost" onClick={() => { if (confirm('Nouveau combat : remettre le tour à 1 et vider toutes les charges + cooldowns ?')) resetCombat(); }} title="Nouveau combat (reset charges + cooldowns)" style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>⟲ Combat</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => { if (confirm('Nouveau combat : remettre le tour à 1 et vider toutes les charges + cooldowns ?')) resetCombat().then((r) => { if (r && !r.logCleared) toast('Combat réinitialisé, mais le journal n’a pas pu être vidé : droits insuffisants', 'debuff'); }); }} title="Nouveau combat (reset charges + cooldowns)" style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>⟲ Combat</button>
             </div>
             <ExportImportPanel />
           </div>

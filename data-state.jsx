@@ -88,7 +88,13 @@ function useSharedTurn() {
       patch.shield = Math.min(st.shield || 0, c.shieldMax || 0);
       window.RTDB.updatePath(p, patch);
     }
-    window.RTDB.setPath(COMBAT_LOG, null);
+    // La purge du journal est une ecriture SUR LE NOEUD combat/log. Elle a longtemps
+    // ete refusee au role `mj` (le noeud n'avait de .write que sur $logId) et echouait
+    // EN SILENCE. On remonte desormais l'echec a l'appelant, qui toaste.
+    let logCleared = true;
+    try { await window.RTDB.setPath(COMBAT_LOG, null); }
+    catch (e) { logCleared = false; console.error('Purge du journal de combat refusee :', e); }
+    return { logCleared };
   }, []);
   // Fin de tour : avance le tour, puis applique la perte de Glaciation de Rathael (-3 s'il
   // n'a pas subi de dégâts ce tour-ci). Le tour qui se termine est `turn`.

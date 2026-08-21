@@ -344,8 +344,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   La CLI **n'affiche aucun diff** avant d'écrire : comparer les règles en ligne avec le fichier du
   dépôt reste nécessaire. La voie console (coller → Publier) reste valable en secours.
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
-  joueur = sa fiche seule, staff = tout ; **`characters/$charId/state/coins/$coin` = `.validate`
-  entier >= 0** (le reste du sous-arbre perso n'est toujours validé nulle part) ; `sharedInventory` = R/W pour tout participant
+  joueur = sa fiche seule, staff = tout ; **`combat/log` et `economyLog` ont un `.write` STAFF au
+  niveau du NŒUD** (purger = écrire sur le nœud ; le `.write` sur `$logId` ne suffit pas — cf. bug
+  du 2026-08-21) ; **`characters/$charId/state/coins/$coin` = `.validate` entier >= 0** (le reste du sous-arbre perso n'est toujours validé nulle part) ; `sharedInventory` = R/W pour tout participant
   inscrit, écriture au niveau `$itemId` ; `sharedCoins` = R/W tout participant inscrit,
   `.validate` par dénomination (nombre ≥ 0) ; `combat/turn` = lecture tout inscrit, **écriture staff**
   (nombre ≥ 1) — tour partagé ; `combat/enemies` = lecture inscrits, **écriture staff** (ennemis
@@ -496,6 +497,22 @@ arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, 
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
 ## État actuel (2026-08-21)
+- **🐞 CORRIGÉ — un MJ ne pouvait PAS vider un journal** (bug **antérieur**, depuis la livraison du
+  journal de combat en juin ; trouvé au test §9-12 du 2026-08-21). Cache `20260821-2`,
+  ⚠️ **RÈGLES RTDB À REPUBLIER** (2 lignes).
+  **Cause** — purger un journal, c'est écrire `null` **SUR LE NŒUD** (`setPath(COMBAT_LOG, null)`).
+  Or `combat/log` n'avait de `.write` que sur **`$logId`** (les entrées individuelles) : rien au niveau
+  du nœud. Le seul ancêtre qui en donne un est `campaign/runeterra`, réservé à **`admin`**. Donc
+  « ⟲ Combat » et « Vider » **échouaient pour le rôle `mj`** — et **en silence**, aucun `catch`.
+  Un `admin` ne voyait rien, d'où six mois d'invisibilité. `economyLog` avait le même défaut de naissance.
+  **Correctif** — `.write` staff **au niveau du nœud** sur `combat/log` ET `economyLog` (les joueurs
+  gardent leur `.write` sur `$logId` seul, pour écrire une entrée). Plus **4 `catch` + toasts** :
+  `resetCombat` renvoie `{logCleared}` (→ toast dans `MJPage`, qui a dû recevoir son `useToast`),
+  `CombatLog` et `JournalPage` toastent « droits insuffisants ».
+  ⚠️ **Leçon à retenir : dans les règles RTDB, un `.write` sur un enfant joker (`$id`) n'autorise PAS
+  à écrire sur le nœud parent.** Écrire une entrée et purger la collection sont deux permissions
+  distinctes. Un `updatePath(NODE, {id: null})` passe par la règle `$id` (l'élagage du journal
+  d'économie fonctionnait donc déjà pour un MJ) ; un `setPath(NODE, null)` non.
 - **🐞 CORRIGÉ — bourse du joueur ÉCRASÉE au lieu d'être créditée** (bug **antérieur**, présent dans le
   code déployé, trouvé au test §9.3-1 du 2026-08-21 : Elias avait 6 argent, en prend 4 au coffre,
   se retrouve avec **4**). **166 tests verts.**
