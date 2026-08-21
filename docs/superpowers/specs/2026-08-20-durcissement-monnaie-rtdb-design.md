@@ -1,9 +1,9 @@
 # Monnaie — durcissement des règles RTDB + traçabilité
 
 > **Statut au 2026-08-21 : PUBLIÉ ET VALIDÉ.** Règles publiées, code déployé (`89fbdfa` puis
-> `9d59236`), campagne de tests du §9 déroulée — résultats en **§9.7**. Il reste 3 tests
-> secondaires (7, 8, 13) et **deux bugs ANTÉRIEURS ont été trouvés au passage**, tous deux
-> corrigés : voir §10.
+> `9d59236`, `582edae`), campagne de tests du §9 déroulée — résultats en **§9.7** : **12 verts sur
+> 14**, restent 8 et 13 (secondaires). **TROIS bugs ANTÉRIEURS ont été trouvés au passage**, tous
+> corrigés : voir §10 — c'est le principal apport de la campagne, aucun n'était lié au chantier.
 > Document de reprise écrit le 2026-08-20 en fin de session. Le §4 (journal) est livré — voir §4.4
 > pour ce qui a réellement été fait et en quoi ça diffère de ce qui était envisagé ici. Le §3
 > (durcissement de `characters/$charId/state/coins`) est **intact et toujours d'actualité**.
@@ -441,7 +441,7 @@ correctif de purge (§10.2). Code déployé en deux temps.
 | 4 | change de monnaie | ✅ |
 | 5 | récompense de clôture de séance | ✅ |
 | 6 | écritures invalides refusées (devtools) | ✅ `PERMISSION_DENIED` sur `-5`, `2.5`, `"5"` |
-| 7 | réimport d'une sauvegarde | 🔶 **a révélé le bug §10.3** — à rejouer après republication |
+| 7 | réimport d'une sauvegarde | ✅ **après correction §10.3** — import propre OK ; valeur décimale/négative → « 1 valeur(s) de pièce assainie(s) » |
 | 8 | ré-amorçage d'un perso | ⬜ à faire |
 | 9-10 | entrée de journal visible chez le MJ | ✅ |
 | 11 | édition MJ journalisée en delta | ✅ |
