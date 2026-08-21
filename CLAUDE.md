@@ -344,7 +344,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   La CLI **n'affiche aucun diff** avant d'écrire : comparer les règles en ligne avec le fichier du
   dépôt reste nécessaire. La voie console (coller → Publier) reste valable en secours.
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
-  joueur = sa fiche seule, staff = tout ; **`combat/log` et `economyLog` ont un `.write` STAFF au
+  joueur = sa fiche seule, staff = tout ; **`campaign/runeterra` a un `.write` `mj`+`admin`**
+  (ouvert au MJ le 2026-08-21 pour l'import de sauvegarde — `setPath(CAMPAIGN,…)` écrit sur le nœud
+  racine ; les `.validate` des descendants continuent de s'appliquer, et `/users` n'est pas
+  concerné : un MJ ne peut toujours pas se promouvoir admin) ; **`combat/log` et `economyLog` ont un `.write` STAFF au
   niveau du NŒUD** (purger = écrire sur le nœud ; le `.write` sur `$logId` ne suffit pas — cf. bug
   du 2026-08-21) ; **`characters/$charId/state/coins/$coin` = `.validate` entier >= 0** (le reste du sous-arbre perso n'est toujours validé nulle part) ; `sharedInventory` = R/W pour tout participant
   inscrit, écriture au niveau `$itemId` ; `sharedCoins` = R/W tout participant inscrit,

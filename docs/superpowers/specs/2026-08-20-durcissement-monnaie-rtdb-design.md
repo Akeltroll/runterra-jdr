@@ -441,7 +441,7 @@ correctif de purge (§10.2). Code déployé en deux temps.
 | 4 | change de monnaie | ✅ |
 | 5 | récompense de clôture de séance | ✅ |
 | 6 | écritures invalides refusées (devtools) | ✅ `PERMISSION_DENIED` sur `-5`, `2.5`, `"5"` |
-| 7 | réimport d'une sauvegarde | ⬜ à faire |
+| 7 | réimport d'une sauvegarde | 🔶 **a révélé le bug §10.3** — à rejouer après republication |
 | 8 | ré-amorçage d'un perso | ⬜ à faire |
 | 9-10 | entrée de journal visible chez le MJ | ✅ |
 | 11 | édition MJ journalisée en delta | ✅ |
@@ -500,3 +500,34 @@ gardent `$logId` pour écrire une entrée), plus 4 `catch` + toasts « droits in
 une entrée et purger la collection sont deux permissions distinctes. Un
 `updatePath(NŒUD, {id: null})` passe par la règle `$id` — c'est pourquoi l'élagage automatique
 fonctionnait déjà — alors qu'un `setPath(NŒUD, null)` non.
+
+### 10.3 Un MJ ne pouvait pas importer une sauvegarde (2026-08-21)
+
+Troisième variante de la **même famille de cause** que §10.2, un cran plus haut. L'export
+fonctionne (c'est une lecture, `campaign/runeterra/.read` est ouvert au staff) ; l'import fait
+`setPath(CAMPAIGN, …)` — une écriture **sur le nœud racine de la campagne**, dont le `.write`
+était réservé à **`admin`**. Un compte `mj` prenait `PERMISSION_DENIED`.
+
+L'interface proposait donc au MJ un bouton qu'il ne pouvait pas utiliser — et sans le `catch`
+ajouté en §10.2, l'échec aurait été **silencieux**, le MJ croyant sa sauvegarde restaurée.
+
+**Décision du MJ (2026-08-21) : ouvrir l'import au rôle `mj`.** `campaign/runeterra/.write`
+passe à `mj || admin`. Raison retenue : une sauvegarde qu'on ne peut pas restaurer n'en est pas
+une, et le MJ est l'opérateur réel de l'outil.
+
+Deux points vérifiés avant d'appliquer :
+
+- **Le gain de pouvoir est marginal.** Un MJ pouvait déjà écrire dans *tous* les nœuds situés en
+  dessous (`characters`, `sharedInventory`, `sharedCoins`, `catalog`, `combat/*`, `economyLog`).
+  Le `.write` parent n'ajoute que l'écriture d'un sous-arbre entier en un appel — donc l'import,
+  mais aussi l'effacement de toute la campagne d'un coup. Contrepartie assumée.
+- **Les `.validate` continuent de s'appliquer** (une règle parente n'annule pas la validation des
+  descendants) : le durcissement des bourses tient, y compris pour un import fait par le MJ.
+  C'est précisément ce que `sanitizeCampaignCoins` protège.
+- **`/users` n'est pas touché** (branche séparée à la racine) : un MJ ne peut toujours pas se
+  promouvoir `admin` ni modifier les attributions.
+
+👉 **Motif récurrent de cette campagne, à garder en tête** : trois bugs sur quatre viennent de la
+même confusion — *écrire un enfant* et *écrire le nœud qui le contient* sont deux permissions
+distinctes dans les règles RTDB. Chaque fois qu'un code fait `setPath(NŒUD, …)` ou
+`setPath(NŒUD, null)`, se demander qui a le `.write` **sur ce nœud**, pas sur ses enfants.
