@@ -4,7 +4,18 @@ Mémoire de projet pour les prochaines sessions. Lis-moi en premier.
 
 ## Ce que c'est
 Outil web pour gérer une campagne de JDR maison (univers Runeterra/LoL), utilisé
-en vrai par le MJ (Akeltroll / nobletjeanbaptiste@gmail.com) et 5 joueurs.
+en vrai par le MJ et 5 joueurs.
+
+**Qui est qui (corrigé le 2026-08-21 — les notes antérieures attribuaient le rôle de MJ à
+Akeltroll)** : le **MJ est Woolost**, compte applicatif de rôle `mj` ; **Akeltroll / JB est
+l'`admin`** du projet, et joue Rathäel. Les deux contribuent au code.
+
+⚠️ **Direction assumée par le MJ (2026-08-21) : le rôle `mj` se rapproche naturellement de
+l'`admin`**, le MJ se considérant désormais autant développeur du projet que l'admin actuel.
+**En cas de doute sur une permission staff, trancher en faveur du MJ plutôt que de réserver à
+`admin`.** C'est ce qui a motivé l'ouverture de l'import de sauvegarde au rôle `mj`
+(`582edae`, §10.3 du document de reprise monnaie). Corollaire : une fonctionnalité réservée à
+`admin` qui bloque le MJ dans son usage quotidien est probablement un défaut, pas une décision.
 Fiches de perso + combat + ressources, **partagées en temps réel**.
 Source de vérité des règles : `Système de jeu JDR Runeterra.xlsx`.
 
@@ -490,8 +501,8 @@ ou `perl -i -pe` pour un search-replace global (ex. le bump du token de cache).
 ## Branches (convention depuis 2026-08-16)
 Le dépôt est nettoyé : **3 branches seulement**, plus de branches `feat/*` ou `fix/*` résiduelles.
 - **`main`** — branche de référence, toujours déployable (c'est elle que sert GitHub Pages).
-- **`Woolost`** — branche de travail du contributeur Woolost.
-- **`JB`** — branche de travail du MJ (Akeltroll / JB).
+- **`Woolost`** — branche de travail de Woolost (le **MJ**).
+- **`JB`** — branche de travail d'Akeltroll / JB (l'`admin` du projet).
 
 Chacun travaille sur sa branche puis fusionne dans `main`. Après un merge dans `main`, on **ne
 supprime pas** `Woolost`/`JB` : on les resynchronise sur `main` (`git merge main`) pour repartir
