@@ -1,8 +1,15 @@
 # Monnaie — durcissement des règles RTDB + traçabilité
 
-> **Statut : À FAIRE.** Document de reprise écrit le 2026-08-20 en fin de session, à froid.
-> Rien de ce qui suit n'est commencé. Il n'y a **aucun travail en cours** : le dépôt est propre,
-> `main` et `Woolost` sont à jour sur `c99879b`.
+> **Statut au 2026-08-21 : A et B écrits, EN ATTENTE D'UNE SEULE PUBLICATION EN CONSOLE.**
+> Le code de B est livré et le `.validate` de A est posé dans `database.rules.json`. Il ne reste
+> que l'étape manuelle : **§9 — séquence de publication et de tests**.
+> Document de reprise écrit le 2026-08-20 en fin de session. Le §4 (journal) est livré — voir §4.4
+> pour ce qui a réellement été fait et en quoi ça diffère de ce qui était envisagé ici. Le §3
+> (durcissement de `characters/$charId/state/coins`) est **intact et toujours d'actualité**.
+>
+> ⚠️ **Une publication de règles en console est désormais DUE** de toute façon (nouveau nœud
+> `economyLog`, §4.4). L'argument qui justifiait de repousser A — « ça coûte une manip manuelle » —
+> est donc tombé : faire A dans la même publication.
 >
 > **À lire avant de coder.** Ce document contient le contexte, deux chantiers indépendants,
 > le patch de règles prêt à coller, et surtout **trois pièges** qui coûteraient une soirée
@@ -23,8 +30,9 @@ Firebase :
    `setSharedCoins` + composant `CoinEditor`.
 2. ✅ **Livré** — libellés de monnaies désalignés du guide d'économie. → Cuivre/Argent/Or/Platine
    + change de monnaie MJ (`planCoinConvert`).
-3. ⬜ **Ce document** — les règles RTDB laissent un joueur écrire n'importe quoi sur sa propre
-   bourse, et **aucun mouvement de pièces n'est journalisé nulle part**.
+3. 🔶 **Ce document** — les règles RTDB laissent un joueur écrire n'importe quoi sur sa propre
+   bourse (⬜ §3, toujours à faire), et **aucun mouvement de pièces n'était journalisé nulle part**
+   (✅ §4, livré le 2026-08-21).
 
 Le point 3 se décompose en deux chantiers **indépendants** : §3 (règles) et §4 (journal). Ils
 peuvent être faits dans n'importe quel ordre, mais voir §5 pour la recommandation.
@@ -125,13 +133,59 @@ volontairement zéro-build, zéro backend).
 **Recommandation : rester au niveau 1 et investir dans le chantier B.** Rendre visible coûte
 presque rien et couvre le vrai risque ; bloquer coûte cher et casse des usages réels.
 
+### 3.2bis État au 2026-08-21 — le `.validate` est POSÉ dans le fichier
+
+Le patch du §3.1 a été appliqué à `database.rules.json` (bloc `characters`, niveau 1). Le `.write`
+**n'a pas été retapé** : il a été conservé octet pour octet (vérifié par `diff` contre `HEAD`),
+conformément à l'avertissement du §3.1. Le fichier n'est **pas** publié pour autant — voir §9.
+
+Deux protections ont été ajoutées côté code parce que le `.validate` crée deux façons nouvelles
+d'échouer, toutes deux sur des écritures qui portent **tout un sous-arbre d'un coup** :
+
+- **Amorçage** — `buildDefaultState` (`game-logic.js`) normalise désormais les 4 dénominations via
+  **`coinInt(v)`** (entier >= 0, même contrat que la règle). Sans ça, un perso mal saisi dans
+  `data.jsx` ferait échouer le `seedIfEmpty` **entier**, pas seulement sa bourse.
+- **Import de sauvegarde** — c'est le piège du §6. `ExportImportPanel` (`components.jsx`) :
+  1. **`sanitizeCampaignCoins(data)`** (game-logic, pur, testé) aligne les pièces de la sauvegarde
+     sur le contrat de la règle **avant** d'écrire, et rend le nombre de valeurs corrigées (annoncé
+     dans le toast) ;
+  2. le `setPath` est passé en **try/catch avec toast d'erreur**. Il n'y en avait aucun : un rejet
+     (JSON invalide ou `PERMISSION_DENIED`) échouait **en silence**, sans toast ni message — le MJ
+     croyait son import passé. C'est précisément le mode de panne que le durcissement rendait
+     probable.
+
 ### 3.3 Procédure de publication (le point qui n'est pas automatique)
 
-`database.rules.json` est **une copie de référence versionnée, pas la source active**. Vérifié
-le 2026-08-20 : le dépôt n'a ni `firebase.json`, ni `.firebaserc`, ni workflow CI. GitHub Pages
-ne sert que des fichiers statiques et ne parle jamais à Firebase. **Rien ne déploie ce fichier.**
+⚠️ **Ce paragraphe a été corrigé le 2026-08-21.** Il disait, à juste titre le 2026-08-20, que le dépôt
+n'avait ni `firebase.json`, ni `.firebaserc`, ni CI, et que **rien ne déployait ce fichier** —
+`database.rules.json` n'était qu'une copie de référence versionnée. **`firebase.json` et `.firebaserc`
+ont depuis été créés** : il existe maintenant un chemin de déploiement en ligne de commande.
+(Vérifié à cette occasion : ces deux fichiers n'avaient **jamais** existé dans l'historique, sur aucune
+des trois branches — `git log --all --diff-filter=A` ne rend rien. Le seul fichier « firebase » du dépôt
+était `firebase-config.js`, qui est l'init du SDK **côté navigateur** et ne déploie rien : confusion
+facile, sens opposés.)
 
-Publier = console Firebase → Realtime Database → onglet **Règles** → coller → **Publier**.
+GitHub Pages, lui, ne sert toujours que des fichiers statiques et ne parle jamais à Firebase.
+
+**Voie recommandée — la CLI** (une seule commande, depuis la racine du dépôt) :
+
+```bash
+npm i -g firebase-tools          # une fois
+firebase login                   # une fois, compte propriétaire du projet
+firebase deploy --only database
+```
+
+`firebase.json` ne déclare **que** `database` — volontairement **pas** `hosting`, puisque le site vit
+sur GitHub Pages. Un `firebase deploy` nu ne peut donc pas publier par mégarde une seconde copie du
+site : il ne touche que les règles. L'instance est nommée explicitement
+(`runeterra-jdr-default-rtdb`) parce que la base est en **europe-west1** et qu'on ne veut pas dépendre
+de la résolution d'un défaut.
+
+**Voie manuelle — la console** (toujours valable, et le seul recours si la CLI n'est pas installée) :
+console Firebase → Realtime Database → onglet **Règles** → coller → **Publier**.
+
+⚠️ **La CLI ne montre aucun diff avant d'écrire.** L'étape « comparer ce qui est en ligne avec le
+fichier du dépôt » (§9.1) compte donc **plus**, pas moins, qu'avec le copier-coller en console.
 
 Trois propriétés à connaître :
 
@@ -197,6 +251,50 @@ règle RTDB, donc aucune republication en console**. C'est l'argument fort pour 
    ne produit qu'une écriture finale via `setCharCoins` — il serait donc journalisé comme une
    simple édition, en perdant l'information « c'était une conversion ». Acceptable ou non.
 
+### 4.4 Ce qui a été livré le 2026-08-21
+
+**Les 3 arbitrages du §4.3, tranchés par le MJ :**
+
+1. **Nœud `economyLog` séparé** (`campaign/runeterra/economyLog`), pas `combat/log`. Le MJ a jugé
+   qu'un historique d'argent effacé à chaque « ⟲ Combat » n'avait aucun intérêt. Nouvelle règle RTDB
+   assumée. **De plus, section réservée au MJ**, accessible par un bouton dans l'onglet Journal.
+2. **Delta, pas valeur finale.** `writeCoins` est passée **async** avec un `getSnapshot` préalable —
+   c'était bien la branche « plus utile et plus coûteuse » évoquée ici.
+3. **Le change n'est pas distingué** d'une édition ordinaire. Il ressort naturellement comme un delta
+   compensé (« −100 cuivre, +1 argent »), ce qui se lit très bien : pas de traitement spécial.
+
+**Une bonne surprise sur l'accès MJ-seul.** `campaign/runeterra` porte déjà un `.read` **staff-only** à
+sa racine, et ce sont les sous-nœuds qui l'élargissent aux joueurs (`sharedCoins`, `combat`, …). Un
+`economyLog` sans `.read` propre hérite donc du staff-only : le « réservé au MJ » est un contrôle
+**serveur**, pas un masquage d'UI, et il n'a rien coûté. Le `.read` staff a quand même été écrit
+**explicitement** dans le fichier pour que l'intention reste lisible (il ne change rien — une règle
+enfant ne peut qu'élargir, jamais restreindre).
+
+**Le sens unique lecture/écriture et sa conséquence.** Les joueurs ont l'**écriture** sur `economyLog`
+sans la lecture — `moveCoins` est une action de joueur et doit pouvoir tracer. Mais du coup **un joueur
+ne peut pas élaguer** le journal (il faudrait le lire). L'élagage à 30 entrées se fait donc **à la
+lecture, côté staff** (`useEconomyLog` + `staleLogIds`) : le journal se borne quand le MJ l'ouvre. Le
+journal de combat, lui, ne s'élague toujours pas en base (il est purgé par « ⟲ Combat », donc inutile).
+
+**Dette du §4.1 ramassée :** les deux `setCoin` morts ont été **supprimés**. Il ne reste plus aucune
+voie d'écriture de pièces non journalisée.
+
+**Règle ajoutée à `database.rules.json`** (à publier, cf. §3.3) :
+
+```json
+"economyLog": {
+  ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+  "$logId": {
+    ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+    ".validate": "newData.child('text').isString()"
+  }
+}
+```
+
+Test après publication, en plus de la séquence du §3.3 : un compte **joueur** prend des pièces au
+coffre → l'entrée doit apparaître **dans le journal du MJ**, et le joueur ne doit pas pouvoir lire
+`economyLog` (`PERMISSION_DENIED` en devtools).
+
 ---
 
 ## 5. Ordre recommandé
@@ -231,14 +329,15 @@ puis **une seule** publication en console.
 - Un `.validate` ne s'applique **pas aux suppressions** (`newData` est null) : effacer une
   dénomination restera possible. C'est le comportement voulu.
 - Si le chantier touche du code : **bumper le jeton de cache** dans `index.html` (`window.APPV`
-  + les `?v=`), sinon les joueurs gardent l'ancien code. Dernier jeton posé : `20260817-8`.
+  + les `?v=`), sinon les joueurs gardent l'ancien code. Dernier jeton posé : `20260821-1`.
 
 ---
 
 ## 7. Vérification
 
-- `node --test test/game-logic.test.js test/auth.test.js` → **150 tests** au moment de l'écriture
-  (game-logic 139 + auth 11). Les 6 tests de `planCoinConvert` sont en fin de fichier.
+- `node --test test/game-logic.test.js test/auth.test.js` → **158 tests** au 2026-08-21
+  (game-logic 147 + auth 11). Les 6 tests de `planCoinConvert` puis les 8 du journal d'économie
+  (`coinsAmountText`/`coinsDeltaText`/`coinsDeltaValue`/`staleLogIds`) sont en fin de fichier.
 - `npx esbuild fichier.jsx > /dev/null` pour chaque `.jsx` touché (⚠️ **pas** de `--loader=jsx`).
 - Un changement de règles ne se teste pas par les tests unitaires : utiliser le simulateur de la
   console Firebase, puis la séquence manuelle de §3.3.
@@ -257,3 +356,71 @@ puis **une seule** publication en console.
 - `info-mj/Économie - guide des joueurs.md` — source de vérité des règles d'économie (privé,
   gitignored).
 - `CLAUDE.md` — section « État actuel (2026-08-20) » pour le détail de ce qui a été livré.
+
+---
+
+## 9. Séquence de publication et de tests (à faire — 2026-08-21)
+
+Une **seule** publication couvre A (`.validate` sur `state/coins`) et B (nœud `economyLog`).
+
+### 9.1 Avant de publier
+
+1. **Exporter une sauvegarde** depuis l'app (bouton « ⬇ Exporter »), avec les règles **actuelles**.
+   C'est le jeu de test du §9.4 *et* le filet en cas de dégât.
+2. **Ouvrir la console** → Realtime Database → onglet **Règles**, et **comparer ce qui est en ligne
+   avec `database.rules.json`**. S'ils ont divergé (une règle publiée à la main jamais reportée dans
+   le dépôt), la publication l'écraserait silencieusement — reporter d'abord la divergence.
+3. **Copier l'ancien JSON** dans un fichier local avant de coller le nouveau (la console garde un
+   historique, mais autant ne pas en dépendre).
+
+### 9.2 Publier
+
+Depuis la racine du dépôt : `firebase deploy --only database` (voir §3.3 pour l'installation, et la
+voie console en secours).
+
+Effet **immédiat**, pour tous les clients connectés : pas de cache, pas de jeton `?v=` qui amortit.
+Une règle fautive verrouille tout le monde dans la seconde. La CLI n'affiche **pas** de diff avant
+d'écrire — d'où l'étape de comparaison du §9.1.
+
+### 9.3 Tests de non-régression (chantier A) — rien ne doit casser
+
+| # | Compte | Action | Attendu |
+|---|---|---|---|
+| 1 | joueur | Prendre des pièces au coffre commun | ✅ passe (c'est `moveCoins`, usage légitime) |
+| 2 | joueur | Déposer des pièces au commun | ✅ passe |
+| 3 | MJ | Éditer une bourse via `CoinEditor`, dont « Tout à 0 » | ✅ passe |
+| 4 | MJ | Change de monnaie dans `CoinEditor` puis Appliquer | ✅ passe |
+| 5 | MJ | Clôturer une séance avec récompense en pièces (`grantCoins`) | ✅ passe |
+
+### 9.4 Tests du durcissement (chantier A) — ça doit maintenant échouer
+
+6. Devtools, compte **joueur**, sur sa propre bourse : `set({ or: -5 })` → **`PERMISSION_DENIED`**.
+   Même chose avec `2.5` (décimale) et `"5"` (chaîne). **C'est le test qui prouve que A sert à
+   quelque chose** — s'il passe, la règle n'est pas active.
+7. ⚠️ **Le piège du §6** : réimporter la sauvegarde du §9.1 (« ⬆ Importer »). Attendu : import
+   réussi, avec un toast mentionnant d'éventuelles valeurs assainies. Si un toast **rouge** apparaît,
+   lire le message : le durcissement rejette autre chose que des pièces, et il faut le comprendre
+   avant d'aller plus loin.
+8. Vérifier qu'un `seedIfEmpty` passe encore : effacer l'état d'un perso de test en console, recharger
+   sa fiche → ré-amorçage sans erreur.
+
+### 9.5 Tests du journal d'économie (chantier B)
+
+9. Compte **MJ** → onglet Journal → bouton **💰 Monnaie** : la section s'affiche.
+10. Compte **joueur** : prendre des pièces au coffre → l'entrée apparaît **chez le MJ**
+    (« 12 argent : coffre commun → Rathäel »), en temps réel.
+11. **MJ** : éditer une bourse → entrée en **delta** (« +2 or, −15 cuivre »), verte si enrichissement,
+    rouge si retrait, or si compensé (un change).
+12. **MJ** : lancer un combat et cliquer **« ⟲ Combat »** → le journal de combat est vidé,
+    **le journal de monnaie ne l'est PAS**. C'est le test qui valide la décision du nœud séparé.
+13. Devtools, compte **joueur** : lire `campaign/runeterra/economyLog` → **`PERMISSION_DENIED`**
+    (le joueur écrit sans lire). Écrire une entrée doit, elle, passer.
+14. Dépasser 30 entrées, puis ouvrir le journal en MJ → l'élagage ramène à 30 (il se fait **à la
+    lecture côté staff**, pas à l'écriture : un joueur ne peut pas élaguer puisqu'il ne peut pas lire).
+
+### 9.6 Si quelque chose casse
+
+Republier l'ancien JSON (§9.1 point 3, ou l'historique de la console). L'effet est immédiat lui
+aussi. Le code de B reste fonctionnel sans la règle `economyLog` — seules les **écritures** du
+journal d'économie seront refusées (silencieusement, elles ne bloquent aucun mouvement d'argent :
+`pushEconomyLog` est appelé après les écritures de pièces, jamais avant).

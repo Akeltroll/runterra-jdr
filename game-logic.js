@@ -206,6 +206,106 @@
     return { spent: spent, gained: gained, unit: vt / vf, patch: patch };
   }
 
+  /* Assainit les pieces d'une sauvegarde importee (MUTE `data`, rend le nombre de
+     valeurs corrigees). L'import ecrit TOUT le sous-arbre campagne d'un coup : une
+     seule piece non entiere ferait echouer l'import ENTIER une fois le .validate
+     publie (doc durcissement monnaie §6). On aligne donc la sauvegarde sur le
+     contrat de la regle plutot que de la laisser etre rejetee en bloc. */
+  function sanitizeCampaignCoins(data) {
+    var fixed = 0;
+    function fix(purse) {
+      if (!purse || typeof purse !== 'object') return;
+      for (var k in purse) {
+        var norm = coinInt(purse[k]);
+        if (purse[k] !== norm) { purse[k] = norm; fixed++; }
+      }
+    }
+    if (!data || typeof data !== 'object') return 0;
+    fix(data.sharedCoins);
+    var chars = data.characters || {};
+    for (var id in chars) {
+      var st = chars[id] && chars[id].state;
+      if (st) fix(st.coins);
+    }
+    return fixed;
+  }
+
+  /* Plan de transfert de pieces (PUR) : borne `n` au solde disponible et rend les
+     valeurs ABSOLUES a ecrire de chaque cote. null si rien ne bouge.
+     Extrait de moveCoins pour etre testable : la regression « bourse ecrasee au
+     lieu d'etre creditee » venait d'un etat de destination faux, pas du calcul. */
+  function planCoinMove(fromCoins, toCoins, key, n) {
+    var avail = coinInt(fromCoins && fromCoins[key]);
+    var m = Math.max(0, Math.min(n | 0, avail));
+    if (m <= 0) return null;
+    var dst = coinInt(toCoins && toCoins[key]);
+    return { moved: m, from: avail - m, to: dst + m };
+  }
+
+  /* --- Journal d'économie : formatage des mouvements de pièces ---------------
+     Textes purs (donc testables) partagés par tous les orchestrateurs qui
+     déplacent de l'argent. L'UI garde ses propres libellés capitalisés dans
+     INV_COINS (components.jsx) : même ordre, même sens, autre usage. */
+  var COIN_NAME = { cuiv: 'cuivre', arg: 'argent', or: 'or', plat: 'platine' };
+
+  /* Normalise une valeur de piece en entier >= 0 (NaN/undefined/negatif/decimal -> 0
+     ou troncature). Meme contrat que la regle RTDB `state/coins/$coin`. */
+  function coinInt(v) { var n = Math.floor(Number(v) || 0); return n > 0 ? n : 0; }
+  var COIN_DESC = ['plat', 'or', 'arg', 'cuiv'];   // de la plus forte à la plus faible
+
+  /* Montant lisible : { or:2, cuiv:15 } → « 2 or, 15 cuivre ». Zéros et clés
+     inconnues ignorés ; '' si le montant est vide. */
+  function coinsAmountText(coins) {
+    var parts = [];
+    for (var i = 0; i < COIN_DESC.length; i++) {
+      var k = COIN_DESC[i];
+      var n = Math.abs((coins && coins[k]) | 0);
+      if (n) parts.push(n + ' ' + COIN_NAME[k]);
+    }
+    return parts.join(', ');
+  }
+
+  /* Delta lisible entre deux bourses : « +2 or, −15 cuivre » (signe explicite,
+     tiret demi-cadratin comme partout dans l'UI). `after` peut être un patch
+     PARTIEL : une clé absente est réputée inchangée. '' si rien n'a bougé. */
+  function coinsDeltaText(before, after) {
+    var parts = [];
+    for (var i = 0; i < COIN_DESC.length; i++) {
+      var k = COIN_DESC[i];
+      if (!after || after[k] == null) continue;
+      var d = (after[k] | 0) - ((before && before[k]) | 0);
+      if (d) parts.push((d > 0 ? '+' : '−') + Math.abs(d) + ' ' + COIN_NAME[k]);
+    }
+    return parts.join(', ');
+  }
+
+  /* Valeur nette d'un delta, en CUIVRE : > 0 = enrichissement, < 0 = retrait,
+     0 = neutre ou compensé (un change de monnaie, typiquement). Sert à colorer
+     l'entrée de journal sans avoir à deviner l'intention. */
+  function coinsDeltaValue(before, after) {
+    var tot = 0;
+    for (var k in COIN_VALUE) {
+      if (!after || after[k] == null) continue;
+      tot += ((after[k] | 0) - ((before && before[k]) | 0)) * COIN_VALUE[k];
+    }
+    return tot;
+  }
+
+  /* --- Journal : plafond d'entrées -------------------------------------------
+     Le journal de combat est purgé par « ⟲ Combat » ; celui d'économie ne l'est
+     JAMAIS (c'est tout son intérêt), donc sans élagage il grossirait sans fin.
+     staleLogIds rend les ids à SUPPRIMER pour ne garder que les `max` plus
+     récents. Tri déterministe : à horodatage égal, l'id départage. */
+  var LOG_MAX = 30;
+  function staleLogIds(map, max) {
+    max = max == null ? LOG_MAX : Math.max(0, max | 0);
+    var all = [];
+    for (var id in (map || {})) all.push({ id: id, ts: (map[id] && map[id].ts) || 0 });
+    if (all.length <= max) return [];
+    all.sort(function (a, b) { return (b.ts - a.ts) || (a.id < b.id ? 1 : -1); });
+    return all.slice(max).map(function (e) { return e.id; });
+  }
+
   /* --- Système de poids porté (affichage seul ; le MJ arbitre la surcharge) --- */
   var CARRY_BASE = 30;        // capacité de base commune (plancher garanti) — spec poids/encombrement
   var CARRY_PER_FORCE = 5;    // capacité gagnée par point de Force
@@ -443,11 +543,14 @@
       modifiers: DEFAULT_MODIFIERS[char.id] || {},
       inventory,
       equipment: {},   // paperdoll { [slotKey]: itemId } — rempli via la page Équipement
+      // Entiers >= 0 imposes : la regle RTDB `state/coins/$coin` valide type ET signe,
+      // et l'amorcage ecrit tout le sous-arbre `state` d'un coup — une seule valeur
+      // non entiere ferait echouer le seed ENTIER (cf. doc durcissement monnaie §6).
       coins: {
-        plat: (char.coins && char.coins.plat) || 0,
-        or:   (char.coins && char.coins.or)   || 0,
-        arg:  (char.coins && char.coins.arg)  || 0,
-        cuiv: (char.coins && char.coins.cuiv) || 0,
+        plat: coinInt(char.coins && char.coins.plat),
+        or:   coinInt(char.coins && char.coins.or),
+        arg:  coinInt(char.coins && char.coins.arg),
+        cuiv: coinInt(char.coins && char.coins.cuiv),
       },
     };
   }
@@ -967,6 +1070,8 @@
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd, buildCatalogSeed, catalogArray,
     COIN_VALUE, planCoinConvert,
+    COIN_NAME, coinsAmountText, coinsDeltaText, coinsDeltaValue, LOG_MAX, staleLogIds,
+    coinInt, sanitizeCampaignCoins, planCoinMove,
     CARRY_BASE, CARRY_PER_FORCE, carriedWeight, carryCapacity, weightStatus, comfortPct,
     ARMOR_CLASSES, armorWeightReduction, armorEffectiveWeight,
     paginate,

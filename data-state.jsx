@@ -29,8 +29,6 @@ function useCharState(charId) {
   // Équipement (paperdoll) : map { [slotKey]: itemId }. Le patch permet une mise à
   // jour atomique multi-slots (déséquiper l'ancien slot d'un item en l'équipant ailleurs).
   const setEquipment  = useCallback((patch)    => window.RTDB.updatePath(`${charPath(charId)}/equipment`, patch), [charId]);
-  const setCoin       = useCallback((key, value) =>
-    window.RTDB.updatePath(`${charPath(charId)}/coins`, { [key]: Math.max(0, value | 0) }), [charId]);
   const setRuneSelected = useCallback((nodeId, on) =>
     window.RTDB.updatePath(`${charPath(charId)}/runes/selected`, { [nodeId]: on ? true : null }), [charId]);
   const setRuneChoice = useCallback((nodeId, choice) =>
@@ -58,7 +56,7 @@ function useCharState(charId) {
   }, [charId]);
   const setAttrsLocked = useCallback((locked) =>
     window.RTDB.updatePath(charPath(charId), { attrsLocked: locked ? true : null }), [charId]);
-  return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment, setCoin,
+  return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment,
     setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked };
 }
 
@@ -181,6 +179,44 @@ function useCombatLog() {
   return { entries, clearLog };
 }
 
+/* Journal d'ÉCONOMIE — nœud SÉPARÉ de combat/log (décision MJ du 2026-08-21).
+   Deux différences volontaires avec le journal de combat :
+     - « ⟲ Combat » (resetCombat) ne le purge PAS : l'historique d'argent survit
+       aux combats, c'est précisément son intérêt ;
+     - il est réservé au MJ : le nœud n'a pas de `.read` propre, il hérite donc du
+       `.read` staff de campaign/runeterra (les joueurs, eux, ont besoin d'y
+       ÉCRIRE — un transfert depuis le coffre commun est une action de joueur).
+   Plafonné à LOG_MAX entrées, élaguées côté staff (useEconomyLog). */
+const ECONOMY_LOG = `${CAMPAIGN}/economyLog`;
+function pushEconomyLog(text, kind) {
+  const id = 'eco_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e4);
+  window.RTDB.updatePath(ECONOMY_LOG, { [id]: { id, ts: Date.now(), text: String(text || ''), kind: kind || 'gold' } });
+}
+function useEconomyLog() {
+  const [map, setMap] = useState(null);
+  useEffect(() => window.RTDB.subscribePath(ECONOMY_LOG, (v) => setMap(v || {})), []);
+  // Élagage : rien ne purge ce journal, on borne donc sa taille à la lecture.
+  // Seul le staff peut lire ce nœud (règle RTDB), donc seul lui monte ce hook :
+  // l'écriture d'élagage est toujours autorisée ici.
+  useEffect(() => {
+    if (!map) return;
+    const stale = staleLogIds(map, LOG_MAX);
+    if (!stale.length) return;
+    const patch = {}; stale.forEach((id) => { patch[id] = null; });
+    window.RTDB.updatePath(ECONOMY_LOG, patch);
+  }, [map]);
+  const entries = map ? Object.values(map).sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, LOG_MAX) : [];
+  const clearLog = useCallback(() => window.RTDB.setPath(ECONOMY_LOG, null), []);
+  return { entries, clearLog };
+}
+/* Nom lisible d'une bourse depuis son chemin RTDB (texte de journal). */
+function purseName(path) {
+  if (path === SHARED_COINS) return 'coffre commun';
+  const m = /\/characters\/([^/]+)\//.exec(String(path || ''));
+  const c = m && CHARACTERS.find((x) => x.id === m[1]);
+  return c ? c.name : (m ? m[1] : 'bourse');
+}
+
 /* Don d'XP (orchestrateur, écriture staff). Lit l'état du perso ciblé, applique le
    gain via applyXp (montée auto + report du surplus), écrit { level, xp }. Journalise
    la montée (pushLog). Retourne le résultat pour que l'appelant puisse toaster. */
@@ -223,12 +259,15 @@ async function grantCoins(charId, patch) {
   const p = charPath(charId);
   const st = (await window.RTDB.getSnapshot(p)) || {};
   const cur = st.coins || {};
-  const next = {};
+  const next = {}, added = {};
   for (const k of COIN_KEYS) {
     const add = Math.max(0, (patch && patch[k]) | 0);
-    if (add) next[k] = (cur[k] || 0) + add;
+    if (add) { next[k] = (cur[k] || 0) + add; added[k] = add; }
   }
-  if (Object.keys(next).length) window.RTDB.updatePath(`${p}/coins`, next);
+  if (!Object.keys(next).length) return;
+  window.RTDB.updatePath(`${p}/coins`, next);
+  const c = CHARACTERS.find((x) => x.id === charId);
+  pushEconomyLog(`<b>${c ? c.name : charId}</b> reçoit ${coinsAmountText(added)} (récompense)`, 'buff');
 }
 
 /* Snapshot live de tous les persos (vue MJ). */
@@ -277,9 +316,7 @@ function useSharedCoins() {
   const [coins, setCoins] = useState(null);
   useEffect(() => window.RTDB.subscribePath(SHARED_COINS, (v) =>
     setCoins(v || { plat:0, or:0, arg:0, cuiv:0 })), []);
-  const setCoin = useCallback((key, value) =>
-    window.RTDB.updatePath(SHARED_COINS, { [key]: Math.max(0, value | 0) }), []);
-  return { coins, setCoin };
+  return { coins };
 }
 
 /* Écriture LIBRE d'une bourse (édition MJ) : valeurs ABSOLUES, clampées à un entier >= 0.
@@ -287,13 +324,23 @@ function useSharedCoins() {
    intactes : updatePath = merge). Renvoie le patch réellement écrit — l'appelant s'en
    sert pour son toast. Contrairement à grantCoins (additif, positif seulement), cette
    voie permet de FIXER une valeur, donc aussi d'en retirer. */
-function writeCoins(path, patch) {
+async function writeCoins(path, patch) {
   const next = {};
   for (const k of COIN_KEYS) {
     if (!patch || patch[k] == null) continue;
     next[k] = Math.max(0, patch[k] | 0);
   }
-  if (Object.keys(next).length) window.RTDB.updatePath(path, next);
+  if (!Object.keys(next).length) return next;
+  // Lecture préalable : `patch` est ABSOLU, le delta n'existe que par rapport à
+  // l'état d'avant. C'est ce delta qui a un sens au journal (« +2 or, −15 cuivre »).
+  const before = (await window.RTDB.getSnapshot(path)) || {};
+  window.RTDB.updatePath(path, next);
+  const txt = coinsDeltaText(before, next);
+  if (txt) {
+    const v = coinsDeltaValue(before, next);   // 0 = compensé : un change de monnaie
+    pushEconomyLog(`Bourse de <b>${purseName(path)}</b> ajustée par le MJ : ${txt}`,
+      v > 0 ? 'buff' : v < 0 ? 'debuff' : 'gold');
+  }
   return next;
 }
 const setCharCoins   = (charId, patch) => writeCoins(`${charPath(charId)}/coins`, patch);
@@ -304,20 +351,39 @@ const setSharedCoins = (patch)         => writeCoins(SHARED_COINS, patch);
    NB : transfert NON atomique (2 écritures sur des sous-arbres distincts). On
    crédite la destination AVANT de débiter la source : si la 2e écriture échoue,
    on a une duplication (récupérable) plutôt qu'une perte. */
-function moveItem(fromPath, toPath, fromItems, toItems, itemId, n) {
-  const { srcPatch, dstPatch } = planItemTransfer(fromItems, toItems, itemId, n);
+async function moveItem(fromPath, toPath, fromItems, toItems, itemId, n) {
+  // ⚠️ Ne PAS se fier aux `fromItems`/`toItems` de l'appelant — voir moveCoins juste
+  // en dessous pour le detail. Ici la consequence etait moins grave (l'item ne
+  // fusionnait pas avec la pile existante et creait un doublon, sans rien detruire),
+  // mais la cause est la meme, donc le correctif aussi.
+  const src = (await window.RTDB.getSnapshot(fromPath)) || {};
+  const dst = (await window.RTDB.getSnapshot(toPath)) || {};
+  const { srcPatch, dstPatch } = planItemTransfer(src, dst, itemId, n);
   if (Object.keys(dstPatch).length) window.RTDB.updatePath(toPath, dstPatch);
   if (Object.keys(srcPatch).length) window.RTDB.updatePath(fromPath, srcPatch);
 }
 
 /* Transfert de pièces (une dénomination) entre deux objets coins, montant borné.
    Crédit-avant-débit, même raison que moveItem (échec → duplication récupérable). */
-function moveCoins(fromPath, toPath, fromCoins, toCoins, key, n) {
-  const avail = (fromCoins && fromCoins[key]) || 0;
-  const m = Math.max(0, Math.min(n | 0, avail));
-  if (m <= 0) return;
-  window.RTDB.updatePath(toPath, { [key]: ((toCoins && toCoins[key]) || 0) + m });
-  window.RTDB.updatePath(fromPath, { [key]: avail - m });
+async function moveCoins(fromPath, toPath, fromCoins, toCoins, key, n) {
+  // ⚠️ Ne PAS se fier aux `fromCoins`/`toCoins` de l'appelant (gardes pour compatibilite
+  // de signature, mais ignores). REGRESSION CORRIGEE le 2026-08-21 : sur la page
+  // Inventaire commun, `toCoins` venait de useAllCharStates(), qui lit le noeud
+  // `campaign/runeterra/characters` — REFUSE a un joueur par les regles RTDB (il ne
+  // peut lire que SA fiche). L'abonnement etait rejete, la valeur retombait sur le
+  // repli {0,0,0,0}, et la bourse du joueur etait ECRASEE par le montant pris au lieu
+  // d'etre creditee (6 argent + 4 pris = 4). Invisible en MJ, qui lit tout.
+  // On relit donc les deux bourses en base : elles sont lisibles par l'auteur legitime
+  // du transfert dans les deux sens, et `getSnapshot` REJETTE si l'acces est refuse —
+  // le transfert est abandonne plutot que d'ecrire une valeur fausse.
+  const src = (await window.RTDB.getSnapshot(fromPath)) || {};
+  const dst = (await window.RTDB.getSnapshot(toPath)) || {};
+  const plan = planCoinMove(src, dst, key, n);
+  if (!plan) return;
+  window.RTDB.updatePath(toPath, { [key]: plan.to });
+  window.RTDB.updatePath(fromPath, { [key]: plan.from });
+  // Le seul mouvement d'argent que les JOUEURS déclenchent — donc le plus utile à tracer.
+  pushEconomyLog(`${coinsAmountText({ [key]: plan.moved })} : <b>${purseName(fromPath)}</b> → <b>${purseName(toPath)}</b>`, 'gold');
 }
 
 /* Identité dérivée de l'auth Firebase + /users/{uid}.
@@ -382,5 +448,6 @@ Object.assign(window, {
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   usePendingHits, applyHitToEnemy, healCharacter, PENDING_HITS,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
+  pushEconomyLog, useEconomyLog, ECONOMY_LOG, purseName,
   COIN_KEYS, setCharCoins, setSharedCoins,
 });

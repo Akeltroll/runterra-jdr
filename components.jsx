@@ -325,8 +325,20 @@ function ExportImportPanel() {
     const reader = new FileReader();
     reader.onload = async () => {
       if (!confirm('Remplacer tout l’état actuel par cette sauvegarde ?')) return;
-      await window.RTDB.setPath(CAMPAIGN, JSON.parse(reader.result));
-      toast('Sauvegarde importée', 'buff');
+      try {
+        const data = JSON.parse(reader.result);
+        // Les règles RTDB valident désormais `state/coins/$coin` (entier >= 0). L'import
+        // réécrit TOUT le sous-arbre d'un coup : une seule pièce non conforme dans une
+        // vieille sauvegarde le ferait rejeter en bloc. On aligne avant d'écrire.
+        const fixed = sanitizeCampaignCoins(data);
+        await window.RTDB.setPath(CAMPAIGN, data);
+        toast(fixed ? `Sauvegarde importée (<b>${fixed}</b> valeur(s) de pièce assainie(s))` : 'Sauvegarde importée', 'buff');
+      } catch (err) {
+        // Sans ce catch, un rejet (JSON invalide ou PERMISSION_DENIED sur une règle)
+        // échouait en silence : ni toast, ni message. Le MJ croyait l'import passé.
+        console.error('Import de sauvegarde échoué :', err);
+        toast('Import échoué : ' + (err && err.message ? err.message : 'erreur inconnue'), 'debuff');
+      }
     };
     reader.readAsText(file);
   };

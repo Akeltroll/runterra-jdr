@@ -41,6 +41,13 @@
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
           ".validate": "newData.isBoolean()"
         },
+        "economyLog": {
+          ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+          "$logId": {
+            ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+            ".validate": "newData.child('text').isString()"
+          }
+        },
         "combat": {
           ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
           "turn": {
@@ -66,7 +73,14 @@
         "characters": {
           "$charId": {
             ".read":  "auth != null && root.child('users').child(auth.uid).child('charId').val() === $charId",
-            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('charId').val() === $charId)"
+            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('charId').val() === $charId)",
+            "state": {
+              "coins": {
+                "$coin": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0"
+                }
+              }
+            }
           }
         }
       }

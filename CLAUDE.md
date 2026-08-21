@@ -55,6 +55,13 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   MJ arbitre la surcharge). Items : champs `weight` (poids unitaire) + `carry` (bonus de capacité).
   **Monnaie** : `COIN_VALUE` (valeurs en cuivre : cuiv 1 / arg 100 / or 10 000 / plat 100 000 — soit
   100 cuivre = 1 argent, 100 argent = 1 or, 10 or = 1 platine, cf. `info-mj/Économie - guide des joueurs.md`)
+  + **journal d'économie** (textes purs, testés) : `COIN_NAME`, `coinsAmountText(coins)` (« 2 or, 15 cuivre »),
+  `coinsDeltaText(before, after)` (« +2 or, −15 cuivre » ; `after` peut être un patch PARTIEL, clé absente =
+  inchangée), `coinsDeltaValue(before, after)` (valeur nette en cuivre → couleur de l'entrée ; **0 = change de
+  monnaie compensé**) + `LOG_MAX`(30)/`staleLogIds(map, max)` (ids des entrées à élaguer, les plus anciennes).
+  **Contrat de la règle RTDB `state/coins/$coin`** (entier >= 0) porté côté code par `coinInt(v)` (utilisé
+  par `buildDefaultState`) et `sanitizeCampaignCoins(data)` (assainit une sauvegarde importée, MUTE `data`,
+  rend le nombre de corrections) — les deux écritures qui portent **tout un sous-arbre d'un coup**
   + `planCoinConvert(coins, from, to, n)` (pur, testé : conversion **dans les deux sens** ; vers le bas =
   exact, vers le haut = seuls les multiples entiers passent et **le reste est laissé dans la bourse**,
   jamais arrondi ni perdu ; `n` borné au solde ; renvoie `null` si rien n'est convertible).
@@ -110,14 +117,25 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   ET **ramène PV/bouclier aux caps de base** via `computeEffective` sans skillBuffs). **Plateau partagé** :
   `useMJEnemies` (ennemis Firebase), `usePendingHits` (file d'attaques), orchestrateur `applyHitToEnemy`
   (`mitigateDamage`→`applyDamageToPools`→PV ennemi) ; **journal** `pushLog(text,kind)`/`useCombatLog()`
-  (`combat/log`, ~30 derniers). Orchestrateurs de transfert RTDB `moveItem` (via `planItemTransfer`) /
-  `moveCoins`. Constantes `CAMPAIGN = 'campaign/runeterra'`, `SHARED_INV`, `SHARED_COINS`, `COMBAT_TURN`,
+  (`combat/log`, ~30 derniers). **Journal d'économie SÉPARÉ** (`ECONOMY_LOG` = `campaign/runeterra/economyLog`) :
+  `pushEconomyLog(text,kind)` + `useEconomyLog()` (lecture **staff only**, **jamais purgé par « ⟲ Combat »**,
+  élagage à `LOG_MAX` via `staleLogIds` fait **à la lecture côté staff** — les joueurs n'ont que le droit
+  d'écrire) + `purseName(path)` (nom lisible d'une bourse depuis son chemin RTDB).
+  **Les 3 orchestrateurs de pièces journalisent** : `moveCoins` (transfert, `gold` — le seul déclenché par
+  les **joueurs**, donc le plus important), `grantCoins` (récompense, `buff`), `writeCoins` (**devenu async** :
+  `getSnapshot` préalable pour calculer le delta d'une édition MJ ; couleur selon `coinsDeltaValue`).
+  ⚠️ Les deux `setCoin` morts (jamais branchés à une UI) ont été **supprimés** — plus aucune voie d'écriture
+  de pièces non journalisée. Orchestrateurs de transfert RTDB `moveItem` (via `planItemTransfer`) /
+  `moveCoins` (via `planCoinMove`) — **tous deux `async` et relisant les DEUX côtés via `getSnapshot`** :
+  ils **ignorent** l'état passé en paramètre (cf. bug de bourse écrasée, État actuel 2026-08-21). Constantes `CAMPAIGN = 'campaign/runeterra'`, `SHARED_INV`, `SHARED_COINS`, `COMBAT_TURN`,
   `ENEMIES`, `PENDING_HITS`, `COMBAT_LOG`.
 - `components.jsx` — UI partagée : `Avatar`, `ResourceBar`, **`XpBar`** (barre d'XP lecture seule :
   `xp/xpToNext(level)` + label niveau), `BuffBadge`, toasts
   (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), **`CombatLog`** (journal de combat
   partagé lecture seule, lit `useCombatLog` ; prop `canClear` = bouton « Vider » staff), `LoginScreen`,
-  `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel`,
+  `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel` (import **assaini**
+  via `sanitizeCampaignCoins` + **try/catch avec toast d'erreur** — sans lui un rejet de règle
+  échouait en silence),
   `InvItemRow` + `InventoryPanel` (inventaire éditable réutilisable). L'éditeur
   `InvItemRow` permet de **téléverser une image** (`downscaleImageToDataURL`, max 128px,
   webp/png) stockée en **data URL** dans `item.img` — pas besoin d'un chemin `ATH/` ni
@@ -291,9 +309,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   affiché en bas. **Déblocage par niveau** : active n° *i* → niveau *i* requis (`skillUnlocked`), carte
   verrouillée grisée + 🔒 ; **stepper « Niveau » staff** dans l'en-tête (`setField('level')`, niveau
   effectif = `state.level ?? char.level`, pilote aussi passif + budget runes).
-- `pages-journal.jsx` — onglet **Journal** (`JournalPage`, staff) : **flux d'événements live** du `combat/log`
-  partagé (`useCombatLog`), filtres par `kind` (tous/actions/buffs/KO) + horodatage + « Vider » (purge partagée).
-  Remplace l'ancien mockup statique. Lecture seule, alimenté par `pushLog`.
+- `pages-journal.jsx` — onglet **Journal** (`JournalPage`, staff) : **deux sections** basculées par un bouton
+  (`JOURNAL_SECTIONS`, état local) — **⚔ Combat** (`combat/log` via `useCombatLog` ; filtres tous/actions/buffs/KO)
+  et **💰 Monnaie** (`economyLog` via `useEconomyLog` ; filtres tous/transferts/gains/retraits). Chaque section a
+  son propre « Vider » (celui de la monnaie **demande confirmation** : c'est la seule trace des transferts depuis
+  le coffre commun). Horodatage, lecture seule, alimenté par `pushLog` / `pushEconomyLog`.
 - `pages-progression.jsx` — onglet **Progression** (`ProgressionPage`) : XP + **respec** (répartition des 4
   caracs) + table des paliers 1→18. Visible des **joueurs** (`prog` ajouté à `PAGE_ACCESS.joueur`, en barre
   principale via `groupByRole:{joueur:'main'}` ; `lockedCharId` = perso du joueur ; staff = sélecteur libre +
@@ -313,14 +333,28 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Conteneur `height:100% + overflow:auto` (scroll interne). Zéro Firebase en écriture, zéro nouvelle règle RTDB.
 - `pages-ds.jsx` — page secondaire (mockup, données surtout statiques).
 - `runeterra.css` — styles (variables CSS `--gold`, `--hp`, etc.).
+- `firebase.json` + `.firebaserc` — **config de la CLI Firebase** (créés le 2026-08-21 ; ils n'avaient
+  jamais existé, d'où l'ancienne obligation de publier les règles à la main en console).
+  `firebase deploy --only database` depuis la racine publie `database.rules.json` sur l'instance
+  `runeterra-jdr-default-rtdb` (europe-west1, nommée explicitement — pas de résolution d'un défaut).
+  ⚠️ **`firebase.json` ne déclare QUE `database`, volontairement pas `hosting`** : le site est sur
+  GitHub Pages, et sans bloc `hosting` un `firebase deploy` nu ne peut pas publier par mégarde une
+  seconde copie du site. Ne pas confondre avec `firebase-config.js`, qui est l'init du SDK **côté
+  navigateur** et ne déploie rien. Prérequis, une fois : `npm i -g firebase-tools` + `firebase login`.
+  La CLI **n'affiche aucun diff** avant d'écrire : comparer les règles en ligne avec le fichier du
+  dépôt reste nécessaire. La voie console (coller → Publier) reste valable en secours.
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
-  joueur = sa fiche seule, staff = tout ; `sharedInventory` = R/W pour tout participant
+  joueur = sa fiche seule, staff = tout ; **`characters/$charId/state/coins/$coin` = `.validate`
+  entier >= 0** (le reste du sous-arbre perso n'est toujours validé nulle part) ; `sharedInventory` = R/W pour tout participant
   inscrit, écriture au niveau `$itemId` ; `sharedCoins` = R/W tout participant inscrit,
   `.validate` par dénomination (nombre ≥ 0) ; `combat/turn` = lecture tout inscrit, **écriture staff**
   (nombre ≥ 1) — tour partagé ; `combat/enemies` = lecture inscrits, **écriture staff** (ennemis
   partagés) ; `combat/pendingHits` = lecture inscrits, **écriture tout inscrit** (un joueur propose
   une attaque ; le staff applique/supprime) ; `combat/log` = lecture+**écriture tout inscrit**
-  (`.validate` `text` string) — journal de combat partagé.
+  (`.validate` `text` string) — journal de combat partagé ; **`economyLog` = lecture STAFF, écriture tout
+  inscrit** (`.validate` `text` string) — journal d'économie réservé au MJ. NB : le `.read` staff y est écrit
+  **explicitement** bien qu'il soit déjà hérité de `campaign/runeterra` — l'intention « MJ seul » doit rester
+  lisible dans le fichier.
 - `test/auth.test.js` — tests unitaires des helpers d'auth (`node --test`).
 - `test/game-logic.test.js` — tests unitaires (`node --test`).
 - `test/smoke.mjs` — test de démarrage Playwright (charge l'app réelle, teste le
@@ -365,6 +399,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
                                               reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
 /campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, lethaMag, crit, dcrit, vol, sapience, omni, hpMax, targetId, ts } ; crit roulé au cast ; le MJ ajuste+applique
                                               letha/lethaMag = les DEUX léthalités snapshotées au cast ; le champ MJ affiché suit le type choisi (physique→letha, magique→lethaMag, brut→0)
+/campaign/runeterra/economyLog/{id}   ← journal d'ÉCONOMIE { id, ts, text, kind:'gold'(transfert)|'buff'(gain)|'debuff'(retrait) }
+                                              lecture STAFF (MJ/admin), écriture tout inscrit (un joueur qui prend au coffre doit pouvoir tracer)
+                                              JAMAIS purgé par « ⟲ Combat » ; plafonné à LOG_MAX(30), élagué à la lecture par le staff
 /campaign/runeterra/combat/log/{id}   ← journal de combat PARTAGÉ { id, ts, text, kind:'gold'|'buff'|'debuff' } ; lecture+écriture tout inscrit ; ~30 derniers ; vidé par « ⟲ Combat »
 ```
 `type` = emplacement d'équipement (`EQUIP_TYPES` : helmet/chest/ring/weapon/accessory/…) ;
@@ -386,7 +423,7 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
 1. Pousser le code sur `main` (GitHub Pages).
 2. Console → Authentication : créer les comptes joueurs (`pseudo@runeterra.local` + mdp).
 3. Console → Realtime Database / Données : vérifier `/users/{adminUID}` = `{username, role:"admin"}`.
-4. Console → Realtime Database / Règles : publier `database.rules.json` (strictes).
+4. Publier les règles : `firebase deploy --only database` (ou console → Realtime Database / Règles).
 5. Console → Authentication : **désactiver** le provider « Anonyme ».
 6. Chaque joueur se connecte une fois → attribuer son perso via la page Admin.
 
@@ -457,6 +494,65 @@ supprime pas** `Woolost`/`JB` : on les resynchronise sur `main` (`git merge main
 d'une base propre. Les anciennes branches de fonctionnalité (auth-comptes-roles, inventaire,
 arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, catalogue-editable)
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
+
+## État actuel (2026-08-21)
+- **🐞 CORRIGÉ — bourse du joueur ÉCRASÉE au lieu d'être créditée** (bug **antérieur**, présent dans le
+  code déployé, trouvé au test §9.3-1 du 2026-08-21 : Elias avait 6 argent, en prend 4 au coffre,
+  se retrouve avec **4**). **166 tests verts.**
+  **Cause** — `CommonInventoryPage` calculait la bourse de destination via **`useAllCharStates()`**, qui
+  s'abonne à `campaign/runeterra/characters`. Or **les règles RTDB refusent ce nœud à un joueur** (il ne
+  peut lire que SA fiche) : l'abonnement est rejeté, `all` reste `null`, `charCoins()` retombe sur son
+  repli `{0,0,0,0}`, et `moveCoins` écrivait `0 + 4 = 4`. **Invisible en MJ**, qui lit tout — d'où un bug
+  resté longtemps caché : il ne se manifeste qu'avec un compte de rôle `joueur`.
+  **Correctif** — `moveCoins` et `moveItem` **ne font plus confiance à l'état passé par l'appelant**
+  (params gardés pour la signature, mais ignorés) : ils **relisent les deux côtés en base** via
+  `getSnapshot`, qui **rejette** si l'accès est refusé — le transfert est abandonné plutôt que d'écrire
+  une valeur fausse. Calcul extrait en logique pure testée **`planCoinMove(from,to,key,n)`**.
+  `moveItem` souffrait de la même cause en moins grave (pas de fusion avec la pile existante → doublon,
+  sans destruction) et est corrigé pareil.
+  ⚠️ **Leçon à retenir : `useAllCharStates()` est un hook DE STAFF.** Pour un joueur il vaut toujours
+  `null`. `pages-lobby` le documentait déjà et gère le cas ; `pages-mj` est staff-only. `pages-inventory`
+  était le seul endroit où ce `null` alimentait **un calcul d'écriture** — d'où la corruption. Avant de
+  réutiliser ce hook dans une page visible des joueurs, se demander ce que vaut le repli.
+- **Journal des mouvements de pièces (chantier B du durcissement monnaie)** — cache `20260821-1`,
+  **162 tests verts**, ⚠️ **RÈGLES RTDB À REPUBLIER** (nœud `economyLog` + `.validate` sur les bourses).
+  Avant ce lot, **aucun mouvement d'argent n'était tracé nulle part** : un joueur pouvait vider le coffre
+  commun sans laisser d'historique. C'était le risque réel identifié par
+  `docs/superpowers/specs/2026-08-20-durcissement-monnaie-rtdb-design.md`.
+  **Les 3 arbitrages du §4.3 ont été tranchés par le MJ (2026-08-21)** :
+  1. **Nœud `economyLog` séparé**, pas `combat/log` — un historique d'argent effacé à chaque « ⟲ Combat »
+     n'a aucun intérêt. Coût assumé : une nouvelle règle, donc une publication en console.
+  2. **Delta, pas valeur finale** — `writeCoins` passe **async** avec un `getSnapshot` préalable
+     (« +2 or, −15 cuivre » plutôt que « bourse fixée à … »).
+  3. **Le change de monnaie n'est pas distingué** d'une édition : il apparaît comme un delta compensé
+     (`coinsDeltaValue === 0`, coloré en `gold`), ce qui se lit très bien tel quel.
+  **Réservé au MJ pour de vrai** : `campaign/runeterra` porte déjà un `.read` **staff-only** à sa racine et
+  ce sont les sous-nœuds qui l'élargissent aux joueurs — un `economyLog` sans `.read` propre hérite donc du
+  staff-only. Le contrôle est **serveur**, pas un simple masquage d'UI. Les joueurs y ont l'**écriture**
+  (sans lecture) : `moveCoins` est une action de joueur et doit pouvoir tracer.
+  **Conséquence de ce sens unique** : l'élagage à 30 entrées se fait **à la lecture, côté staff**
+  (`useEconomyLog`) — un joueur ne peut pas élaguer puisqu'il ne peut pas lire. Le journal se borne donc
+  quand le MJ l'ouvre, ce qui suffit.
+- **Durcissement des règles de bourse (chantier A)** — posé dans `database.rules.json` le 2026-08-21,
+  **en attente de publication** (une seule publication couvre A + B).
+  `characters/$charId/state/coins/$coin` reçoit un `.validate` **entier >= 0** (aligné sur ce que
+  `sharedCoins` faisait déjà). Le `.write` n'a **pas** été retapé — conservé octet pour octet, vérifié
+  par `diff` contre `HEAD` (une règle `.write` réécrite de mémoire verrouille tout le monde).
+  Ce que ça bloque : négatifs, décimales, chaînes. Ce que ça **ne bloque pas** : un joueur qui s'écrit
+  `or: 999999`, entier positif parfaitement valide — le blocage réel exigerait des Cloud Functions
+  (§3.2 du doc), disproportionné ici. Le vrai garde-fou reste le journal (B).
+  ⚠️ **Un `.validate` frappe les écritures qui portent tout un sous-arbre d'un coup**, d'où deux
+  protections ajoutées côté code :
+  - `buildDefaultState` normalise les 4 dénominations via **`coinInt(v)`** — sinon un perso mal saisi
+    dans `data.jsx` ferait échouer le `seedIfEmpty` **entier**, pas seulement sa bourse ;
+  - `ExportImportPanel` (le piège du §6) : **`sanitizeCampaignCoins(data)`** (pur, testé) aligne les
+    pièces de la sauvegarde **avant** d'écrire (nombre de corrections annoncé au toast), et le `setPath`
+    passe en **try/catch avec toast d'erreur**. Il n'y en avait aucun : un rejet (JSON invalide ou
+    `PERMISSION_DENIED`) échouait **en silence**, le MJ croyait son import passé.
+  👉 **Séquence de publication + 14 tests** (non-régression, durcissement, journal) : **§9 du document
+  de reprise** `docs/superpowers/specs/2026-08-20-durcissement-monnaie-rtdb-design.md`. Les deux tests
+  qui comptent : un joueur qui tente `set({or:-5})` sur sa bourse doit prendre `PERMISSION_DENIED`, et
+  « ⟲ Combat » ne doit **pas** vider le journal de monnaie.
 
 ## État actuel (2026-08-20)
 - **Édition libre des bourses par le MJ** — cache `20260817-7`, **144 tests verts**, **aucune règle RTDB à
@@ -712,14 +808,13 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   (`MOD_STATS`, 11 stats) visible si `cat==='Équipement'`. 39 tests verts.
 
 ## Chantiers en cours / backlog
-- **Monnaie : durcissement des règles RTDB + journal des mouvements de pièces** — ⬜ à faire,
+- **Monnaie : durcissement des règles RTDB** — 🔶 **A et B écrits, il ne reste qu'à publier**
+  (`firebase deploy --only database`) **et à dérouler les 14 tests** : **§9** du document de reprise,
   **document de reprise complet** : `docs/superpowers/specs/2026-08-20-durcissement-monnaie-rtdb-design.md`
   (contexte, patch de règles prêt à coller, points d'accroche du journal, 3 pièges dont l'import de
-  sauvegarde cassé par un `.validate`). Deux chantiers indépendants : **B (journal)** ne demande
-  **aucune republication de règles** si on réutilise `combat/log` → à faire en premier ; **A (durcir
-  `characters/$charId/state/coins`)** est bloqué sur une **publication manuelle en console Firebase**
+  sauvegarde cassé par un `.validate`). A reste bloqué sur une **publication manuelle en console Firebase**
   (le dépôt n'a ni CI ni `firebase.json` : `database.rules.json` est une copie de référence, rien ne
-  la déploie).
+  la déploie) — mais `economyLog` en impose déjà une, donc autant faire les deux d'un coup.
 - **Lot améliorations graphiques** (brainstormé 2026-06-28, chantiers indépendants — chacun sa spec/plan) :
   **A — Refonte fiche joueur = FAIT** (voir État actuel 2026-06-29).
   **B — Arbre de runes en vrai arbre visuel = FAIT, refondu et VALIDÉ par le MJ** (2026-08-16) :

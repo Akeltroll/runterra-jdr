@@ -1079,3 +1079,123 @@ test('planCoinConvert : aller-retour sans perte sur un multiple exact', () => {
   const down = L.planCoinConvert(up.patch, 'or', 'cuiv', 1);
   assert.deepEqual(down.patch, { or: 0, cuiv: 10000 });
 });
+
+/* --- Journal d'économie : formatage des mouvements de pièces --- */
+test('coinsAmountText : montant lisible, de la plus forte à la plus faible', () => {
+  assert.equal(L.coinsAmountText({ cuiv: 15, or: 2 }), '2 or, 15 cuivre');
+  assert.equal(L.coinsAmountText({ plat: 1, arg: 3 }), '1 platine, 3 argent');
+});
+
+test('coinsAmountText : zéros, clés inconnues et bourse vide sont ignorés', () => {
+  assert.equal(L.coinsAmountText({ or: 0, cuiv: 5, xxx: 9 }), '5 cuivre');
+  assert.equal(L.coinsAmountText({}), '');
+  assert.equal(L.coinsAmountText(null), '');
+});
+
+test('coinsDeltaText : signe explicite dans les deux sens', () => {
+  assert.equal(L.coinsDeltaText({ or: 1, cuiv: 20 }, { or: 3, cuiv: 5 }), '+2 or, −15 cuivre');
+  assert.equal(L.coinsDeltaText({}, { arg: 4 }), '+4 argent');
+});
+
+test('coinsDeltaText : un patch PARTIEL laisse les clés absentes inchangées', () => {
+  // `after` ne porte que l'or : l'argent de `before` ne doit produire aucun delta.
+  assert.equal(L.coinsDeltaText({ or: 5, arg: 99 }, { or: 7 }), '+2 or');
+  assert.equal(L.coinsDeltaText({ or: 5 }, { or: 5 }), '');   // rien n'a bougé
+});
+
+test('coinsDeltaValue : signe du mouvement, en cuivre', () => {
+  assert.ok(L.coinsDeltaValue({ or: 1 }, { or: 3 }) > 0);          // enrichissement
+  assert.ok(L.coinsDeltaValue({ arg: 10 }, { arg: 4 }) < 0);       // retrait
+  // Change de monnaie : 100 cuivre échangés contre 1 argent → valeur nette nulle.
+  assert.equal(L.coinsDeltaValue({ cuiv: 100, arg: 0 }, { cuiv: 0, arg: 1 }), 0);
+});
+
+/* --- Journal : élagage (le journal d'économie n'est jamais purgé) --- */
+test("staleLogIds : ne rend rien tant que le plafond n'est pas dépassé", () => {
+  const map = { a: { ts: 1 }, b: { ts: 2 } };
+  assert.deepEqual(L.staleLogIds(map, 30), []);
+  assert.deepEqual(L.staleLogIds({}, 30), []);
+  assert.deepEqual(L.staleLogIds(null, 30), []);
+});
+
+test('staleLogIds : rend les plus ANCIENS au-delà du plafond', () => {
+  const map = { a: { ts: 30 }, b: { ts: 10 }, c: { ts: 20 }, d: { ts: 40 } };
+  assert.deepEqual(L.staleLogIds(map, 2).sort(), ['b', 'c']);   // on garde d(40) et a(30)
+  assert.equal(L.staleLogIds(map, 0).length, 4);
+});
+
+test('staleLogIds : plafond par défaut = LOG_MAX', () => {
+  const map = {};
+  for (let i = 0; i < L.LOG_MAX + 5; i++) map['e' + i] = { ts: i };
+  assert.equal(L.staleLogIds(map).length, 5);
+  assert.ok(!L.staleLogIds(map).includes('e' + (L.LOG_MAX + 4)));   // la plus récente est gardée
+});
+
+/* --- Durcissement RTDB : les pièces amorcées doivent être des entiers >= 0 --- */
+test('coinInt : normalise en entier >= 0 (contrat de la règle RTDB)', () => {
+  assert.equal(L.coinInt(5), 5);
+  assert.equal(L.coinInt(-3), 0);        // signe refusé par la règle
+  assert.equal(L.coinInt(2.7), 2);       // décimale refusée par la règle
+  assert.equal(L.coinInt('4'), 4);       // chaîne refusée par la règle
+  assert.equal(L.coinInt(undefined), 0);
+  assert.equal(L.coinInt('x'), 0);       // NaN
+});
+
+test("buildDefaultState : coins toujours entiers >= 0, même si le perso est mal saisi", () => {
+  // L'amorçage écrit tout le sous-arbre `state` d'un coup : une seule valeur non
+  // entière ferait échouer le seed ENTIER une fois le .validate publié.
+  const char = { id: 'x', level: 1, attrs: { force: 5, hab: 5, mental: 5, magie: 5 },
+    coins: { plat: -2, or: 3.9, arg: '7', cuiv: null } };
+  const st = L.buildDefaultState(char);
+  assert.deepEqual(st.coins, { plat: 0, or: 3, arg: 7, cuiv: 0 });
+  for (const k of Object.keys(st.coins)) {
+    assert.ok(Number.isInteger(st.coins[k]) && st.coins[k] >= 0, k);
+  }
+});
+
+test("sanitizeCampaignCoins : aligne une vieille sauvegarde sur le contrat de la règle", () => {
+  const data = {
+    sharedCoins: { or: 2.5, cuiv: -1, arg: 4 },
+    characters: { a: { state: { coins: { arg: '7' } } }, b: { state: {} }, c: null },
+  };
+  assert.equal(sanitizeCampaignCoins_count(data), 3);   // or, cuiv, arg('7') — arg:4 déjà conforme
+  assert.deepEqual(data.sharedCoins, { or: 2, cuiv: 0, arg: 4 });
+  assert.deepEqual(data.characters.a.state.coins, { arg: 7 });
+});
+
+function sanitizeCampaignCoins_count(d) { return L.sanitizeCampaignCoins(d); }
+
+test('sanitizeCampaignCoins : tolère une sauvegarde vide ou malformée', () => {
+  assert.equal(L.sanitizeCampaignCoins(null), 0);
+  assert.equal(L.sanitizeCampaignCoins({}), 0);
+  assert.equal(L.sanitizeCampaignCoins({ characters: { a: {} } }), 0);
+});
+
+/* --- Regression 2026-08-21 : bourse ECRASEE au lieu d'etre creditee --- */
+test('planCoinMove : CREDITE la destination, ne la remplace pas', () => {
+  // Le bug : la destination etait lue via useAllCharStates(), refuse a un joueur
+  // par les regles RTDB -> repli {0,0,0,0} -> 6 argent + 4 pris donnait 4.
+  const plan = L.planCoinMove({ arg: 10 }, { arg: 6 }, 'arg', 4);
+  assert.equal(plan.moved, 4);
+  assert.equal(plan.to, 10);     // 6 + 4, surtout PAS 4
+  assert.equal(plan.from, 6);    // 10 - 4
+});
+
+test('planCoinMove : borne le montant au solde de la source', () => {
+  const plan = L.planCoinMove({ or: 3 }, { or: 1 }, 'or', 99);
+  assert.equal(plan.moved, 3);
+  assert.equal(plan.from, 0);
+  assert.equal(plan.to, 4);
+});
+
+test('planCoinMove : destination vide ou absente = simple credit', () => {
+  assert.deepEqual(L.planCoinMove({ cuiv: 5 }, {}, 'cuiv', 5), { moved: 5, from: 0, to: 5 });
+  assert.deepEqual(L.planCoinMove({ cuiv: 5 }, null, 'cuiv', 2), { moved: 2, from: 3, to: 2 });
+});
+
+test('planCoinMove : rend null quand rien ne peut bouger', () => {
+  assert.equal(L.planCoinMove({ arg: 0 }, { arg: 6 }, 'arg', 4), null);   // source vide
+  assert.equal(L.planCoinMove({ arg: 5 }, { arg: 6 }, 'arg', 0), null);   // montant nul
+  assert.equal(L.planCoinMove({ arg: 5 }, { arg: 6 }, 'arg', -3), null);  // montant negatif
+  assert.equal(L.planCoinMove(null, {}, 'arg', 4), null);                 // source absente
+});

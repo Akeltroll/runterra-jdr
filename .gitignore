@@ -13,3 +13,6 @@ info-mj/
 
 # Mockups brainstorming (visual companion)
 .superpowers/
+
+# Cache local de la CLI Firebase (firebase deploy) — jamais committer
+.firebase/
