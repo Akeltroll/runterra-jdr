@@ -1,8 +1,9 @@
 # Monnaie — durcissement des règles RTDB + traçabilité
 
-> **Statut au 2026-08-21 : A et B écrits, EN ATTENTE D'UNE SEULE PUBLICATION EN CONSOLE.**
-> Le code de B est livré et le `.validate` de A est posé dans `database.rules.json`. Il ne reste
-> que l'étape manuelle : **§9 — séquence de publication et de tests**.
+> **Statut au 2026-08-21 : PUBLIÉ ET VALIDÉ.** Règles publiées, code déployé (`89fbdfa` puis
+> `9d59236`), campagne de tests du §9 déroulée — résultats en **§9.7**. Il reste 3 tests
+> secondaires (7, 8, 13) et **deux bugs ANTÉRIEURS ont été trouvés au passage**, tous deux
+> corrigés : voir §10.
 > Document de reprise écrit le 2026-08-20 en fin de session. Le §4 (journal) est livré — voir §4.4
 > pour ce qui a réellement été fait et en quoi ça diffère de ce qui était envisagé ici. Le §3
 > (durcissement de `characters/$charId/state/coins`) est **intact et toujours d'actualité**.
@@ -424,3 +425,78 @@ Republier l'ancien JSON (§9.1 point 3, ou l'historique de la console). L'effet 
 aussi. Le code de B reste fonctionnel sans la règle `economyLog` — seules les **écritures** du
 journal d'économie seront refusées (silencieusement, elles ne bloquent aucun mouvement d'argent :
 `pushEconomyLog` est appelé après les écritures de pièces, jamais avant).
+
+---
+
+## 9.7 Résultats de la campagne (2026-08-21)
+
+Règles publiées en console (economyLog + `.validate` coins), puis une seconde fois après le
+correctif de purge (§10.2). Code déployé en deux temps.
+
+| # | Test | Résultat |
+|---|---|---|
+| 1 | joueur prend au coffre | ✅ **après correction** — a révélé le bug §10.1 |
+| 2 | joueur dépose au commun | ✅ |
+| 3 | MJ édite une bourse (dont « Tout à 0 ») | ✅ |
+| 4 | change de monnaie | ✅ |
+| 5 | récompense de clôture de séance | ✅ |
+| 6 | écritures invalides refusées (devtools) | ✅ `PERMISSION_DENIED` sur `-5`, `2.5`, `"5"` |
+| 7 | réimport d'une sauvegarde | ⬜ à faire |
+| 8 | ré-amorçage d'un perso | ⬜ à faire |
+| 9-10 | entrée de journal visible chez le MJ | ✅ |
+| 11 | édition MJ journalisée en delta | ✅ |
+| 12 | « ⟲ Combat » ne vide PAS le journal de monnaie | ✅ **après correction** — a révélé le bug §10.2 |
+| 13 | lecture d'`economyLog` refusée au joueur | ⬜ à faire |
+| 14 | élagage au-delà de 30 entrées | ✅ |
+
+⚠️ **Leçon de méthode, la plus importante de cette campagne.** Deux retours ont été « ça marche,
+l'interface ne me laisse pas faire » — pour le test 6 (les champs refusent les décimales) et le
+test 13 (l'onglet Journal est caché aux joueurs). **Ce n'est pas ce que ces tests vérifient.**
+Un joueur en devtools parle directement à la base avec son propre jeton, sans passer par l'UI.
+Les deux tests contournent donc l'interface exprès : ce sont les seuls qui prouvent que les
+règles mordent. Une restriction d'affichage n'est jamais une serrure — c'est toute la raison
+d'être du chantier A.
+
+⚠️ **Piège de copier-coller rencontré** : un snippet devtools écrit avec des accents graves
+(gabarit de chaîne) perd ses backticks à la copie depuis un terminal, et `${x}` devient du code
+nu → `Unexpected token '{'`. **Écrire les snippets destinés à l'utilisateur en concaténation
+de chaînes**, jamais en template literal.
+
+---
+
+## 10. Bugs ANTÉRIEURS révélés par la campagne
+
+Aucun des deux n'était causé par ce chantier. Tous deux corrigés et déployés.
+
+### 10.1 Bourse du joueur ÉCRASÉE au lieu d'être créditée (`89fbdfa`)
+
+Elias a 6 argent, en prend 4 au coffre, se retrouve avec **4**.
+
+`CommonInventoryPage` calculait la bourse de destination via `useAllCharStates()`, qui s'abonne à
+`campaign/runeterra/characters` — **nœud refusé à un joueur** (il ne lit que SA fiche).
+L'abonnement rejeté laissait `all` à `null`, `charCoins()` retombait sur son repli `{0,0,0,0}`,
+et `moveCoins` écrivait `0 + 4`. **Invisible en MJ**, qui lit tout : il fallait un compte de rôle
+`joueur` pour le voir.
+
+Correctif : `moveCoins`/`moveItem` ne font plus confiance à l'état passé par l'appelant et
+relisent les deux côtés via `getSnapshot` (qui **rejette** si l'accès est refusé — transfert
+abandonné plutôt que valeur fausse écrite). Calcul extrait en `planCoinMove`, testé.
+
+👉 **`useAllCharStates()` est un hook DE STAFF** : `null` pour un joueur. `pages-inventory` était
+le seul endroit où ce `null` alimentait un **calcul d'écriture**.
+
+### 10.2 Un MJ ne pouvait pas vider un journal (`9d59236`)
+
+Purger = écrire `null` **SUR LE NŒUD**. `combat/log` n'avait de `.write` que sur `$logId` : rien
+au niveau du nœud, et le seul ancêtre qui en donne un est `campaign/runeterra`, réservé à
+`admin`. « ⟲ Combat » et « Vider » échouaient donc pour le rôle `mj`, **en silence** (aucun
+`catch`). Présent depuis la livraison du journal de combat en juin ; `economyLog` avait le même
+défaut de naissance.
+
+Correctif : `.write` staff **au niveau du nœud** sur `combat/log` et `economyLog` (les joueurs
+gardent `$logId` pour écrire une entrée), plus 4 `catch` + toasts « droits insuffisants ».
+
+👉 **Un `.write` sur un enfant joker (`$id`) n'autorise PAS à écrire sur le nœud parent.** Écrire
+une entrée et purger la collection sont deux permissions distinctes. Un
+`updatePath(NŒUD, {id: null})` passe par la règle `$id` — c'est pourquoi l'élagage automatique
+fonctionnait déjà — alors qu'un `setPath(NŒUD, null)` non.

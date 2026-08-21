@@ -825,8 +825,10 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   (`MOD_STATS`, 11 stats) visible si `cat==='Équipement'`. 39 tests verts.
 
 ## Chantiers en cours / backlog
-- **Monnaie : durcissement des règles RTDB** — 🔶 **A et B écrits, il ne reste qu'à publier**
-  (`firebase deploy --only database`) **et à dérouler les 14 tests** : **§9** du document de reprise,
+- **Monnaie : durcissement des règles RTDB + journal** — ✅ **FAIT, publié et validé le 2026-08-21**
+  (résultats de la campagne de tests + 2 bugs antérieurs trouvés au passage : **§9.7 et §10** du
+  document de reprise). Restent 3 tests secondaires : 7 (réimport de sauvegarde), 8 (ré-amorçage),
+  13 (lecture d'`economyLog` refusée au joueur). Document :
   **document de reprise complet** : `docs/superpowers/specs/2026-08-20-durcissement-monnaie-rtdb-design.md`
   (contexte, patch de règles prêt à coller, points d'accroche du journal, 3 pièges dont l'import de
   sauvegarde cassé par un `.validate`). A reste bloqué sur une **publication manuelle en console Firebase**
