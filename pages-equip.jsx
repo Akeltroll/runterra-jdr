@@ -168,11 +168,12 @@ function EquipBody({ char }) {
   // (même règle que carriedWeight) ; null ailleurs = poids de base. Alimente les infobulles.
   const effWeightOf = (it) => (it && equipment.armure && equipment.armure === it.id)
     ? armorEffectiveWeight(it.weight, carryMental) : null;
-  const weightCarried = carriedWeight(itemsById, carryMental, equipment);
+  /* Monnaie live — déclarée AVANT la jauge de poids, qui en dépend (les pièces pèsent). */
+  const coins = state.coins || char.coins || { plat:0, or:0, arg:0, cuiv:0 };
+  const weightCarried = carriedWeight(itemsById, carryMental, equipment, coins);
   const weightCap = carryCapacity(carryForce, carryMental, effLevel, equipment, itemsById);
   const wStatus = weightStatus(weightCarried, weightCap, carryHab);
   const weightOver = wStatus.over;
-  const WEIGHT_STATE = { leger: { label:'Léger', col:'#9fd07a' }, encombre: { label:'Encombré', col:'#e0a33a' }, surcharge: { label:'Surchargé', col:'var(--hp)' } };
   const wInfo = WEIGHT_STATE[wStatus.state] || WEIGHT_STATE.leger;
   const sval = (k, base, pct) => (pct ? (base || 0).toFixed(1) + '%' : invFmt(base || 0));
   const scol = (k) => (skillBuffMods[k] ? 'var(--skillbuff)' : (bonuses[k] ? '#9fd07a' : '#e9dcc4'));
@@ -230,9 +231,7 @@ function EquipBody({ char }) {
     setMenu(null);
   };
 
-  /* --- Monnaie live + actions items/pièces --- */
-  const coins = state.coins || char.coins || { plat:0, or:0, arg:0, cuiv:0 };
-
+  /* --- Actions items/pièces --- */
   const sendToCommon = (item, n) => {
     moveItem(`${charPath(char.id)}/inventory`, SHARED_INV, itemsById, sharedItems || {}, item.id, n);
   };
@@ -388,7 +387,7 @@ function EquipBody({ char }) {
           <div style={{ marginTop:12, paddingTop:10, borderTop:'1px solid rgba(160,128,72,0.15)' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', fontSize:11, marginBottom:4 }}>
               <span style={{ fontFamily:"'Cinzel',serif", letterSpacing:1, color:'#c2a05a' }}>POIDS</span>
-              <span><span style={{ color:wInfo.col, fontWeight:700, marginRight:6 }}>{wInfo.label}</span><span style={{ color:'#9a8b76' }}>{weightCarried} / {weightCap}</span></span>
+              <span><span style={{ color:wInfo.col, fontWeight:700, marginRight:6 }}>{wInfo.label}</span><span style={{ color:'#9a8b76' }}>{invWeightFmt(weightCarried)} / {weightCap}</span></span>
             </div>
             <div style={{ position:'relative', height:7, borderRadius:4, background:'var(--bg-inset)', overflow:'hidden', border:'1px solid rgba(160,128,72,0.18)' }}>
               <div style={{ height:'100%', width:`${Math.min(100, wStatus.pct * 100)}%`,

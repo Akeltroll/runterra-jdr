@@ -60,10 +60,33 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `180 + 100*level` = `info-mj/tableau_XP.png` ; **cap niveau 18** → `Infinity` au cap, `MAX_LEVEL=18`)
   + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade, figée au cap)
   + `applyXpLoss(level, xp, loss)` (miroir : descente en cascade, plancher niveau 1 / xp 0 — corrige une
-  saisie d'XP erronée). **Poids porté** : `carriedWeight(items)` (Σ `weight×qty`), `carryCapacity(force,
-  equipment, itemsById)` (= `CARRY_BASE`(10) + `force×CARRY_PER_FORCE`(5) + Σ `item.carry` des items équipés —
-  **la ceinture = un item avec `carry`**), `weightStatus(carried, cap)` (`{pct, over}`, affichage seul, le
-  MJ arbitre la surcharge). Items : champs `weight` (poids unitaire) + `carry` (bonus de capacité).
+  saisie d'XP erronée). **Poids porté** : `carriedWeight(items, mental, equipment, coins)` (Σ `weight×qty`,
+  armure du slot `armure` allégée par le Mental, **+ le poids de la bourse** si `coins` est fourni — 4e param
+  optionnel, les appels sans lui sont inchangés), `carryCapacity(force, mental, level, equipment, itemsById)`
+  (= `CARRY_BASE`(**30**) + `force×CARRY_PER_FORCE`(5) + **`mental×niveau÷10`** + Σ `item.carry` des items
+  équipés, arrondi inférieur — **la ceinture = un item avec `carry`**), `comfortPct(hab)` (seuil de confort
+  = 60 % + Hab×2 %, plafond 90 %), `weightStatus(carried, cap, hab)` (`{pct, over, comfort, comfortPct,
+  state}` où `state` ∈ `leger`/`encombre`/`surcharge` ; affichage seul, le MJ arbitre la surcharge),
+  `ARMOR_CLASSES`/`armorWeightReduction`/`armorEffectiveWeight`. Items : champs `weight` (poids unitaire)
+  + `carry` (bonus de capacité **personnelle**, canal `p` — objet équipé, réservé à `cat==='Équipement'`)
+  + **`carryGroup`** (bonus de capacité du **groupe**, canal `g` — **toutes catégories**) + `armorClass`.
+  **Capacité COMMUNE du coffre** : `carryBaseRaw(force, mental, level)` (terme brut non arrondi, sans
+  bonus — partagé avec `carryCapacity`), `groupCarryBase(profiles)` (Σ brute, **conforme au doc MJ**),
+  `GROUP_CARRY_RATIO` (0,30 — voir l'écart assumé ci-dessus),
+  `groupCarryCapacity(profiles, bonusGroup)` (⌊Σ×ratio + attelage⌋, arrondi **une seule fois à la fin** :
+  ⌊74,34⌋ = 74 et non 73), `groupComfortPct(profiles)` (moyenne des conforts individuels),
+  `weightStatusPct(carried, cap, pct)` (seuil donné en fraction). **Attelage** : `TRANSPORT_SLOTS`
+  (2 montures + 3 sacs), `transportAccepts(slot, item)` (exige `carryGroup > 0` ; respecte le `type`
+  `mount`/`pack` **sauf pour un objet non typé, qui passe partout** — le champ « Emplacement » n'existe
+  que pour `cat==='Équipement'`, un sac en Butin ne PEUT pas être typé), `sumTransportCarry(transport,
+  items)` (Σ des objets attelés, dédoublonné, par pile).
+  **Poids de la monnaie** (guide d'économie §3, livré le 2026-08-21) : `COIN_PER_WEIGHT`
+  (pièces pour 1 unité de poids — cuiv 200 / arg 100 / **or 67** / plat 200) + `coinsWeight(coins)`.
+  ⚠️ Barème **non monotone avec la valeur, et c'est voulu** : l'**or est la plus LOURDE**, le **platine la
+  plus LÉGÈRE** — ne pas « corriger » l'ordre. Valeur **exacte, jamais arrondie** en interne (décision MJ :
+  199 cuivres pèsent 0,995 et non 0) ; l'arrondi à 1 décimale est purement d'affichage (`invWeightFmt`,
+  components.jsx). Branché sur les 2 jauges de charge (Équipement, Admin) + le pied de `InventoryGrid`
+  (« ⚖ N » à côté des pièces → visible sur fiche, coffre commun et Équipement).
   **Monnaie** : `COIN_VALUE` (valeurs en cuivre : cuiv 1 / arg 100 / or 10 000 / plat 100 000 — soit
   100 cuivre = 1 argent, 100 argent = 1 or, 10 or = 1 platine, cf. `info-mj/Économie - guide des joueurs.md`)
   + **journal d'économie** (textes purs, testés) : `COIN_NAME`, `coinsAmountText(coins)` (« 2 or, 15 cuivre »),
@@ -230,6 +253,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Supprimer) ; clic pièce → retrait. **Transferts commun → perso** via `moveItem`/`moveCoins` :
   joueur = sa propre fiche, **MJ/admin = choix du destinataire** (picker sur `CHARACTERS`).
   Pile qty>1 → `AmountStepper` (montant), qty=1 → direct.
+  **Jauge de charge du coffre** (`CommonWeightBar`) : capacité = Σ des capacités des 5 persos
+  (`useGroupCarry`→`groupCarryCapacity`) + attelage, confort = moyenne (`groupComfortPct`), poids =
+  `carriedWeight(items, 0, {}, sharedCoins)` — **appelé sans `equipment`** : le coffre n'a pas de porteur,
+  donc pas de réduction Mental sur l'armure (§7 du doc). **`TransportRack`** = les 5 emplacements
+  d'attelage (glisser-déposer depuis la grille, ou clic → liste des objets éligibles ; clic sur un slot
+  occupé = dételer), persistés dans `sharedTransport`.
 - `pages-equip.jsx` — page **Équipement** (`EquipPage`/`EquipBody`) : paperdoll dark-fantasy
   recréé du design Claude. 3 colonnes (slots+stats / portrait `ATH/Perso/` imposant / inventaire
   live via `InventoryGrid`), drag & drop inventaire ↔ slots + double-clic, tooltip, HUD bas
@@ -354,13 +383,25 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   navigateur** et ne déploie rien. Prérequis, une fois : `npm i -g firebase-tools` + `firebase login`.
   La CLI **n'affiche aucun diff** avant d'écrire : comparer les règles en ligne avec le fichier du
   dépôt reste nécessaire. La voie console (coller → Publier) reste valable en secours.
+  ✅ **Comment LIRE les règles en ligne** (trouvé le 2026-08-22 — il n'y a pas de `database:rules:get`) :
+  `firebase database:get "/.settings/rules" --instance runeterra-jdr-default-rtdb`.
+  ⚠️ La commande **sort les règles complètes PUIS quitte en code 255** : l'erreur est cosmétique, la
+  sortie est bonne — ne pas conclure à un échec. C'est ce qui permet de vérifier **avant** (dérive
+  console ?) et **après** (le déploiement fait-il ce qu'on croit ?) chaque publication.
+  Attention en PowerShell : `Out-File -Encoding utf8` ajoute un **BOM** qui fait diverger le `diff`
+  sur la 1re ligne — le retirer avant de comparer (`sed 's/^\xef\xbb\xbf//'`).
 - `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
   joueur = sa fiche seule, staff = tout ; **`campaign/runeterra` a un `.write` `mj`+`admin`**
   (ouvert au MJ le 2026-08-21 pour l'import de sauvegarde — `setPath(CAMPAIGN,…)` écrit sur le nœud
   racine ; les `.validate` des descendants continuent de s'appliquer, et `/users` n'est pas
   concerné : un MJ ne peut toujours pas se promouvoir admin) ; **`combat/log` et `economyLog` ont un `.write` STAFF au
   niveau du NŒUD** (purger = écrire sur le nœud ; le `.write` sur `$logId` ne suffit pas — cf. bug
-  du 2026-08-21) ; **`characters/$charId/state/coins/$coin` = `.validate` entier >= 0** (le reste du sous-arbre perso n'est toujours validé nulle part) ; `sharedInventory` = R/W pour tout participant
+  du 2026-08-21) ; **`characters/$charId/state/coins/$coin` = `.validate` entier >= 0** (le reste du sous-arbre perso n'est toujours validé nulle part) ;
+  **`characters/$charId/state/attrs` et `/level` ont un `.read` ouvert à TOUS les inscrits** (2026-08-21,
+  capacité commune du coffre : elle a besoin des caracs des 5 persos ; le reste de la fiche — PV, bourse,
+  modificateurs, XP, runes, inventaire — **reste cloisonné**, et aucune écriture n'est élargie) ;
+  **`sharedTransport` = R/W tout participant inscrit** (attelage du groupe : ranger la monture n'est pas
+  un acte de MJ ; `.validate` = chaîne ou suppression) ; `sharedInventory` = R/W pour tout participant
   inscrit, écriture au niveau `$itemId` ; `sharedCoins` = R/W tout participant inscrit,
   `.validate` par dénomination (nombre ≥ 0) ; `combat/turn` = lecture tout inscrit, **écriture staff**
   (nombre ≥ 1) — tour partagé ; `combat/enemies` = lecture inscrits, **écriture staff** (ennemis
@@ -391,7 +432,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
                ↑ liste unique `MOD_STATS` (components.jsx), partagée éditeur d'item + panneau Modificateurs MJ
                letha = léthalité PHYSIQUE (réduit l'armure) ; lethaMag = léthalité MAGIQUE (réduit la rés. mag.)
                sapience/vol/omni sont des POURCENTAGES (cf. lifestealHeal), pas des valeurs plates
-    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods, weight, carry, order } }   ← perso, éditable (order = rangement manuel, cf. planReorder)
+    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods, weight, carry, carryGroup, order } }   ← perso, éditable (order = rangement manuel, cf. planReorder)
     invInit:   true   ← marqueur de migration (amorçage unique de l'inventaire)
     equipment: { [slotKey]: itemId }   ← paperdoll (page Équipement), temps réel ; slotKey ∈ EQUIP_SLOTS (12 slots, armure fusionnée + ceinture)
     armureInit: true   ← marqueur de migration (fusion des 4 slots d'armure → slot « armure » unique)
@@ -406,7 +447,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
     skillBuffs: { [skillId]: { mods:{ [stat]: n }, until:<n° de tour>|null } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; until = tour de fin (auto-expiration via sumSkillBuffs(buffs,turn), ex. Mur de Givre 1/2 tours), null = permanent ; ancienne forme plate { [stat]:n } encore lue (compat) ; effacés par « ⟲ Combat »
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
-    { id, cat, name, sub, qty, ic, img, type, mods, weight, carry }
+    { id, cat, name, sub, qty, ic, img, type, mods, weight, carry, carryGroup }
+/campaign/runeterra/sharedTransport/   ← ATTELAGE du groupe : { [slotKey]: itemId } (R/W tout participant)
+                                          slotKey ∈ TRANSPORT_SLOTS (monture1, monture2, sac1, sac2, sac3)
+                                          un objet du coffre n'apporte son `carryGroup` à la capacité commune
+                                          QUE placé ici — la simple présence dans le coffre ne suffit pas
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
 /campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
 /campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, crit, dcrit, lethaAD, lethaAP, reveal, revealPct } ; lecture inscrits, écriture staff
@@ -511,6 +556,78 @@ arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, 
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
 ## État actuel (2026-08-21)
+- **Capacité du coffre commun + attelage du groupe (lot 3/3 du chantier « poids »)** — cache
+  `20260821-6`, **183 tests verts** (game-logic 172 + auth 11), ✅ **RÈGLES RTDB PUBLIÉES ET VÉRIFIÉES
+  le 2026-08-22** (`firebase deploy --only database` ; relecture en ligne avant/après : aucune dérive
+  console préalable, et le diff post-déploiement ne montre que les 3 ajouts attendus).
+  Le coffre commun était **la seule grille de l'app sans jauge de charge** : rien ne limitait ce qu'on
+  y entassait. Il a maintenant une capacité, un seuil de confort et un état, calculés par le modèle
+  du §3-5 de `info-mj/Systeme de poids - Inventaire commun (formules).md`.
+  **Capacité = grandeur EXTENSIVE → SOMME** des capacités de base des 5 persos (× ratio) + attelage ;
+  **confort = grandeur INTENSIVE → MOYENNE** de leurs seuils individuels. Groupe actuel (niveau 2,
+  sans attelage) : **74 de capacité, 68 % de confort, seuil 50** — verrouillé par un test.
+  ⚠️ **ÉCART ASSUMÉ AU DOC MJ — `GROUP_CARRY_RATIO` (0,30)**, arbitré par le MJ le 2026-08-21 après
+  essai en jeu. Le §3 du doc pose « capacité commune = Σ des capacités individuelles », soit 247 ici.
+  Mais dans l'app le coffre est un stockage **SÉPARÉ** des sacs persos : à pleine somme le groupe
+  disposerait de 247 (sacs) + 247 (coffre) ≈ **494**, le double de sa capacité réelle, et le seuil
+  d'encombrement du coffre (167) ne serait **jamais** atteint — une armure lourde pèse 20. Le coffre
+  ne vaut donc qu'une **fraction** de la capacité collective. À 30 % il tombe à 74, cohérent avec les
+  ordres de grandeur du guide d'économie (« quatre brigands dépouillés = 22 unités », charge perso de
+  30 à 80 au niveau 1). **Le ratio est le curseur d'équilibrage du système : une seule ligne à changer**
+  (`GROUP_CARRY_RATIO`, game-logic.js). `groupCarryBase` expose la somme **brute**, restée exactement
+  conforme au doc (testée contre son exemple du §9 : 352) — c'est le ratio qui s'en écarte, pas elle.
+  ⚠️ **Le ratio NE s'applique PAS au bonus d'attelage** : une monture est intégralement dédiée au
+  portage collectif, rien à en défalquer. C'est ce qui donne son intérêt à l'attelage — un chameau à
+  +50 pèse plus lourd dans le calcul que les 5 personnages réunis.
+  Livré (game-logic, purs, testés) : `carryBaseRaw` (terme brut **non arrondi et sans bonus**),
+  `groupCarryCapacity`, `groupComfortPct`, `weightStatusPct` (variante de `weightStatus` prenant le
+  seuil **en fraction** — le confort commun est une moyenne et ne correspond à l'Habileté de personne ;
+  `weightStatus(hab)` n'est plus qu'un appel à cette fonction). Plus `TRANSPORT_SLOTS` /
+  `transportAccepts` / `sumTransportCarry`. Côté app : `useSharedTransport` + `useGroupCarry`
+  (data-state), `TransportRack` + `CommonWeightBar` (pages-inventory), `WEIGHT_STATE` **extrait dans
+  components.jsx** (il était local à pages-equip et allait être dupliqué une 3e fois).
+  ⚠️ **`carryCapacity()` n'était PAS réutilisable pour la somme commune**, malgré la formule identique :
+  elle arrondit **individuellement** (⌊247,8⌋ = 247 contre 246 en arrondissant chacun — écart durable et
+  silencieux) et elle ajoute le bonus `carry` **personnel** que le §3 exclut du commun. D'où
+  `carryBaseRaw`, désormais partagé par les deux.
+  ⚠️ **`useGroupCarry` n'est PAS `useAllCharStates`** : ce dernier s'abonne au nœud **parent**
+  `characters`, resté staff-only — ouvrir un enfant n'ouvre pas le parent (version **lecture** de la
+  leçon des journaux). Le hook s'abonne aux chemins **feuilles** `state/attrs` et `state/level` des
+  5 persos. Et il n'alimente **que de l'affichage** : aucune écriture ne doit en dépendre.
+  ✅ **Règles en ligne** : les joueurs peuvent désormais lire `attrs`/`level` des 5 persos (jauge juste
+  même après une respec) et atteler eux-mêmes. Plus de `permission_denied` en console.
+- **Canal « groupe » des objets de transport (lot 2/3 du chantier « poids »)** — cache `20260821-4`,
+  **177 tests verts** (game-logic 166 + auth 11), **aucune règle RTDB**, aucune migration.
+  §6 du doc `info-mj/Systeme de poids - Inventaire commun (formules).md` : un objet de transport porte
+  **deux bonus indépendants** — `carry` (canal `p`, capacité **personnelle** du porteur, déjà là) et le
+  **nouveau `carryGroup`** (canal `g`, capacité du **coffre commun**). Un même objet peut alimenter l'un,
+  l'autre ou les deux (chameau harnaché : `carry:10, carryGroup:50`).
+  Livré : champ `carryGroup` propagé aux **4 sites** de copie de champs d'item (`makeItem`,
+  `planItemTransfer`, `fillStacks`, `buildCatalogSeed`) + saisie dans `InvItemRow` + affichage
+  (`ItemTooltip`, détail du coffre commun).
+  ⚠️ **Gating volontairement différent de `carry`** : `carry` est remis à 0 hors `cat==='Équipement'`
+  (il faut l'équiper pour en profiter), **`carryGroup` ne l'est pas** — un sac large ou une monture peut
+  être rangé en `Butin` sans être équipable et compter quand même pour le groupe. Ne pas « harmoniser ».
+  ⚠️ **Règle de déclenchement CORRIGÉE le jour même, au retour de test du MJ** : la première version
+  (`sumGroupCarry`) sommait le `carryGroup` de **tout** le coffre + les objets équipés. Le MJ a tranché
+  autrement — dix sacs rangés en vrac gonfleraient la capacité de +200. Un objet n'apporte sa capacité de
+  groupe que **placé dans un emplacement d'attelage** (`TRANSPORT_SLOTS`, lot 3). `sumGroupCarry` a été
+  **supprimé** (pas laissé à côté : deux règles concurrentes auraient trompé le prochain lecteur) et
+  remplacé par `sumTransportCarry`. Bonus compté **par pile**, pas par unité.
+- **Poids de la monnaie (lot 1/3 du chantier « poids »)** — cache `20260821-3`, **171 tests verts**
+  (game-logic 160 + auth 11), **aucune règle RTDB**, aucune migration.
+  Avant ce lot, les pièces ne pesaient **rien** : `carriedWeight` ne regardait que `items`, alors que le
+  guide des joueurs annonce le poids des bourses depuis toujours et s'en sert comme argument de jeu
+  (« convertissez »). Un joueur pouvait porter 40 000 cuivres sans quitter l'état *Léger*.
+  Livré : `COIN_PER_WEIGHT` + `coinsWeight` (game-logic, purs, testés), 4e param `coins` de `carriedWeight`,
+  `invWeightFmt` (components) et 3 points d'affichage (jauge Équipement, compteur Admin, pied de
+  `InventoryGrid`). ⚠️ Une charge peut désormais être **fractionnaire** : formater avec `invWeightFmt`,
+  jamais interpoler la valeur brute.
+  📄 Spec + plan : `docs/superpowers/{specs,plans}/2026-08-21-poids-monnaie-inventaire-commun*`.
+  **Restent les lots 2 et 3** (canal `g` `item.carryGroup` ; capacité/confort du coffre commun) — le lot 3
+  demande **une republication de règles RTDB** (4 `.read` sur `characters/$charId/state/{attrs,level,
+  equipment,inventory}`) et porte une conséquence à confirmer : l'inventaire perso de chacun devient
+  lisible par les autres joueurs (§7.1 de la spec, repli documenté).
 - **🐞 CORRIGÉ — un MJ ne pouvait PAS vider un journal** (bug **antérieur**, depuis la livraison du
   journal de combat en juin ; trouvé au test §9-12 du 2026-08-21). Cache `20260821-2`,
   ⚠️ **RÈGLES RTDB À REPUBLIER** (2 lignes).
@@ -739,7 +856,9 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
      (`EQUIP_SLOTS` passe à 12 slots, `accepts` multi-types, migration unique `armureInit`).
   3. **Système de poids** : items `weight`/`carry` ; `carriedWeight`/`carryCapacity`/`weightStatus`
      (game-logic, testés) ; capacité = `CARRY_BASE + force×CARRY_PER_FORCE + Σ item.carry équipés` —
-     **la ceinture = un item `carry`** (+ slot « Ceinture ») ; jauge de poids sur fiche + Équipement.
+     **la ceinture = un item `carry`** (+ slot « Ceinture ») ; jauge de poids sur **Équipement + Admin**
+     (⚠️ cette note annonçait « fiche + Équipement » : **la fiche joueur n'a jamais eu de jauge** — écart
+     de documentation relevé le 2026-08-21, pas un manque signalé par le MJ).
   4. **Badge CD statique** sur chaque carte de compétence Combat (`1×/tour` / `CD N tours` / `1×/combat` /
      `Sans CD`) — lisible sans lancer la comp.
   5. **Gestion d'inventaire par perso en Admin** (`CharInventoryAdminPanel`) : sélecteur de perso →

@@ -413,6 +413,17 @@ function CoinIcon({ coin, size = 26 }) {
     background:`url(${coin.img}) center/contain no-repeat` }} />;
 }
 const invFmt = (n) => Number(n || 0).toLocaleString('fr-FR');
+/* Format d'un poids : entier tel quel, sinon UNE décimale. Depuis que les pièces pèsent
+   (coinsWeight, guide d'économie §3), une charge peut tomber sur un fractionnaire — le
+   calcul reste exact en interne, seul l'affichage arrondit. */
+const invWeightFmt = (n) => Number(n || 0).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+/* Libellé + couleur des 3 états d'encombrement (weightStatus.state). Partagé par la jauge
+   personnelle (Équipement) et celle du coffre commun — une seule table, pas trois copies. */
+const WEIGHT_STATE = {
+  leger:     { label:'Léger',      col:'#9fd07a' },
+  encombre:  { label:'Encombré',   col:'#e0a33a' },
+  surcharge: { label:'Surchargé',  col:'var(--hp)' },
+};
 /* Libellé de poids d'un item : unitaire, + le total de la pile si qty > 1.
    Renvoie null si l'item ne pèse rien (rien à afficher).
    `effUnit` = poids unitaire EFFECTIF (optionnel) : sert à l'armure équipée, allégée par
@@ -483,6 +494,23 @@ function ItemTooltip({ item, x, y, effWeight }) {
           </div>
         </React.Fragment>
       )}
+      {(Number(item.carry) > 0 || Number(item.carryGroup) > 0) && (
+        <React.Fragment>
+          {sep}
+          {Number(item.carry) > 0 && (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12.5, padding:'2px 0' }}>
+              <span style={{ color:'#9a8b76' }}>Capacité portée</span>
+              <span style={{ color:'#9fd07a' }}>+{invFmt(item.carry)}</span>
+            </div>
+          )}
+          {Number(item.carryGroup) > 0 && (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12.5, padding:'2px 0' }}>
+              <span style={{ color:'#9a8b76' }}>Capacité du groupe</span>
+              <span style={{ color:'#9fd07a' }}>+{invFmt(item.carryGroup)}</span>
+            </div>
+          )}
+        </React.Fragment>
+      )}
     </div>
   );
 }
@@ -492,6 +520,7 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
   // Pas de poids effectif ici : toutes les grilles excluent les objets équipés (seuls concernés
   // par l'allègement au Mental), donc le poids de base est toujours le bon.
   const [tip, setTip] = useState(null);   // { item, x, y }
+  const purseWeight = coinsWeight(coins);   // les pièces pèsent (guide d'économie §3)
   const ordVal = (it) => typeof it.order === 'number' ? it.order : Number.MAX_SAFE_INTEGER;
   const list = items
     ? Object.values(items).filter(it => it.qty == null || it.qty > 0).sort((a, b) => ordVal(a) - ordVal(b))
@@ -587,6 +616,12 @@ function InventoryGrid({ items, coins, filter, setFilter, onItemClick, onCoinCli
             </span>
           </div>
         ))}
+        {purseWeight > 0 && (
+          <span title="Poids de la bourse (67 or = 100 argent = 200 cuivre = 200 platine = 1 unité)"
+            style={{ fontFamily:"'EB Garamond',serif", fontSize:12, color:'rgba(190,170,135,0.7)', marginLeft:2 }}>
+            ⚖ {invWeightFmt(purseWeight)}
+          </span>
+        )}
         <div style={{ flex:1 }} />
         <span style={{ fontFamily:"'Cinzel',serif", fontSize:11, color:'#c2a05a', letterSpacing:0.5 }}>
           {list.length} / {capacity}
@@ -870,6 +905,16 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
                 onChange={e => setD({ ...d, carry: Math.max(0, parseFloat(e.target.value) || 0) })} />
             </label>
           )}
+          {/* Canal GROUPE (§6 du doc « Inventaire commun ») : contrairement à `carry`, il n'est
+              PAS réservé à cat==='Équipement' — un sac large ou une monture peut être rangé en
+              Butin sans être équipable, et compte quand même pour le coffre commun. */}
+          <label className="row gap-1" title="Bonus de capacité du COFFRE COMMUN. Compte quand l'objet est rangé dans le coffre partagé, ou équipé par un joueur."
+            style={{ alignItems:'center', fontSize:11, color:'var(--ink-soft)' }}>
+            Capacité groupe (+coffre)
+            <input style={{ ...fld, width:70 }} type="number" min="0" step="1"
+              value={d.carryGroup != null ? d.carryGroup : ''} placeholder="0"
+              onChange={e => setD({ ...d, carryGroup: Math.max(0, parseFloat(e.target.value) || 0) })} />
+          </label>
         </div>
         {/* Image : téléversement + aperçu (pas besoin de connaître l'arborescence) */}
         <div className="row gap-2" style={{ alignItems:'center' }}>
@@ -887,7 +932,7 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
           : <input style={fld} value={d.img || ''} placeholder="ou chemin/URL (ex. ATH/Items/xxx.webp)" onChange={e => setD({ ...d, img: e.target.value })} />}
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => { setD(item); setEdit(false); }}>Annuler</button>
-          <button className="btn btn-sm btn-gold" onClick={() => { const isEq = d.cat === 'Équipement'; onSave({ ...d, type: isEq ? (d.type || '') : '', mods: isEq ? (d.mods || {}) : {}, weight: Math.max(0, Number(d.weight) || 0), carry: isEq ? (Math.max(0, Number(d.carry) || 0)) : 0, armorClass: (isEq && d.type === 'armor') ? (d.armorClass || '') : '' }); setEdit(false); }}>Enregistrer</button>
+          <button className="btn btn-sm btn-gold" onClick={() => { const isEq = d.cat === 'Équipement'; onSave({ ...d, type: isEq ? (d.type || '') : '', mods: isEq ? (d.mods || {}) : {}, weight: Math.max(0, Number(d.weight) || 0), carry: isEq ? (Math.max(0, Number(d.carry) || 0)) : 0, carryGroup: Math.max(0, Number(d.carryGroup) || 0), armorClass: (isEq && d.type === 'armor') ? (d.armorClass || '') : '' }); setEdit(false); }}>Enregistrer</button>
         </div>
       </div>
     );
@@ -1026,6 +1071,6 @@ Object.assign(window, {
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
   ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL, STAT_LABEL_SHORT, STAT_FAMILY, statFamily,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
-  InventoryGrid, ItemTooltip, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invCoin, CoinIcon, invFmt, invWeightLabel, invThumbStyle,
+  InventoryGrid, ItemTooltip, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invCoin, CoinIcon, invFmt, invWeightFmt, invWeightLabel, invThumbStyle,
   AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar, MOD_STATS, CoinEditor,
 });

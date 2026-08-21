@@ -22,6 +22,13 @@
             ".validate": "newData.hasChildren(['id', 'name', 'cat'])"
           }
         },
+        "sharedTransport": {
+          ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+          "$slot": {
+            ".validate": "!newData.exists() || newData.isString()"
+          }
+        },
         "sharedCoins": {
           ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
           ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
@@ -77,6 +84,12 @@
             ".read":  "auth != null && root.child('users').child(auth.uid).child('charId').val() === $charId",
             ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('charId').val() === $charId)",
             "state": {
+              "attrs": {
+                ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()"
+              },
+              "level": {
+                ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()"
+              },
               "coins": {
                 "$coin": {
                   ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0"

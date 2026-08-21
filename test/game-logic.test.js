@@ -811,7 +811,53 @@ test('applyXpLoss : perte nulle ou négative = inchangé', () => {
   assert.deepEqual(L.applyXpLoss(2, 100, -50), { level: 2, xp: 100, levelsLost: 0 });
 });
 
+/* --- Poids de la monnaie (guide d'économie §3) --- */
+test('coinsWeight : bourse vide / absente = 0', () => {
+  assert.equal(L.coinsWeight({}), 0);
+  assert.equal(L.coinsWeight(null), 0);
+  assert.equal(L.coinsWeight(undefined), 0);
+  assert.equal(L.coinsWeight({ inconnu: 5000 }), 0);   // clé hors barème ignorée
+});
+test('coinsWeight : barème du guide — 67 or / 100 argent / 200 cuivre / 200 platine = 1 unité', () => {
+  assert.equal(L.coinsWeight({ or: 67 }), 1);
+  assert.equal(L.coinsWeight({ arg: 100 }), 1);
+  assert.equal(L.coinsWeight({ cuiv: 200 }), 1);
+  assert.equal(L.coinsWeight({ plat: 200 }), 1);
+  // repère explicite du guide : « un trésor de 500 pièces d'argent pèse 5 unités »
+  assert.equal(L.coinsWeight({ arg: 500 }), 5);
+  // ...« la même valeur en cuivre pèserait 25 unités » (500 arg = 50 000 cuiv)
+  assert.equal(L.coinsWeight({ cuiv: 50000 }), 250);
+  // l'or est bien la PLUS LOURDE et le platine la PLUS LÉGÈRE (barème non monotone)
+  assert.ok(L.coinsWeight({ or: 100 }) > L.coinsWeight({ arg: 100 }));
+  assert.ok(L.coinsWeight({ plat: 100 }) < L.coinsWeight({ arg: 100 }));
+});
+test('coinsWeight : valeur EXACTE, aucun arrondi (199 cuivres ne pèsent pas 0)', () => {
+  assert.equal(L.coinsWeight({ cuiv: 199 }), 199 / 200);       // 0,995 — pas 0
+  assert.ok(L.coinsWeight({ cuiv: 199 }) > 0.99);
+  assert.equal(L.coinsWeight({ or: 1 }), 1 / 67);
+  // 4 bourses de 199 cuivres pèsent ~4 unités, pas 0 (le contrôle du choix « exact en interne »)
+  assert.ok(Math.abs(L.coinsWeight({ cuiv: 796 }) - 3.98) < 1e-9);
+});
+test('coinsWeight : les 4 dénominations s\'additionnent ; négatifs plancés à 0', () => {
+  assert.equal(L.coinsWeight({ cuiv: 200, arg: 100, or: 67, plat: 200 }), 4);
+  assert.equal(L.coinsWeight({ cuiv: 100, arg: 50 }), 0.5 + 0.5);
+  assert.equal(L.coinsWeight({ or: -100, arg: 100 }), 1);
+});
+
 /* --- Système de poids : carriedWeight / carryCapacity / weightStatus --- */
+test('carriedWeight : la bourse compte dans la charge (4e param optionnel)', () => {
+  const items = { a: { weight: 3, qty: 2 } };
+  // sans 4e param : résultat INCHANGÉ (non-régression des appels existants)
+  assert.equal(L.carriedWeight(items), 6);
+  assert.equal(L.carriedWeight(items, 20, {}), 6);
+  // avec bourse : objets + pièces
+  assert.equal(L.carriedWeight(items, 0, {}, { arg: 400 }), 6 + 4);
+  assert.equal(L.carriedWeight({}, 0, {}, { or: 67 }), 1);
+  assert.equal(L.carriedWeight(items, 0, {}, {}), 6);   // bourse vide = rien de plus
+  // la réduction Mental de l'armure équipée reste appliquée en présence d'une bourse
+  const eq = { a: { id: 'a', weight: 20, qty: 1 } };
+  assert.equal(L.carriedWeight(eq, 20, { armure: 'a' }, { arg: 100 }), 12 + 1);
+});
 test('carriedWeight : somme weight×qty, qty 0 ignorée, vide = 0', () => {
   assert.equal(L.carriedWeight({}), 0);
   const items = { a: { weight: 3, qty: 2 }, b: { weight: 5, qty: 0 }, c: { weight: 1, qty: 4 } };
@@ -844,6 +890,153 @@ test('weightStatus : pct, seuil de confort et 3 états', () => {
   assert.equal(L.weightStatus(40, 50, 20).comfort, 45);       // plafond 90% même à hab 20
   assert.equal(L.weightStatus(10, 0, 5).state, 'surcharge');  // cap 0 → tout surcharge
 });
+/* --- Attelage du groupe : slots de transport du coffre commun (§6 du doc MJ) ---
+   ⚠️ Règle arrêtée par le MJ le 2026-08-21 : le canal 'g' ne se déclenche PAS par simple
+   présence dans le coffre (dix sacs en vrac gonfleraient la capacité de +200), mais seulement
+   quand l'objet occupe un des 5 emplacements d'attelage. */
+test('TRANSPORT_SLOTS : 2 montures + 3 sacs, clés uniques', () => {
+  assert.equal(L.TRANSPORT_SLOTS.length, 5);
+  const keys = L.TRANSPORT_SLOTS.map(s => s.key);
+  assert.equal(new Set(keys).size, 5);
+  assert.equal(L.TRANSPORT_SLOTS.filter(s => s.accepts.includes('mount')).length, 2);
+  assert.equal(L.TRANSPORT_SLOTS.filter(s => s.accepts.includes('pack')).length, 3);
+});
+test('transportAccepts : il faut apporter quelque chose au groupe', () => {
+  const monture = L.TRANSPORT_SLOTS[0], sac = L.TRANSPORT_SLOTS[2];
+  // carryGroup nul ou absent : refusé partout, même avec le bon type
+  assert.equal(L.transportAccepts(monture, { type: 'mount' }), false);
+  assert.equal(L.transportAccepts(monture, { type: 'mount', carryGroup: 0 }), false);
+  // un `carry` PERSONNEL ne suffit pas : ce n'est pas le même canal
+  assert.equal(L.transportAccepts(sac, { type: 'pack', carry: 30 }), false);
+  assert.equal(L.transportAccepts(monture, { type: 'mount', carryGroup: 50 }), true);
+  assert.equal(L.transportAccepts(null, { carryGroup: 5 }), false);
+  assert.equal(L.transportAccepts(monture, null), false);
+});
+test('transportAccepts : le type est respecté, mais un objet NON typé passe partout', () => {
+  const monture = L.TRANSPORT_SLOTS[0], sac = L.TRANSPORT_SLOTS[2];
+  assert.equal(L.transportAccepts(monture, { type: 'pack', carryGroup: 20 }), false);
+  assert.equal(L.transportAccepts(sac, { type: 'mount', carryGroup: 50 }), false);
+  // tolérance voulue : le champ « Emplacement » n'existe que pour cat==='Équipement',
+  // donc un sac rangé en Butin ne PEUT pas être typé — il ne doit pas être refusé pour ça.
+  assert.equal(L.transportAccepts(sac, { carryGroup: 20 }), true);
+  assert.equal(L.transportAccepts(monture, { type: '', carryGroup: 20 }), true);
+});
+test('sumTransportCarry : seuls les objets ATTELÉS comptent', () => {
+  const items = {
+    ch: { id: 'ch', type: 'mount', carryGroup: 50 },
+    sac: { id: 'sac', type: 'pack', carryGroup: 20 },
+    range: { id: 'range', type: 'pack', carryGroup: 99 },   // dans le coffre, PAS attelé
+  };
+  assert.equal(L.sumTransportCarry({}, items), 0);          // rien d'attelé = 0
+  assert.equal(L.sumTransportCarry({ monture1: 'ch' }, items), 50);
+  // l'exemple du §9 du doc MJ : sac large 20 + chameau 50 = 70
+  assert.equal(L.sumTransportCarry({ monture1: 'ch', sac1: 'sac' }, items), 70);
+  // `range` a le plus gros bonus du coffre mais n'est pas attelé : il ne compte pas
+  assert.equal(L.sumTransportCarry({ sac1: 'sac' }, items), 20);
+});
+test('sumTransportCarry : robuste aux états partiels', () => {
+  assert.equal(L.sumTransportCarry(null, null), 0);
+  const items = { sac: { id: 'sac', carryGroup: 20 } };
+  // référence orpheline (objet pris par un joueur ou supprimé) : ignorée, pas de crash
+  assert.equal(L.sumTransportCarry({ sac1: 'disparu' }, items), 0);
+  assert.equal(L.sumTransportCarry({ sac1: null }, items), 0);
+  // pile vidée : ne porte plus rien
+  assert.equal(L.sumTransportCarry({ sac1: 'sac' }, { sac: { carryGroup: 20, qty: 0 } }), 0);
+  // compté PAR PILE, pas par unité
+  assert.equal(L.sumTransportCarry({ sac1: 'sac' }, { sac: { carryGroup: 20, qty: 3 } }), 20);
+  // même objet dans deux slots : compté une seule fois
+  assert.equal(L.sumTransportCarry({ sac1: 'sac', sac2: 'sac' }, items), 20);
+  // une clé qui n'est pas un slot connu est ignorée
+  assert.equal(L.sumTransportCarry({ inconnu: 'sac' }, items), 0);
+});
+
+/* --- Capacité et confort COMMUNS du coffre (§3-4 du doc MJ) --- */
+test('carryBaseRaw : terme brut NON arrondi et SANS bonus d\'objet', () => {
+  assert.equal(L.carryBaseRaw(4, 4, 2), 50.8);    // Rathäel
+  assert.equal(L.carryBaseRaw(6, 5, 2), 61);      // Urskaar
+  assert.equal(L.carryBaseRaw(1, 1, 2), 35.2);    // Jett
+  assert.equal(L.carryBaseRaw(0, 0, 1), 30);      // socle garanti
+  assert.equal(L.carryBaseRaw(0, 0, 0), 30);      // niveau planché à 1
+  // c'est bien le même terme que carryCapacity, qui l'arrondit et y ajoute les bonus
+  assert.equal(L.carryCapacity(1, 1, 2, {}, {}), Math.floor(L.carryBaseRaw(1, 1, 2)));
+});
+test('groupCarryBase : conforme au §9 du doc MJ (4 joueurs) = 352', () => {
+  const profiles = [
+    { force: 12, mental: 8,  hab: 10, level: 10 },   // 98
+    { force: 6,  mental: 14, hab: 4,  level: 10 },   // 74
+    { force: 20, mental: 0,  hab: 0,  level: 10 },   // 130
+    { force: 0,  mental: 20, hab: 15, level: 10 },   // 50
+  ];
+  // la SOMME brute reste exactement celle du document — c'est le ratio qui s'en écarte, pas elle
+  assert.equal(L.groupCarryBase(profiles), 352);
+  assert.equal(L.groupComfortPct(profiles), 0.745);              // (80+68+60+90)/4
+  // avec le ratio de groupe : floor(352 x 0,30) + 70 d'attelage = 105 + 70 = 175
+  assert.equal(L.groupCarryCapacity(profiles, 70), 175);
+  assert.equal(L.groupCarryCapacity(profiles, 0), 105);
+});
+test('GROUP_CARRY_RATIO : le coffre ne vaut qu\'une FRACTION de la capacité du groupe', () => {
+  // Écart assumé au §3 du doc MJ (arbitré par le MJ le 2026-08-21) : le coffre est un stockage
+  // SÉPARÉ des sacs persos ; à pleine somme le groupe aurait ~494 unités et le coffre ne serait
+  // jamais encombré. Voir le commentaire de GROUP_CARRY_RATIO dans game-logic.js.
+  assert.ok(L.GROUP_CARRY_RATIO > 0 && L.GROUP_CARRY_RATIO <= 1);
+  const p1 = [{ force: 0, mental: 0, hab: 0, level: 1 }];       // base brute = 30
+  assert.equal(L.groupCarryCapacity(p1, 0), Math.floor(30 * L.GROUP_CARRY_RATIO));
+  // le ratio NE s'applique PAS à l'attelage : le bonus passe entier
+  assert.equal(L.groupCarryCapacity(p1, 50), Math.floor(30 * L.GROUP_CARRY_RATIO) + 50);
+  assert.equal(L.groupCarryCapacity([], 50), 50);               // sans joueur, il reste l'attelage
+  assert.equal(L.groupCarryCapacity([], 0), 0);
+});
+test('groupCarryCapacity : groupe RÉEL de data.jsx (niveau 2) = 74, attelable jusqu\'à +N', () => {
+  const profiles = [
+    { force: 4, mental: 4, hab: 3, level: 2 },   // Rathäel  50,8
+    { force: 6, mental: 5, hab: 1, level: 2 },   // Urskaar  61,0
+    { force: 3, mental: 1, hab: 6, level: 2 },   // Smith    45,2
+    { force: 5, mental: 3, hab: 4, level: 2 },   // Elias    55,6
+    { force: 1, mental: 1, hab: 6, level: 2 },   // Jett     35,2
+  ];
+  // l'arrondi se fait UNE SEULE FOIS à la fin : floor(247,8 x 0,30) = floor(74,34) = 74.
+  // Arrondir chaque joueur d'abord donnerait 73 — c'est le piège que ce test verrouille.
+  assert.equal(L.groupCarryBase(profiles), 247.8);
+  assert.equal(L.groupCarryCapacity(profiles, 0), 74);
+  assert.notEqual(L.groupCarryCapacity(profiles, 0), 73);
+  assert.equal(L.groupComfortPct(profiles), 0.68);               // (66+62+72+68+72)/5
+  assert.equal(L.weightStatusPct(0, 74, 0.68).comfort, 50);      // seuil de confort du coffre
+  // un attelage relève la capacité à hauteur de son bonus PLEIN
+  assert.equal(L.groupCarryCapacity(profiles, 20), 94);
+  assert.equal(L.groupCarryCapacity(profiles, 50), 124);
+});
+test('groupComfortPct : moyenne bornée à 90 % par joueur ; groupe vide = 60 %', () => {
+  assert.equal(L.groupComfortPct([]), 0.60);
+  assert.equal(L.groupComfortPct(null), 0.60);
+  assert.equal(L.groupComfortPct([{ hab: 0 }]), 0.60);
+  assert.equal(L.groupComfortPct([{ hab: 15 }]), 0.90);
+  // hab 20 reste plafonné à 90 % : il ne tire pas la moyenne au-delà
+  assert.equal(L.groupComfortPct([{ hab: 20 }, { hab: 20 }]), 0.90);
+  assert.equal(L.groupComfortPct([{ hab: 0 }, { hab: 15 }]), 0.75);
+});
+test('weightStatusPct : les 3 états aux bornes exactes', () => {
+  // coffre du groupe actuel : seuil = floor(0,68 x 74) = 50 ; capacité = 74
+  assert.equal(L.weightStatusPct(50, 74, 0.68).state, 'leger');       // W = seuil -> encore léger
+  assert.equal(L.weightStatusPct(51, 74, 0.68).state, 'encombre');
+  assert.equal(L.weightStatusPct(74, 74, 0.68).state, 'encombre');    // W = capacité -> pas encore surchargé
+  assert.equal(L.weightStatusPct(75, 74, 0.68).state, 'surcharge');
+  assert.equal(L.weightStatusPct(75, 74, 0.68).over, true);
+  // weightStatus(hab) n'est plus qu'un appel à weightStatusPct(comfortPct(hab)) : même résultat
+  assert.deepEqual(L.weightStatus(40, 50, 15), L.weightStatusPct(40, 50, L.comfortPct(15)));
+});
+
+test('makeItem / transferts : carryGroup est porté par le modèle d\'item', () => {
+  assert.equal(L.makeItem({}).carryGroup, 0);
+  assert.equal(L.makeItem({ name: 'Sac large', carryGroup: 20 }).carryGroup, 20);
+  // le bonus survit à un transfert vers une autre grille (coffre → fiche)
+  const src = { s1: L.makeItem({ id: 's1', name: 'Sac large', carryGroup: 20, qty: 1 }) };
+  const { dstPatch } = L.planItemTransfer(src, {}, 's1', 1);
+  assert.equal(Object.values(dstPatch)[0].carryGroup, 20);
+  // ...et à un ajout depuis le catalogue
+  const { patch } = L.planItemAdd({}, { cat: 'Butin', name: 'Sac large', carryGroup: 20 }, 1);
+  assert.equal(Object.values(patch)[0].carryGroup, 20);
+});
+
 test('comfortPct : 60% + hab×2%, plafond 90%', () => {
   assert.equal(L.comfortPct(0), 0.60);
   assert.equal(L.comfortPct(5), 0.70);

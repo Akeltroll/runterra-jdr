@@ -325,6 +325,52 @@ function useSharedCoins() {
   return { coins };
 }
 
+/* Attelage du groupe : { [slotKey]: itemId } — les 5 emplacements de transport du coffre
+   commun (TRANSPORT_SLOTS). Un objet n'apporte sa capacité de groupe (`carryGroup`) que
+   PLACÉ dans un de ces slots, pas par simple présence dans le coffre.
+   R/W pour tout participant inscrit, comme sharedInventory : ranger la monture n'est pas
+   un acte de MJ. */
+const SHARED_TRANSPORT = `${CAMPAIGN}/sharedTransport`;
+function useSharedTransport() {
+  const [transport, setTransport] = useState(null);   // null = en chargement ; {} = vide chargé
+  useEffect(() => window.RTDB.subscribePath(SHARED_TRANSPORT, (v) => setTransport(v || {})), []);
+  const setSlot = useCallback((slotKey, itemId) =>
+    window.RTDB.updatePath(SHARED_TRANSPORT, { [slotKey]: itemId || null }), []);
+  return { transport, setSlot };
+}
+
+/* Profils de portage des 5 personnages, pour la capacité COMMUNE du coffre.
+   ⚠️ NE PAS remplacer par useAllCharStates() : ce hook s'abonne au nœud PARENT
+   `campaign/runeterra/characters`, resté staff-only. Ouvrir un enfant n'ouvre pas le
+   parent (version lecture de la leçon des journaux) — l'abonnement serait rejeté et
+   retomberait silencieusement sur null pour un joueur. On s'abonne donc aux chemins
+   FEUILLES `state/attrs` et `state/level`, les deux seuls ouverts aux inscrits.
+   ⚠️ Ce hook n'alimente QUE de l'affichage. Aucune écriture ne doit en dépendre : c'est
+   exactement ce qui a écrasé la bourse d'Elias le 2026-08-21 (valeur nulle → écriture
+   d'un montant faux). Une jauge fausse est une gêne, une écriture fausse une corruption.
+   `attrs`/`level` sont ABSENTS par défaut (cas nominal aujourd'hui) : on replie sur
+   `char.attrs` / `char.level` de data.jsx, comme le fait déjà charBaseStats. */
+function useGroupCarry() {
+  const [live, setLive] = useState({});   // { [charId]: { attrs, level } }
+  useEffect(() => {
+    const offs = [];
+    CHARACTERS.forEach((c) => {
+      offs.push(window.RTDB.subscribePath(`${charPath(c.id)}/attrs`, (v) =>
+        setLive((prev) => ({ ...prev, [c.id]: { ...(prev[c.id] || {}), attrs: v } }))));
+      offs.push(window.RTDB.subscribePath(`${charPath(c.id)}/level`, (v) =>
+        setLive((prev) => ({ ...prev, [c.id]: { ...(prev[c.id] || {}), level: v } }))));
+    });
+    return () => offs.forEach((off) => { if (typeof off === 'function') off(); });
+  }, []);
+  return CHARACTERS.map((c) => {
+    const st = live[c.id] || {};
+    const a = st.attrs || c.attrs || {};
+    return { charId: c.id, name: c.name,
+      force: a.force || 0, mental: a.mental || 0, hab: a.hab || 0,
+      level: (st.level != null ? st.level : c.level) || 1 };
+  });
+}
+
 /* Écriture LIBRE d'une bourse (édition MJ) : valeurs ABSOLUES, clampées à un entier >= 0.
    Seules les dénominations présentes dans `patch` sont écrites (les autres restent
    intactes : updatePath = merge). Renvoie le patch réellement écrit — l'appelant s'en
@@ -456,4 +502,5 @@ Object.assign(window, {
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
   pushEconomyLog, useEconomyLog, ECONOMY_LOG, purseName,
   COIN_KEYS, setCharCoins, setSharedCoins,
+  useSharedTransport, SHARED_TRANSPORT, useGroupCarry,
 });

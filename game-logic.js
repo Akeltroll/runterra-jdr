@@ -109,7 +109,8 @@
       type: p.type || '',   // emplacement (helmet/chest/ring/weapon/accessory/boots…) ; vide = non équipable
       mods: p.mods || {},   // vide pour l'instant — hook futur des bonus de stats
       weight: Number(p.weight) || 0,   // poids unitaire porté (affichage seul)
-      carry:  Number(p.carry) || 0,    // bonus de capacité de charge (ceinture/équipement)
+      carry:  Number(p.carry) || 0,    // bonus de capacité de charge PERSONNELLE (canal 'p') — objet équipé
+      carryGroup: Number(p.carryGroup) || 0,  // bonus de capacité de charge du GROUPE (canal 'g') — coffre commun
       armorClass: p.armorClass || '',  // '' | 'legere' | 'intermediaire' | 'lourde' (armures)
     };
   }
@@ -133,7 +134,7 @@
     var dstPatch = fillStacks(dstItems, {
       cat: src.cat, name: src.name, sub: src.sub,
       ic: src.ic, img: src.img, type: src.type, mods: src.mods,
-      weight: src.weight, carry: src.carry, armorClass: src.armorClass,
+      weight: src.weight, carry: src.carry, carryGroup: src.carryGroup, armorClass: src.armorClass,
     }, move);
     return { srcPatch: srcPatch, dstPatch: dstPatch };
   }
@@ -164,7 +165,7 @@
       var fresh = makeItem({
         cat: entry.cat, name: entry.name, sub: entry.sub, qty: take,
         ic: entry.ic, img: entry.img, type: entry.type, mods: entry.mods,
-        weight: entry.weight, carry: entry.carry, armorClass: entry.armorClass,
+        weight: entry.weight, carry: entry.carry, carryGroup: entry.carryGroup, armorClass: entry.armorClass,
       });
       patch[fresh.id] = fresh;
       remaining -= take;
@@ -181,6 +182,27 @@
      Les valeurs sont exprimées en CUIVRE (unité de base) ; tous les rapports entre
      deux dénominations voisines ou non sont donc des entiers dans les deux sens. */
   var COIN_VALUE = { cuiv: 1, arg: 100, or: 10000, plat: 100000 };
+
+  /* Poids des pièces (guide d'économie du MJ §3 « Le poids de votre bourse ») :
+     combien de pièces il faut pour UNE unité de poids.
+     ⚠️ Ce barème n'est PAS monotone avec la valeur, et ce n'est pas une coquille :
+     l'OR est la pièce la PLUS LOURDE (frappée large et épaisse, on la soupèse pour
+     vérifier qu'elle est vraie) et le PLATINE la PLUS LÉGÈRE (à peine plus grand
+     qu'un ongle de pouce). Ne pas « corriger » l'ordre. */
+  var COIN_PER_WEIGHT = { cuiv: 200, arg: 100, or: 67, plat: 200 };
+
+  /* Poids total d'une bourse, valeur EXACTE (fractionnaire — décision MJ du 2026-08-21 :
+     on garde la précision en interne et on n'arrondit qu'à l'affichage, sinon une bourse
+     de 199 cuivres pèserait 0 et le poids disparaîtrait par petits paquets).
+     Repères du guide : 67 or = 1 · 100 argent = 1 · 200 cuivre = 1 · 500 argent = 5. */
+  function coinsWeight(coins) {
+    var tot = 0;
+    for (var k in COIN_PER_WEIGHT) {
+      var n = Math.max(0, Number((coins && coins[k]) || 0));
+      tot += n / COIN_PER_WEIGHT[k];
+    }
+    return tot;
+  }
 
   /* Plan de conversion PUR : convertit `n` pièces de `fromKey` vers `toKey`.
        - vers le bas (or → cuivre) : exact, tout le montant demandé est converti ;
@@ -310,7 +332,10 @@
   var CARRY_BASE = 30;        // capacité de base commune (plancher garanti) — spec poids/encombrement
   var CARRY_PER_FORCE = 5;    // capacité gagnée par point de Force
 
-  function carriedWeight(items, mental, equipment) {
+  /* `coins` (optionnel) = bourse à compter dans la charge (les pièces pèsent, cf. coinsWeight).
+     Paramètre plutôt qu'addition sur chaque site d'appel : c'est le seul moyen qu'un futur
+     écran affichant une charge ne puisse pas oublier le poids de l'argent. */
+  function carriedWeight(items, mental, equipment, coins) {
     items = items || {};
     equipment = equipment || {};
     var armorId = equipment.armure || null;   // objet dans le slot Armure → réduction Mental (§5.1)
@@ -321,7 +346,7 @@
       if (armorId && k === armorId) w = armorEffectiveWeight(w, mental);   // armure équipée allégée
       tot += w * (Number(it.qty) || 0);
     }
-    return tot;
+    return tot + (coins ? coinsWeight(coins) : 0);
   }
 
   function carryCapacity(force, mental, level, equipment, itemsById) {
@@ -335,8 +360,58 @@
       var it = itemsById[id]; if (it) bonus += Number(it.carry) || 0;
     }
     /* Charge max = 30 + Force×5 + Mental×Niveau÷10 + bonus 'carry' des objets équipés,
-       arrondi à l'inférieur (spec « Système de poids et d'encombrement »). */
-    return Math.floor(CARRY_BASE + force * CARRY_PER_FORCE + (mental * level) / 10 + bonus);
+       arrondi à l'inférieur (spec « Système de poids et d'encombrement »).
+       Le terme brut vit dans `carryBaseRaw`, partagé avec le calcul de capacité commune. */
+    return Math.floor(carryBaseRaw(force, mental, level) + bonus);
+  }
+
+  /* --- Attelage du groupe : slots de transport du COFFRE COMMUN ---------------
+     Le canal 'g' (§6 du doc « Système de poids — Inventaire commun ») ne se déclenche
+     PAS par simple présence dans le coffre — sinon dix sacs rangés en vrac gonfleraient
+     la capacité de +200. Décision MJ du 2026-08-21 : un objet n'apporte sa capacité de
+     groupe que **placé dans un emplacement de transport actif**, et il y en a 5.
+     Ces slots vivent sur le coffre COMMUN (nœud partagé `sharedTransport`), pas sur le
+     paperdoll perso : c'est ce qui permet de garder les inventaires personnels privés. */
+  var TRANSPORT_SLOTS = [
+    { key:'monture1', label:'Monture 1',  accepts:['mount'] },
+    { key:'monture2', label:'Monture 2',  accepts:['mount'] },
+    { key:'sac1',     label:'Sac 1',      accepts:['pack']  },
+    { key:'sac2',     label:'Sac 2',      accepts:['pack']  },
+    { key:'sac3',     label:'Sac 3',      accepts:['pack']  },
+  ];
+
+  /* Un slot d'attelage accepte-t-il cet objet ?
+     Règle en deux temps, volontairement TOLÉRANTE :
+       1. l'objet doit apporter quelque chose au groupe (`carryGroup > 0`) — sinon il n'a
+          rien à faire dans un attelage ;
+       2. son `type` doit être accepté par le slot... SAUF s'il n'a pas de type du tout,
+          auquel cas il passe partout. Le champ « Emplacement » de l'éditeur n'apparaît que
+          pour cat==='Équipement' : un sac rangé en Butin ne PEUT pas être typé, et on ne va
+          pas le refuser pour ça. */
+  function transportAccepts(slot, item) {
+    if (!slot || !item) return false;
+    if (!(Number(item.carryGroup) > 0)) return false;
+    var t = item.type || '';
+    if (!t) return true;
+    return (slot.accepts || []).indexOf(t) !== -1;
+  }
+
+  /* Σ des bonus de capacité de GROUPE réellement actifs = les objets placés dans les slots
+     d'attelage. `transport` = { [slotKey]: itemId }, `items` = le coffre commun.
+     Le bonus est compté PAR PILE et non par unité (deux ceintures empilées ne doublent pas
+     la capacité), comme `carryCapacity` le fait déjà pour le canal personnel. */
+  function sumTransportCarry(transport, items) {
+    var tr = transport || {}, inv = items || {}, seen = {}, tot = 0;
+    for (var i = 0; i < TRANSPORT_SLOTS.length; i++) {
+      var id = tr[TRANSPORT_SLOTS[i].key];
+      if (!id || seen[id]) continue;              // même objet sur 2 slots = compté 1 fois
+      seen[id] = true;
+      var it = inv[id];
+      if (!it) continue;                          // référence orpheline (objet pris/supprimé)
+      if ((it.qty != null) && !(it.qty > 0)) continue;   // pile vide = rien
+      tot += Number(it.carryGroup) || 0;
+    }
+    return tot;
   }
 
   /* Seuil de confort = 60% + Habileté×2% (plafond 90%), en fraction de la charge max. */
@@ -345,14 +420,80 @@
     return Math.min(90, 60 + hab * 2) / 100;
   }
 
+  /* --- Capacité COMMUNE du coffre (§3-4 du doc « Inventaire commun ») ---------
+     Capacité = grandeur EXTENSIVE → on SOMME les capacités de base des joueurs.
+     Confort  = grandeur INTENSIVE → on fait la MOYENNE des conforts individuels.
+     `profiles` = [{ force, mental, hab, level }], un par personnage.
+
+     ⚠️ Pourquoi ne pas réutiliser `carryCapacity()` ici, alors qu'elle a la même formule :
+       1. elle arrondit à l'inférieur INDIVIDUELLEMENT, alors que le doc arrondit une seule
+          fois à la fin (⌊ Σ … ⌋). Sur le groupe actuel l'écart vaut 1 unité (246 vs 247) ;
+       2. elle ajoute le bonus `carry` PERSONNEL des objets équipés, que le §3 exclut
+          explicitement du calcul commun.
+     D'où `carryBaseRaw` : le terme brut, non arrondi et sans bonus, partagé par les deux. */
+  function carryBaseRaw(force, mental, level) {
+    force = Number(force) || 0;
+    mental = Number(mental) || 0;
+    level = Math.max(1, Number(level) || 1);
+    return CARRY_BASE + force * CARRY_PER_FORCE + (mental * level) / 10;
+  }
+
+  /* Somme BRUTE des capacités de base, non arrondie — c'est le « Σ_i » du §3 du doc MJ,
+     conservé tel quel pour rester vérifiable contre son exemple chiffré (§9 : 352). */
+  function groupCarryBase(profiles) {
+    var list = profiles || [], tot = 0;
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i] || {};
+      tot += carryBaseRaw(p.force, p.mental, p.level);
+    }
+    return tot;
+  }
+
+  /* ⚠️ ÉCART ASSUMÉ AU DOC MJ, arbitré par le MJ le 2026-08-21 après essai en jeu.
+     Le §3 du doc pose « Capacité commune = Σ des capacités individuelles ». Mais dans l'app le
+     coffre est un stockage SÉPARÉ des sacs persos : à pleine somme, le groupe disposerait de
+     247 (sacs) + 247 (coffre) = ~494, soit le double de sa capacité réelle, et le seuil
+     d'encombrement du coffre (167) ne serait jamais atteint — une armure lourde pèse 20.
+     Le coffre ne représente donc qu'une FRACTION de la capacité collective : ce que le groupe
+     peut porter en plus de ce qu'il a déjà sur le dos.
+     Le ratio est le curseur d'équilibrage de ce système : une seule ligne à changer.
+     À 30 %, le groupe actuel a 74 de coffre — cohérent avec les ordres de grandeur du guide
+     d'économie (« quatre brigands dépouillés = 22 unités », charge perso de 30 à 80 au niveau 1). */
+  var GROUP_CARRY_RATIO = 0.30;
+
+  /* Le ratio NE s'applique PAS au bonus d'attelage : une monture est intégralement dédiée au
+     portage collectif, il n'y a rien à en défalquer. C'est aussi ce qui donne son intérêt à
+     l'attelage — un chameau à +50 pèse plus lourd dans le calcul que tout le groupe réuni. */
+  function groupCarryCapacity(profiles, bonusGroup) {
+    return Math.floor(groupCarryBase(profiles) * GROUP_CARRY_RATIO + (Number(bonusGroup) || 0));
+  }
+
+  /* Moyenne des seuils de confort individuels — chaque joueur compte à parts égales.
+     Groupe vide : on retombe sur le plancher individuel (60 %) plutôt que 0, qui mettrait
+     un coffre vide en « Encombré ». */
+  function groupComfortPct(profiles) {
+    var list = profiles || [];
+    if (!list.length) return comfortPct(0);
+    var tot = 0;
+    for (var i = 0; i < list.length; i++) tot += comfortPct((list[i] || {}).hab);
+    return tot / list.length;
+  }
+
   /* Compare le poids porté au seuil de confort et à la charge max → état d'encombrement.
      États (affichage seul ; les malus sont arbitrés sur Roll20) :
        'leger'     : poids ≤ seuil de confort
        'encombre'  : seuil de confort < poids ≤ charge max
        'surcharge' : poids > charge max */
   function weightStatus(carried, cap, hab) {
+    return weightStatusPct(carried, cap, comfortPct(hab));
+  }
+
+  /* Même chose, mais le seuil de confort est donné directement en fraction (0..1) au lieu
+     d'être dérivé d'une Habileté. C'est ce qu'il faut au coffre COMMUN, dont le confort est
+     une MOYENNE de plusieurs joueurs et ne correspond donc à l'Habileté de personne. */
+  function weightStatusPct(carried, cap, cPct) {
     carried = Number(carried) || 0; cap = Number(cap) || 0;
-    var cPct = comfortPct(hab);
+    cPct = Number(cPct) || 0;
     var comfort = Math.floor(cPct * cap);
     var state = carried > cap ? 'surcharge' : (carried > comfort ? 'encombre' : 'leger');
     return { pct: cap > 0 ? carried / cap : 0, over: carried > cap,
@@ -392,7 +533,7 @@
       var id = newItemId();
       out[id] = { id: id, cat: e.cat || 'Butin', name: e.name || 'Objet', sub: e.sub || '',
         ic: e.ic || '', img: e.img || '', type: e.type || '', mods: e.mods || {},
-        weight: Number(e.weight) || 0, carry: Number(e.carry) || 0, armorClass: e.armorClass || '' };
+        weight: Number(e.weight) || 0, carry: Number(e.carry) || 0, carryGroup: Number(e.carryGroup) || 0, armorClass: e.armorClass || '' };
     }
     return out;
   }
@@ -417,6 +558,11 @@
     { value:'amulet',    label:'Amulette' },
     { value:'ring',      label:'Anneau' },
     { value:'accessory', label:'Accessoire' },
+    /* Transport de GROUPE : ces deux types ne vont dans AUCUN slot du paperdoll perso
+       (`EQUIP_SLOTS`) — on ne s'équipe pas d'un chameau. Ils ne servent qu'aux slots
+       d'attelage du coffre commun (`TRANSPORT_SLOTS`). */
+    { value:'mount',     label:'Monture (groupe)' },
+    { value:'pack',      label:'Sac / Contenant (groupe)' },
   ];
 
   /* --- Runes : coûts par palier + index + validation + somme des bonus plats --- */
@@ -1069,10 +1215,12 @@
     applyHealMods, buildDefaultState, makeItem, newItemId,
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd, buildCatalogSeed, catalogArray,
-    COIN_VALUE, planCoinConvert,
+    COIN_VALUE, planCoinConvert, COIN_PER_WEIGHT, coinsWeight,
     COIN_NAME, coinsAmountText, coinsDeltaText, coinsDeltaValue, LOG_MAX, staleLogIds,
     coinInt, sanitizeCampaignCoins, planCoinMove,
-    CARRY_BASE, CARRY_PER_FORCE, carriedWeight, carryCapacity, weightStatus, comfortPct,
+    CARRY_BASE, CARRY_PER_FORCE, carriedWeight, carryCapacity, weightStatus, weightStatusPct, comfortPct,
+    carryBaseRaw, groupCarryBase, GROUP_CARRY_RATIO, groupCarryCapacity, groupComfortPct,
+    TRANSPORT_SLOTS, transportAccepts, sumTransportCarry,
     ARMOR_CLASSES, armorWeightReduction, armorEffectiveWeight,
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
