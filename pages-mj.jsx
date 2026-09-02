@@ -205,6 +205,148 @@ function MJCompactCard({ c, st, turn, onFull }) {
   );
 }
 
+/* ============================================================
+   INITIATIVE — panneau de la colonne MJ (lot 4)
+   Règles : docs/superpowers/specs/2026-09-02-initiative-creneaux-design.md
+   ============================================================ */
+
+/* Pastille de camp : PJ (or) / allié (vert) / ennemi (rouge). */
+const INI_SIDE_COLOR = { pj: 'var(--gold)', ally: 'var(--buff)', enemy: 'var(--debuff)' };
+
+/* Une ligne de combattant dans un créneau. Cliquer bascule sa déclaration de fin de tour
+   (le MJ peut cocher pour tout le monde, y compris à la place d'un joueur absent). */
+function IniRow({ id, meta, done, isDone, onToggle, onDragStart, dim }) {
+  const m = meta[id] || { name: id, side: 'enemy' };
+  return (
+    <button onClick={onToggle} draggable onDragStart={onDragStart}
+      title={isDone ? 'A terminé son tour — cliquer pour annuler' : 'Marquer comme ayant fini'}
+      style={{ display:'flex', alignItems:'center', gap:7, width:'100%', textAlign:'left',
+        padding:'5px 7px', borderRadius:6, border:'1px solid transparent', cursor:'grab',
+        background:'transparent', opacity: dim ? 0.45 : 1 }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+      <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0,
+        background: INI_SIDE_COLOR[m.side] || 'var(--debuff)' }} />
+      <span style={{ flex:1, minWidth:0, fontSize:12.5, color: isDone ? 'var(--ink-faint)' : 'var(--ink)',
+        textDecoration: isDone ? 'line-through' : 'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+        {m.name}
+      </span>
+      <span className="mono" style={{ fontSize:11, color: isDone ? 'var(--buff-bright)' : 'var(--ink-faint)', flexShrink:0 }}>
+        {isDone ? '✓' : '…'}
+      </span>
+    </button>
+  );
+}
+
+function InitiativePanel({ ini, meta, ids, turn }) {
+  const toast = useToast();
+  const { state, scores, done, roll, setDone, setBonus, validate, refuse, forceSlot } = ini;
+  const [drag, setDrag] = useState(null);
+
+  // Combattants sans score validé : ils n'entrent pas dans les créneaux (spec §2.1.bis).
+  const waiting = ids.filter(id => initiativeStatus(scores[id]) !== 'ok');
+
+  /* Déposer un combattant sur un créneau = l'y déplacer. Comme le total est dérivé
+     (d6 + bonus) et que le dé appartient au joueur, on ajuste le BONUS — ce qui se
+     lit très bien : le MJ corrige la circonstance, pas le jet. */
+  const dropOn = (init) => {
+    if (!drag) return;
+    const e = scores[drag] || {};
+    if (e.d6 == null) { toast('Ce combattant n’a pas encore lancé son dé', 'gold'); setDrag(null); return; }
+    setBonus(drag, init - e.d6);
+    setDrag(null);
+  };
+
+  return (
+    <div className="col" style={{ minHeight:0, flex:1, borderTop:'1px solid var(--line)' }}>
+      <div className="row" style={{ justifyContent:'space-between', alignItems:'center', padding:'10px 12px 6px' }}>
+        <span className="overline">Ordre des tours</span>
+        <span className="mono faint" style={{ fontSize:10.5 }}>Round {turn}</span>
+      </div>
+
+      <div className="col gap-1" style={{ padding:'0 8px 8px', overflowY:'auto', flex:1, minHeight:0 }}>
+        {/* --- Jets en attente de validation --- */}
+        {waiting.length > 0 && (
+          <div style={{ marginBottom:6 }}>
+            <div className="overline" style={{ fontSize:9.5, padding:'0 4px 4px', color:'var(--ink-faint)' }}>
+              En attente ({waiting.length})
+            </div>
+            {waiting.map(id => {
+              const m = meta[id] || { name:id, side:'enemy' };
+              const e = scores[id] || {};
+              const st = initiativeStatus(e);
+              return (
+                <div key={id} className="row" style={{ alignItems:'center', gap:6, padding:'3px 4px' }}>
+                  <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0,
+                    background: INI_SIDE_COLOR[m.side] || 'var(--debuff)' }} />
+                  <span style={{ flex:1, minWidth:0, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.name}</span>
+                  {st === 'pending' ? (
+                    <span className="row gap-1" style={{ flexShrink:0, alignItems:'center' }}>
+                      <span className="mono" style={{ fontSize:11.5, color:'var(--gold-pale)' }}>🎲{e.d6}</span>
+                      <button className="btn btn-sm btn-ghost" title="Valider ce jet" style={{ padding:'1px 5px', fontSize:11, color:'var(--buff-bright)' }}
+                        onClick={() => validate(id)}>✓</button>
+                      <button className="btn btn-sm btn-ghost" title="Refuser — le joueur relance" style={{ padding:'1px 5px', fontSize:11, color:'var(--debuff-bright)' }}
+                        onClick={() => refuse(id)}>✗</button>
+                    </span>
+                  ) : (
+                    <button className="btn btn-sm btn-ghost" style={{ padding:'1px 6px', fontSize:10.5, flexShrink:0 }}
+                      title={st === 'reroll' ? 'Relance demandée — lancer à sa place' : 'Lancer le dé'}
+                      onClick={() => roll(id)}>
+                      {st === 'reroll' ? '↻ relancer' : '🎲 lancer'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* --- Les créneaux --- */}
+        {state.slots.length === 0
+          ? <div className="faint" style={{ fontSize:11.5, padding:'4px 6px' }}>
+              Aucun combattant n’a d’initiative validée.
+            </div>
+          : state.slots.map(slot => {
+              const isActive = state.activeInit === slot.init;
+              return (
+                <div key={slot.init}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); dropOn(slot.init); }}
+                  style={{ borderRadius:7, marginBottom:3, padding:'4px 3px',
+                    border:'1px solid ' + (isActive ? 'var(--line-gold)' : 'transparent'),
+                    background: isActive ? 'var(--bg-panel-2)' : 'transparent' }}>
+                  <div className="row" style={{ justifyContent:'space-between', alignItems:'center', padding:'0 5px 3px' }}>
+                    <span className="mono" style={{ fontSize:11, color: isActive ? 'var(--gold-pale)' : 'var(--ink-faint)' }}>
+                      {isActive ? '▶ ' : ''}Créneau {slot.init}
+                    </span>
+                    {slot.complete && <span className="mono" style={{ fontSize:10, color:'var(--buff-bright)' }}>terminé</span>}
+                  </div>
+                  {slot.members.map(id => (
+                    <IniRow key={id} id={id} meta={meta} done={done}
+                      isDone={done[id] === true}
+                      dim={slot.participants.indexOf(id) === -1}
+                      onToggle={() => setDone(id, done[id] !== true)}
+                      onDragStart={() => setDrag(id)} />
+                  ))}
+                </div>
+              );
+            })}
+      </div>
+
+      {/* --- Filet du MJ : un absent ne doit pas geler la table --- */}
+      {state.active && state.active.pending.length > 0 && (
+        <div style={{ padding:'6px 10px 10px' }}>
+          <button className="btn btn-ghost btn-sm" style={{ width:'100%', justifyContent:'center', fontSize:11 }}
+            title="Marque comme terminés tous ceux qui restent en attente sur le créneau actif"
+            onClick={forceSlot}>
+            ⏭ Forcer la fin du créneau ({state.active.pending.length})
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EnemyCard({ enemy, onUpdate, onRemove, onAttack, stampKo }) {
   const [edit, setEdit] = useState(false);
   const [subir, setSubir] = useState('');
@@ -585,7 +727,13 @@ function MJPage({ go }) {
   // declarations ; la liste des creneaux a l'ecran arrive au lot 4.
   const combatants = CHARACTERS.map(c => ({ id: c.id, hp: (stOf(c.id) || {}).hpCur }))
     .concat(enemies.map(e => ({ id: e.id, hp: e.hpCur })));
-  const { stampKo } = useInitiative(combatants, turn);
+  const ini = useInitiative(combatants, turn);
+  const { stampKo } = ini;
+  // Metadonnees d'affichage (nom + camp) : le moteur ne connait que des ids et des PV.
+  const iniMeta = {};
+  CHARACTERS.forEach(c => { iniMeta[c.id] = { name: c.name, side: 'pj' }; });
+  enemies.forEach(e => { iniMeta[e.id] = { name: e.name, side: combatantSide(e) }; });
+  const iniIds = combatants.map(c => c.id);
   const { active, start, close } = useSession();
   const [decided, setDecided] = useState(false);
   const [rewards, setRewards] = useState(false);
@@ -601,11 +749,12 @@ function MJPage({ go }) {
           </div>
         </div>
         <hr className="gold-rule" />
-        <div className="col gap-1" style={{ padding:10, overflowY:'auto', flex:1 }}>
+        <div className="col gap-1" style={{ padding:10, overflowY:'auto', flexShrink:0 }}>
           {CHARACTERS.map(c => (
             <MJSidebarRow key={c.id} c={c} st={stOf(c.id)} active={selected === c.id} onClick={() => setSelected(c.id)} />
           ))}
         </div>
+        <InitiativePanel ini={ini} meta={iniMeta} ids={iniIds} turn={turn} />
         <div style={{ padding:12, borderTop:'1px solid var(--line)' }}>
           <button className="btn btn-ghost btn-sm" style={{ width:'100%', justifyContent:'center' }} onClick={() => go('journal')}>Journal de la session →</button>
         </div>
