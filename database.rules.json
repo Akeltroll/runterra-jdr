@@ -106,6 +106,9 @@
               "level": {
                 ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()"
               },
+              "hpCur": {
+                ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()"
+              },
               "coins": {
                 "$coin": {
                   ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0"

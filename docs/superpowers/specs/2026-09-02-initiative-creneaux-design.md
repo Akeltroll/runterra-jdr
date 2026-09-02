@@ -4,7 +4,7 @@ Design du chantier « gestion des tours ». Rédigé le 2026-09-02 d'après les 
 données par le MJ en session. **Les règles de jeu de la §2 ne sont écrites nulle part
 ailleurs** — ni dans `info-mj/`, ni dans l'Excel. Ce document en est la source.
 
-Statut : **lots 1 et 2 livrés**, lots 3 à 6 à faire.
+Statut : **lots 1, 2 et 3 livrés** ; règles RTDB de la §6 **rédigées mais NON PUBLIÉES**. Lots 4 à 6 à faire.
 
 ---
 
@@ -342,6 +342,31 @@ Un joueur ne peut cocher que **son** personnage. Ennemis et PNJ alliés n'ont de
 chez personne : seul le MJ les valide, ce qui correspond exactement au « ennemi compris »
 de la §2.5.
 
+### 6.1 — Troisième addition : la lecture des PV (décision MJ, 2026-09-02)
+
+```json
+"hpCur": { ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()" }
+```
+
+Posée sous `characters/$charId/state`, à côté d'`attrs` et `level` qui suivaient déjà ce
+motif depuis la capacité du coffre commun.
+
+**Pourquoi elle est nécessaire** — et ce n'est pas du confort. Déterminer les
+participants d'un créneau demande les PV de **tous** ses membres (§4.2). Sans cette
+lecture, l'écran d'un joueur reçoit des PV vides pour les autres PJ, les lit comme 0,
+et les exclut du créneau : **il croirait le créneau terminé alors que ses camarades
+n'ont pas joué**, pendant que l'écran du MJ afficherait le bon. Deux vérités
+contradictoires à la même table — le défaut le plus pénible qui soit à déboguer.
+
+Ce qui reste cloisonné : bourse, inventaire, runes, modificateurs, XP, équipement.
+Seuls les PV courants s'ouvrent, et **aucune écriture n'est élargie**.
+
+> Effet de bord souhaitable : le Hub peut enfin afficher de vraies barres de PV sur les
+> cartes des autres PJ, aujourd'hui grisées faute de droit de lecture. À noter que le
+> **maximum** exact dépend encore des modificateurs et de l'équipement, non lisibles :
+> une barre calculée sur `charBaseStats` seul serait légèrement optimiste. À traiter le
+> jour où on branchera le Hub, pas ici.
+
 ### ⚠️ Le piège du nœud vs ses enfants — ici, il ne mord PAS
 
 Purger `done` d'un coup, c'est écrire `null` **sur le nœud** `done`. C'est le motif exact
@@ -368,7 +393,7 @@ bouton « j'ai fini » dès sa première version.
 |---|---|---|---|
 | **1** | Drapeau `side` — les PNJ alliés existent | aucune | ✅ **livré** |
 | **2** | Moteur pur : créneaux, participation, complétude + tests | aucune | ✅ **livré** |
-| **3** | Nœud `combat/initiative`, hook, bouclage → `turn + 1` | **§6** | à faire |
+| **3** | Nœud `combat/initiative`, hook, bouclage → `turn + 1` | **§6** (non publiées) | ✅ **livré** |
 | **4** | UI MJ — liste des créneaux sous la table, drag, créneau actif | aucune | à faire |
 | **5** | UI joueur — bas de l'onglet Combat + bouton « J'ai fini » | aucune | à faire |
 | **6** | Assistant caracs → stats PNJ (indépendant) | aucune | à faire |
