@@ -384,9 +384,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   La CLI **n'affiche aucun diff** avant d'écrire : comparer les règles en ligne avec le fichier du
   dépôt reste nécessaire. La voie console (coller → Publier) reste valable en secours.
   ✅ **Comment LIRE les règles en ligne** (trouvé le 2026-08-22 — il n'y a pas de `database:rules:get`) :
-  `firebase database:get "/.settings/rules" --instance runeterra-jdr-default-rtdb`.
-  ⚠️ La commande **sort les règles complètes PUIS quitte en code 255** : l'erreur est cosmétique, la
-  sortie est bonne — ne pas conclure à un échec. C'est ce qui permet de vérifier **avant** (dérive
+  `MSYS_NO_PATHCONV=1 firebase database:get "/.settings/rules" --instance runeterra-jdr-default-rtdb`.
+  ⚠️ **Le préfixe `MSYS_NO_PATHCONV=1` est OBLIGATOIRE depuis Git Bash** (vérifié le 2026-09-02) :
+  sans lui, MSYS convertit `/.settings/rules` en chemin Windows et la CLI répond
+  `Error: Path must begin with /` (exit 1). Ce n'est pas un problème de droits.
+  ⚠️ Le code de sortie a déjà été **255** malgré une sortie correcte (ne pas conclure à un échec) ;
+  en CLI 15.28.1 il vaut **0**. Se fier à la sortie, pas au code. C'est ce qui permet de vérifier **avant** (dérive
   console ?) et **après** (le déploiement fait-il ce qu'on croit ?) chaque publication.
   Attention en PowerShell : `Out-File -Encoding utf8` ajoute un **BOM** qui fait diverger le `diff`
   sur la 1re ligne — le retirer avant de comparer (`sed 's/^\xef\xbb\xbf//'`).
@@ -554,6 +557,52 @@ supprime pas** `Woolost`/`JB` : on les resynchronise sur `main` (`git merge main
 d'une base propre. Les anciennes branches de fonctionnalité (auth-comptes-roles, inventaire,
 arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, catalogue-editable)
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
+
+## État actuel (2026-09-02)
+- **Chantier « gestion des tours » — lots 1 à 3 livrés** (initiative, créneaux, PNJ alliés).
+  Cache `20260902-2`, **202 tests verts** (game-logic 191 + auth 11), ✅ **RÈGLES RTDB PUBLIÉES ET
+  VÉRIFIÉES le 2026-09-02** (relecture en ligne avant/après : aucune dérive console préalable, diff
+  post-publication limité aux 2 additions attendues).
+  📄 **Spec complète et source de vérité des règles de jeu** :
+  `docs/superpowers/specs/2026-09-02-initiative-creneaux-design.md` — les règles du MJ (§2) ne sont
+  écrites **nulle part ailleurs**, ni dans `info-mj/`, ni dans l'Excel.
+  **Le modèle en une phrase** : score = **1d6 + bonus**, les **ex æquo forment un CRÉNEAU** et jouent
+  simultanément ; on ne passe au créneau suivant que quand **tous** ses participants ont déclaré
+  « j'ai fini » (ennemis compris, le MJ clique pour eux).
+  ⚠️ **`combat/turn` n'a PAS changé de sens** : il reste le compteur de **ROUND**. Cinq mécanismes en
+  dépendent (cooldowns `readyAt`, `sumSkillBuffs.until`, `glaciationDecay`, `souverainUntil`,
+  `CD_LOCKED`) et un glissement de sens les décalerait **en silence**. L'initiative vit dans un nœud
+  séparé ; le round ne s'incrémente qu'au **bouclage** du dernier créneau.
+  ⚠️ **Le créneau actif est DÉRIVÉ, jamais stocké** (= le premier dont les participants n'ont pas tous
+  déclaré). C'est ce qui fait que passer au créneau suivant **ne coûte AUCUNE écriture** — donc aucune
+  course entre deux clics simultanés, aucun état désaligné après un rechargement. Les deux **seules**
+  écritures de la mécanique sont la purge de `done` en fin de round et la purge totale au « ⟲ Combat ».
+  Ne pas « optimiser » en persistant un `activeId`.
+  ⚠️ **KO DIFFÉRÉ (règle MJ)** : un combattant tombé à 0 PV **pendant son propre créneau** joue quand
+  même son action ; tombé **avant**, il est sauté. Résolu par un horodatage `ko:{round,init}` posé aux
+  3 endroits où des PV tombent à 0 (`PendingHitsPanel`, `EnemyCard.applySubir`, `EnemyAttackModal`) —
+  c'est ce qui permet de garder la dérivation intégrale. Une entrée périmée est inoffensive
+  (`slotParticipants` teste les PV d'abord, un ressuscité rejoue).
+  ⚠️ **ARRIVÉE TARDIVE** : `joinRound` — un renfort lance son dé tout de suite mais n'entre qu'au
+  **round entier suivant**, pour ne pas surgir en amont de joueurs ayant déjà agi. Absent = 1.
+  ⚠️ **SÉCURITÉ — la règle RTDB ouvre la FEUILLE `scores/$id/d6`, jamais le NŒUD `scores/$id`** :
+  sur le nœud, un joueur pourrait écrire son propre `bonus` **et** son propre `ok`, donc s'auto-valider
+  et court-circuiter la validation du MJ. `bonus`/`ok`/`reroll` n'ont aucune règle propre et retombent
+  sur l'ancêtre staff. Le cycle de validation est garanti par le **serveur**, pas par l'UI.
+  **Le joueur lance, le MJ valide** : la randomisation est faite par l'**app** (`rollInitiative`, rng
+  injectable), jamais saisie à la main ; cycle `idle → pending → ok`, avec `reroll` si le MJ refuse.
+  **Nouveau `.read` ouvert à tous les inscrits : `characters/$charId/state/hpCur`** (à côté d'`attrs` et
+  `level`). Nécessaire : sans lui l'écran d'un joueur lit les PV des autres PJ comme 0, les exclut du
+  créneau et **croit le créneau terminé** alors que le MJ voit l'inverse. Bourse, inventaire, runes,
+  modificateurs, XP et équipement **restent cloisonnés** ; aucune écriture élargie.
+  👉 Piste ouverte : le Hub peut maintenant afficher de vraies barres de PV sur les cartes des autres PJ
+  (aujourd'hui grisées) — attention, le **max** exact dépend des modificateurs/équipement non lisibles.
+  Livré : `combatantSide`/`isAlly`/`splitCombatants` + `INIT_DIE`/`rollInitiative`/`initiativeTotal`/
+  `initiativeStatus`/`initiativeReady`/`combatantJoinRound`/`initiativeSlots`/`slotParticipants`/
+  `initiativeState` (game-logic, purs, testés) ; `useInitiative` + `INITIATIVE` (data-state) ; PNJ alliés
+  dans la vue MJ (section « Combattants », bouton `+ PNJ allié`, bascule Camp) et côté joueur (bandeau
+  séparé + `<optgroup>` de ciblage). **Restent les lots 4 (liste MJ), 5 (UI joueur), 6 (assistant
+  caracs → stats PNJ)**.
 
 ## État actuel (2026-08-21)
 - **Capacité du coffre commun + attelage du groupe (lot 3/3 du chantier « poids »)** — cache
