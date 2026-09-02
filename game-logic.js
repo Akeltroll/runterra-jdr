@@ -814,6 +814,127 @@
   }
 
   /* ============================================================
+     INITIATIVE & CRENEAUX DE TOUR — logique pure
+     Regles du MJ : docs/superpowers/specs/2026-09-02-initiative-creneaux-design.md
+     Resume : score = 1d6 + bonus ; les EX AEQUO forment un CRENEAU et jouent
+     simultanement ; on ne passe au creneau suivant que quand tous ses participants
+     ont declare leur fin de tour. Le round vit toujours dans `combat/turn` : ces
+     fonctions ne le remplacent pas, elles s'empilent dessus.
+     ============================================================ */
+
+  var INIT_DIE = 6;
+
+  /* Jet d'initiative. `rng` injectable (meme idiome que rollCrit) => testable.
+     La randomisation est faite par l'APP, jamais saisie a la main par le joueur. */
+  function rollInitiative(rng) {
+    var r = typeof rng === 'function' ? rng() : Math.random();
+    if (!(r >= 0)) r = 0;                      // NaN / valeur absurde => borne basse
+    if (r > 0.9999999) r = 0.9999999;          // rng() === 1 ne doit pas donner 7
+    return 1 + Math.floor(r * INIT_DIE);
+  }
+
+  /* Une entree de score : { d6, bonus, ok, reroll }.
+     `d6`     = le jet (1..6), ecrit par le JOUEUR pour son perso, par le MJ pour les PNJ
+     `bonus`  = preparation au combat (-2..+2) + bonus personnels, ecrit par le MJ
+     `ok`     = validation du MJ ; tant qu'elle manque le score n'entre pas en jeu
+     `reroll` = le MJ a refuse le jet et en demande un autre */
+  function initiativeTotal(entry) {
+    if (!entry || entry.d6 == null) return null;
+    var d6 = Math.max(1, Math.min(INIT_DIE, entry.d6 | 0));
+    return d6 + (entry.bonus | 0);
+  }
+
+  /* 'idle'   : pas encore lance          'pending' : lance, attend le MJ
+     'reroll' : refuse, a relancer        'ok'      : valide, entre dans les creneaux */
+  function initiativeStatus(entry) {
+    if (!entry || entry.d6 == null) return (entry && entry.reroll) ? 'reroll' : 'idle';
+    return entry.ok === true ? 'ok' : 'pending';
+  }
+  function initiativeReady(entry) { return initiativeStatus(entry) === 'ok'; }
+
+  /* Round a partir duquel un combattant entre en jeu. Absent = 1 (present des le
+     debut). Un retardataire lance son de normalement mais ne rejoint qu'au ROUND
+     ENTIER SUIVANT : sans ca il pourrait surgir sur un creneau deja depasse, en
+     amont de joueurs qui ont deja agi ce round. */
+  function combatantJoinRound(c) {
+    var j = c && c.joinRound;
+    return (j == null) ? 1 : Math.max(1, j | 0);
+  }
+
+  /* Creneaux du round : valeurs distinctes de score, triees DECROISSANT.
+     `combatants` = [{ id, hp, joinRound }] (forme normalisee : les PJ viennent de
+     `characters`, les PNJ de `combat/enemies`, l'appelant les uniformise).
+     N'entrent que les combattants presents ce round ET dont le score est valide. */
+  function initiativeSlots(combatants, scores, round) {
+    scores = scores || {};
+    round = Math.max(1, round | 0);
+    var byInit = {};
+    (combatants || []).forEach(function (c) {
+      if (!c || c.id == null) return;
+      if (combatantJoinRound(c) > round) return;
+      var entry = scores[c.id];
+      if (!initiativeReady(entry)) return;
+      var t = initiativeTotal(entry);
+      if (t == null) return;
+      if (!byInit[t]) byInit[t] = [];
+      byInit[t].push(c.id);
+    });
+    return Object.keys(byInit)
+      .map(Number)
+      .sort(function (a, b) { return b - a; })
+      .map(function (init) { return { init: init, members: byInit[init] }; });
+  }
+
+  /* Participants REELS d'un creneau — applique la regle du KO differe.
+     Un combattant a 0 PV ne participe pas... SAUF s'il est tombe pendant CE creneau
+     de CE round : le MJ veut qu'il joue quand meme son action (tuer un monstre dans
+     son creneau lui laisse le temps de riposter). D'ou l'horodatage `ko`. */
+  function slotParticipants(members, byId, ko, round, init) {
+    ko = ko || {}; byId = byId || {};
+    round = Math.max(1, round | 0);
+    return (members || []).filter(function (id) {
+      var c = byId[id];
+      var hp = c ? (Number(c.hp) || 0) : 0;
+      if (hp > 0) return true;
+      var k = ko[id];
+      return !!(k && (k.round | 0) === round && Number(k.init) === Number(init));
+    });
+  }
+
+  /* Etat complet du round, en UN appel (ce que l'UI consomme).
+     Le creneau actif est DERIVE, jamais stocke : c'est le premier dont les
+     participants n'ont pas tous declare. Consequence : quand le dernier membre
+     coche « j'ai fini », le creneau suivant s'active pour tout le monde SANS
+     aucune ecriture supplementaire — donc sans course entre deux clics simultanes.
+     Un creneau dont tous les membres sont KO avant ouverture a 0 participant :
+     il est complet d'office et se saute tout seul (pas de blocage de table). */
+  function initiativeState(combatants, scores, done, ko, round) {
+    done = done || {};
+    round = Math.max(1, round | 0);
+    var byId = {};
+    (combatants || []).forEach(function (c) { if (c && c.id != null) byId[c.id] = c; });
+    var slots = initiativeSlots(combatants, scores, round).map(function (s) {
+      var participants = slotParticipants(s.members, byId, ko, round, s.init);
+      var pending = participants.filter(function (id) { return done[id] !== true; });
+      return {
+        init: s.init, members: s.members, participants: participants,
+        pending: pending, complete: pending.length === 0,
+      };
+    });
+    var active = null;
+    for (var i = 0; i < slots.length; i++) {
+      if (!slots[i].complete) { active = slots[i]; break; }
+    }
+    return {
+      slots: slots,
+      active: active,
+      activeInit: active ? active.init : null,
+      // « Fin de round » ne s'allume que s'il y avait quelque chose a jouer.
+      complete: active === null && slots.length > 0,
+    };
+  }
+
+  /* ============================================================
      COMPÉTENCES (actif/passif) — logique pure
      Source des formules : info-mj/Codes App Script.md (le script prime).
      ============================================================ */
@@ -1247,6 +1368,8 @@
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods, ADP_KEYS, runeHasAdpChoice,
     mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, enemyPublicView,
     combatantSide, isAlly, splitCombatants,
+    INIT_DIE, rollInitiative, initiativeTotal, initiativeStatus, initiativeReady,
+    combatantJoinRound, initiativeSlots, slotParticipants, initiativeState,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,

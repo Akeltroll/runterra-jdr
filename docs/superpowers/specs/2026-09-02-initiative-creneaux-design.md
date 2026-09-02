@@ -4,7 +4,7 @@ Design du chantier « gestion des tours ». Rédigé le 2026-09-02 d'après les 
 données par le MJ en session. **Les règles de jeu de la §2 ne sont écrites nulle part
 ailleurs** — ni dans `info-mj/`, ni dans l'Excel. Ce document en est la source.
 
-Statut : **lot 1 livré**, lots 2 à 6 à faire.
+Statut : **lots 1 et 2 livrés**, lots 3 à 6 à faire.
 
 ---
 
@@ -51,7 +51,43 @@ Ils restent toujours faibles : **il est invraisemblable de dépasser +4 ou −4*
 réelle est donc environ **−3 à +10**.
 
 > Conséquence de conception : le score **ne se calcule pas** depuis Force / Habileté /
-> Mental / Magie. Aucune formule à écrire dans `game-logic.js`. C'est une valeur saisie.
+> Mental / Magie. Aucune formule à écrire dans `game-logic.js`. C'est un jet, plus un
+> bonus saisi.
+
+**Deux champs séparés, pas un total** (décision MJ) : `d6` (le jet) et `bonus`
+(préparation + bonus personnels). Le total est dérivé. Ça permet d'afficher
+« 5 = 4 +1 vigilant » et de justifier un ordre contesté en table.
+
+### 2.1.bis — Le joueur lance, le MJ valide
+
+> Le 1d6 d'un PJ doit être lancé activement par le joueur, qui renseigne le score au MJ,
+> lequel le valide dans la vue MJ. Si le MJ refuse, le PJ pourra relancer son initiative.
+> Cela donne au joueur un mini sentiment de contrôle : c'est lui qui lance.
+
+⚠️ **La randomisation est faite par l'app, jamais saisie à la main.** Le joueur clique
+« Lancer », il ne tape pas un chiffre. Cycle de vie d'un score :
+
+```
+idle ──(le joueur clique « Lancer »)──▶ pending ──(le MJ valide)──▶ ok  ─▶ entre en jeu
+                    ▲                                  │
+                    └────────(le MJ refuse)──────── reroll
+```
+
+Seul un score **`ok`** entre dans les créneaux. Un score `pending` n'existe pas encore
+pour le calcul de l'ordre.
+
+Répartition des écritures, et elle est fine :
+
+| Champ | Écrit par | Pourquoi |
+|---|---|---|
+| `d6` | le **joueur** (son perso) / le MJ (les PNJ) | c'est son jet |
+| `bonus` | le **MJ** seul | la préparation au combat et les buffs relèvent de sa connaissance |
+| `ok` / `reroll` | le **MJ** seul | c'est la validation |
+
+> Sur la triche : le tirage est côté client, donc un joueur déterminé pourrait écrire un
+> `d6` arbitraire via la console. C'est la même posture que pour les bourses — un
+> `.validate` bloque l'absurde (hors 1–6), et **le vrai garde-fou est la validation du
+> MJ**, qui voit chaque score avant qu'il entre en jeu. Ne pas chercher plus loin.
 
 ### 2.2 — Les créneaux (le point structurant)
 
@@ -101,7 +137,21 @@ Deux cas à distinguer, donc :
 
 C'est la règle qui met le plus de pression sur le modèle (voir §4).
 
-### 2.4 — Qui déclare la fin de tour
+### 2.4 — L'arrivée tardive : au round entier suivant
+
+> Pour tout combattant intégrant le combat tardivement : il effectue son jet
+> d'initiative avec ses bonus ou malus comme un autre l'aurait fait. Puis il rejoindra le
+> **tour entier suivant**. Tout cela pour éviter le cas où un combattant arriverait à un
+> créneau plus antérieur que des joueurs actifs pendant le tour.
+
+Autrement dit : un renfort qui débarque au milieu du round 3 avec un 6 ne doit pas
+surgir en amont de joueurs qui ont déjà agi ce round-là. Il lance quand même son dé
+tout de suite (le MJ le valide), mais il n'entre dans les créneaux qu'**au round 4**.
+
+Porté par un champ `joinRound` sur le combattant. **Absent ⇒ 1** (présent dès le début) :
+encore une fois, aucune migration.
+
+### 2.5 — Qui déclare la fin de tour
 
 - Un **joueur** clique « j'ai fini » pour **son** personnage.
 - Le **MJ** clique pour les ennemis et les PNJ alliés.
@@ -219,10 +269,19 @@ ennemi et chaque allié du créneau, **c'est donc lui qui ferme en pratique**.
 ```
 /campaign/runeterra/combat/turn                    ← INCHANGÉ : compteur de ROUND
 /campaign/runeterra/combat/initiative/
-    scores: { [combatantId]: <nombre> }            ← 1d6 + mods ; écriture STAFF
+    scores: { [combatantId]: {
+        d6:     1..6,        ← le jet ; JOUEUR (son perso) ou MJ (les PNJ). Tiré par l'app.
+        bonus:  <entier>,    ← préparation + bonus personnels ; MJ seul. Peut être négatif.
+        ok:     true,        ← validation du MJ ; sans elle le score n'entre pas en jeu
+        reroll: true,        ← le MJ a refusé, le joueur doit relancer
+    } }
     done:   { [combatantId]: true }                ← « j'ai fini » ; joueur = SON perso, staff = tous
     ko:     { [combatantId]: { round, init } }     ← horodatage du KO (§4.2) ; écriture STAFF
+    joinRound: { [combatantId]: <n° de round> }    ← arrivée tardive (§2.4) ; MJ. Absent = 1.
 ```
+
+Le **total** (`d6 + bonus`) n'est jamais stocké : il se dérive (`initiativeTotal`). Deux
+sources de vérité pour un même nombre, c'est une divergence garantie à terme.
 
 `combatantId` = soit un `charId` de PJ (`rathael`, `urskaar`, `smith`, `lunick`, `jett`),
 soit un id d'ennemi/allié (`enemy_xxx`). Les deux espaces de noms ne se recoupent pas.
@@ -240,24 +299,48 @@ tous vidés par **« ⟲ Combat »** (`resetCombat`).
 
 ## 6. Règles RTDB — le patch
 
-Une seule addition. Tout le reste est **hérité** : la lecture vient du `.read` du nœud
-`combat` (tout inscrit), l'écriture staff vient du `.write` mj+admin de
-`campaign/runeterra`.
+**Deux** additions, et seulement là où un JOUEUR doit écrire. Tout le reste est
+**hérité** : la lecture vient du `.read` du nœud `combat` (tout inscrit), l'écriture
+staff vient du `.write` mj+admin de `campaign/runeterra`.
+
+Soit `MJ` la condition staff usuelle :
+`root.child('users').child(auth.uid).child('role').val() === 'mj' || … === 'admin'`
+et `SIEN` : `root.child('users').child(auth.uid).child('charId').val() === $combatantId`.
 
 ```json
 "initiative": {
   "done": {
     "$combatantId": {
-      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('charId').val() === $combatantId)",
+      ".write": "auth != null && (MJ || SIEN)",
       ".validate": "!newData.exists() || newData.isBoolean()"
+    }
+  },
+  "scores": {
+    "$combatantId": {
+      "d6": {
+        ".write": "auth != null && (MJ || SIEN)",
+        ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6 && newData.val() % 1 === 0"
+      }
     }
   }
 }
 ```
 
+⚠️ **La permission joueur est posée sur la FEUILLE `d6`, pas sur `scores/$combatantId`.**
+C'est le point délicat de ce patch. Si on ouvrait le nœud du score entier, un joueur
+pourrait écrire son propre `bonus: 99` et son propre `ok: true` — il s'auto-validerait et
+contournerait le MJ, ce qui vide la §2.1.bis de son sens. En descendant d'un cran,
+`bonus`, `ok` et `reroll` n'ont **aucune** règle propre : ils retombent sur l'ancêtre
+`campaign/runeterra`, donc staff seul. Le cycle de validation est ainsi garanti par le
+**serveur**, pas par le masquage d'UI.
+
+Le `.validate` sur `d6` borne le jet à un entier 1–6 : un `9` tapé en console est rejeté.
+Il ne prétend pas empêcher un joueur de « choisir » son 6 — c'est la validation du MJ qui
+joue ce rôle (§2.1.bis).
+
 Un joueur ne peut cocher que **son** personnage. Ennemis et PNJ alliés n'ont de `charId`
 chez personne : seul le MJ les valide, ce qui correspond exactement au « ennemi compris »
-de la §2.4.
+de la §2.5.
 
 ### ⚠️ Le piège du nœud vs ses enfants — ici, il ne mord PAS
 
@@ -284,7 +367,7 @@ bouton « j'ai fini » dès sa première version.
 | Lot | Contenu | Règles RTDB | Statut |
 |---|---|---|---|
 | **1** | Drapeau `side` — les PNJ alliés existent | aucune | ✅ **livré** |
-| **2** | Moteur pur : créneaux, participation, complétude + tests | aucune | à faire |
+| **2** | Moteur pur : créneaux, participation, complétude + tests | aucune | ✅ **livré** |
 | **3** | Nœud `combat/initiative`, hook, bouclage → `turn + 1` | **§6** | à faire |
 | **4** | UI MJ — liste des créneaux sous la table, drag, créneau actif | aucune | à faire |
 | **5** | UI joueur — bas de l'onglet Combat + bouton « J'ai fini » | aucune | à faire |
@@ -311,39 +394,57 @@ Tout le moteur de combat s'applique aux alliés **sans une ligne de changement**
 
 ---
 
-## 8. Fonctions pures à écrire (lot 2)
+## 8. Le moteur pur (lot 2) — ✅ livré le 2026-09-02
+
+Tout est dans `game-logic.js`, sans dépendance React / DOM / Firebase.
 
 ```
-initiativeSlots(combatants, scores)
-    → [{ init, members: [id] }] trié par init décroissant
-      (combattant sans score : voir §10 — question ouverte)
-
-slotParticipants(slot, combatants, ko, round)
-    → [id] des membres qui doivent agir (applique §4.2)
-
-activeSlot(slots, done, combatants, ko, round)
-    → le créneau actif, ou null si le round est terminé
-
-roundComplete(slots, done, combatants, ko, round)
-    → bool ; pilote l'allumage du bouton « Fin de round »
+INIT_DIE = 6
+rollInitiative(rng)              → 1..6 ; `rng` injectable (idiome de rollCrit)
+initiativeTotal(entry)           → d6 + bonus, ou null si pas encore lancé
+initiativeStatus(entry)          → 'idle' | 'pending' | 'reroll' | 'ok'
+initiativeReady(entry)           → raccourci : statut 'ok'
+combatantJoinRound(c)            → joinRound, absent = 1 (§2.4)
+initiativeSlots(combatants, scores, round)
+                                 → [{ init, members }] trié décroissant ; n'inclut que
+                                   les scores validés ET les combattants déjà entrés
+slotParticipants(members, byId, ko, round, init)
+                                 → [id] devant agir ; applique le KO différé (§4.2)
+initiativeState(combatants, scores, done, ko, round)
+                                 → { slots, active, activeInit, complete }
+                                   c'est l'appel unique que consomme l'UI
 ```
 
-### Tests à écrire
+`combatants` est une liste **normalisée** `[{ id, hp, joinRound }]` : c'est l'appelant qui
+uniformise les PJ (venus de `characters`) et les PNJ (venus de `combat/enemies`). Le
+moteur ignore tout du camp et de Firebase.
 
-1. créneaux triés décroissant, ex æquo regroupés ;
-2. un créneau à un seul membre se comporte comme les autres ;
-3. **KO avant son créneau** → non-participant, ne bloque pas ;
-4. **KO pendant son propre créneau** (§2.3) → participant, doit déclarer ;
-5. KO d'un round antérieur → non-participant ;
-6. créneau partiellement déclaré → toujours actif ;
-7. créneau entièrement déclaré → le suivant devient actif, **sans écriture** ;
-8. tous les créneaux déclarés → `roundComplete` vrai, `activeSlot` null ;
-9. `done` d'un combattant absent de la liste → ignoré, ne casse rien ;
-10. liste vide / scores absents → pas de plantage ;
-11. **tous les participants d'un créneau KO avant ouverture** → créneau entièrement sauté,
-    on passe au suivant sans blocage (le cas de deadlock à ne pas rater).
+Chaque créneau rendu par `initiativeState` porte `{ init, members, participants, pending,
+complete }` — `members` = tout le monde, `participants` = ceux qui doivent agir après
+application de la règle du KO, `pending` = ceux qui n'ont pas encore déclaré.
 
----
+### Tests écrits (15, tous verts)
+
+1. `rollInitiative` borné 1–6, `rng` injectable, **`rng() === 1` ne donne jamais 7**,
+   `NaN` retombe sur la borne basse, et 200 tirages réels restent dans la plage ;
+2. `initiativeTotal` : bonus négatif, total négatif possible, bonus absent = 0, `d6`
+   hors plage borné (un `9` écrit en console ne devient pas un score de 9) ;
+3. `initiativeStatus` : les 4 états du cycle de la §2.1.bis ;
+4. créneaux triés décroissant, ex æquo regroupés, ordre d'origine préservé dans un
+   créneau, créneau à un seul membre ;
+5. **un score non validé par le MJ n'entre pas en jeu** (`pending` et `reroll` exclus) ;
+6. **le retardataire ne rejoint qu'au round suivant** (§2.4), même avec un meilleur score ;
+7. KO **avant** son créneau → sauté ;
+8. KO **pendant son propre créneau** (§2.3) → participe quand même ;
+9. KO d'un round antérieur → reste hors jeu ;
+10. créneau partiellement déclaré → toujours actif ;
+11. créneau entièrement déclaré → le suivant s'active, **sans aucune écriture** ;
+12. tous les créneaux déclarés → `complete` vrai, `active` null ;
+13. **créneau entièrement KO avant ouverture** → sauté d'office, pas de blocage de table ;
+14. `done` parasite (combattant absent de la liste) → ignoré ;
+15. plateau vide / scores absents / arguments nuls → pas de plantage, et
+    `complete: false` (rien à jouer ≠ round terminé : le bouton « Fin de round » reste
+    éteint sur un plateau qui n'a pas commencé).
 
 ## 9. Surfaces d'affichage visées
 
@@ -362,22 +463,32 @@ tordu au doigt — à ne faire que si le MJ le réclame.
 
 ---
 
-## 10. Questions ouvertes
+## 10. Questions tranchées par le MJ (2026-09-02)
 
-1. **Un combattant sans score d'initiative** — arrive-t-il en fin de liste, dans un
-   créneau « non initié », ou est-il exclu du combat tant que le MJ n'a pas saisi son
-   1d6 ? (Cas réel : un renfort qui débarque au round 3.)
-2. **Un combattant qui rejoint en cours de round** — joue-t-il dès ce round si son créneau
-   n'est pas encore passé, ou seulement au suivant ?
-3. **Qui saisit le 1d6 d'un PJ ?** La §2.1 suppose que le MJ collecte les jets. Si les
-   joueurs doivent saisir le leur, il faut **élargir la règle RTDB** de la §6 à
-   `scores/$combatantId` selon le même motif que `done`.
-4. **Les modificateurs de préparation (−2…+2)** — sont-ils saisis comme un champ séparé
-   (`d6` + `mod`, avec l'app qui somme) ou le MJ saisit-il directement le total ? Le champ
-   séparé permettrait d'afficher « 5 = 4 +1 vigilant » en infobulle.
+Les quatre questions ouvertes de la première rédaction ont été tranchées le jour même.
+Elles sont reportées dans les sections concernées ; résumé et conséquences :
+
+1. **Combattant sans score / arrivée tardive** → §2.4. Il lance son dé normalement, mais
+   n'entre qu'au **round entier suivant**, pour ne jamais surgir en amont de joueurs ayant
+   déjà agi. Porté par `joinRound` (absent = 1).
+2. *(fusionnée avec la 1)*
+3. **Qui lance le 1d6 d'un PJ** → §2.1.bis. **Le joueur**, avec randomisation par l'app,
+   puis **validation du MJ** (qui peut refuser et demander une relance).
+   ⚠️ Conséquence directe sur la §6 : la règle RTDB s'ouvre à `scores/$combatantId/**d6**`
+   — sur la feuille, surtout pas sur le nœud du score, sinon le joueur s'auto-validerait.
+4. **Un champ ou deux** → **deux** : `d6` et `bonus`. Le total est dérivé, jamais stocké.
+
+### Ce qui reste réellement ouvert
+
+- **Le geste de drag dans la liste MJ** (§9) : déposer un combattant sur un autre créneau
+  pour lui en prendre le score est le geste naturel ; créer un créneau *entre* deux
+  existants est possible mais tordu au doigt. À décider au lot 4, en voyant l'écran.
+- **Le `bonus` est-il persistant d'un combat à l'autre ?** Un malus de surprise vaut pour
+  ce combat-là ; « ⟲ Combat » doit vraisemblablement le remettre à 0 en même temps que
+  les scores. À confirmer à l'usage.
+- **Lot 6** — l'assistant caracs → stats PNJ, indépendant du reste.
 
 ---
-
 ## 11. Recette
 
 - [ ] `node --test test/game-logic.test.js` et `test/auth.test.js` verts

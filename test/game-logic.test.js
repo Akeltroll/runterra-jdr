@@ -1421,3 +1421,150 @@ test('splitCombatants : liste vide ou absente = deux camps vides', () => {
   assert.deepEqual(L.splitCombatants([]), { enemies: [], allies: [] });
   assert.deepEqual(L.splitCombatants(null), { enemies: [], allies: [] });
 });
+
+/* --- Initiative & creneaux de tour --- */
+/* Raccourcis : score valide, en attente, refuse. */
+const okS = (d6, bonus) => ({ d6, bonus: bonus || 0, ok: true });
+/* Combattants normalises {id, hp, joinRound}. */
+const cbt = (id, hp, joinRound) => ({ id, hp: hp == null ? 100 : hp, joinRound });
+
+test('rollInitiative : borne 1..6, rng injectable', () => {
+  assert.equal(L.rollInitiative(() => 0), 1);
+  assert.equal(L.rollInitiative(() => 0.5), 4);
+  assert.equal(L.rollInitiative(() => 0.9999), 6);
+  // rng() === 1 ne doit JAMAIS produire 7
+  assert.equal(L.rollInitiative(() => 1), 6);
+  // rng absurde => borne basse, pas de NaN
+  assert.equal(L.rollInitiative(() => NaN), 1);
+  // sans rng : reste dans la plage
+  for (let i = 0; i < 200; i++) {
+    const v = L.rollInitiative();
+    assert.ok(v >= 1 && v <= 6 && Number.isInteger(v), 'hors plage : ' + v);
+  }
+});
+
+test('initiativeTotal : d6 + bonus, bonus negatif accepte', () => {
+  assert.equal(L.initiativeTotal({ d6: 4, bonus: 2 }), 6);
+  assert.equal(L.initiativeTotal({ d6: 4, bonus: -2 }), 2);
+  assert.equal(L.initiativeTotal({ d6: 1, bonus: -3 }), -2);   // total negatif possible
+  assert.equal(L.initiativeTotal({ d6: 5 }), 5);               // bonus absent = 0
+  assert.equal(L.initiativeTotal({ bonus: 3 }), null);         // pas de jet = pas de score
+  assert.equal(L.initiativeTotal(null), null);
+  // d6 hors plage borne (une valeur ecrite a la main en console ne passe pas)
+  assert.equal(L.initiativeTotal({ d6: 9, bonus: 0 }), 6);
+  assert.equal(L.initiativeTotal({ d6: 0, bonus: 0 }), 1);
+});
+
+test('initiativeStatus : cycle jet -> validation MJ', () => {
+  assert.equal(L.initiativeStatus(null), 'idle');
+  assert.equal(L.initiativeStatus({}), 'idle');
+  assert.equal(L.initiativeStatus({ d6: 4 }), 'pending');            // attend le MJ
+  assert.equal(L.initiativeStatus({ d6: 4, ok: true }), 'ok');
+  assert.equal(L.initiativeStatus({ reroll: true }), 'reroll');      // MJ a refuse
+  assert.equal(L.initiativeReady({ d6: 4, ok: true }), true);
+  assert.equal(L.initiativeReady({ d6: 4 }), false);
+});
+
+test('initiativeSlots : tri decroissant, ex aequo regroupes', () => {
+  const slots = L.initiativeSlots(
+    [cbt('a'), cbt('b'), cbt('c'), cbt('d')],
+    { a: okS(5), b: okS(6), c: okS(5), d: okS(3) }, 1);
+  assert.deepEqual(slots.map(s => s.init), [6, 5, 3]);
+  assert.deepEqual(slots[1].members, ['a', 'c']);      // ordre d'origine preserve
+  assert.deepEqual(slots[0].members, ['b']);           // creneau a un seul membre
+});
+
+test('initiativeSlots : un score non valide par le MJ n entre PAS en jeu', () => {
+  const slots = L.initiativeSlots(
+    [cbt('a'), cbt('b'), cbt('c')],
+    { a: okS(5), b: { d6: 6 }, c: { reroll: true } }, 1);
+  assert.deepEqual(slots.map(s => s.init), [5]);
+  assert.deepEqual(slots[0].members, ['a']);
+});
+
+test('initiativeSlots : le retardataire ne rejoint qu au round suivant', () => {
+  const list = [cbt('a'), cbt('renfort', 100, 3)];
+  const sc = { a: okS(2), renfort: okS(6) };
+  // arrive au round 3 : absent des rounds 1 et 2, meme avec un meilleur score
+  assert.deepEqual(L.initiativeSlots(list, sc, 2).map(s => s.init), [2]);
+  assert.deepEqual(L.initiativeSlots(list, sc, 3).map(s => s.init), [6, 2]);
+  // joinRound absent = present des le debut
+  assert.equal(L.combatantJoinRound({ id: 'x' }), 1);
+  assert.equal(L.combatantJoinRound({ id: 'x', joinRound: 4 }), 4);
+});
+
+test('slotParticipants : KO AVANT son creneau => saute', () => {
+  const byId = { mort: { id: 'mort', hp: 0 }, vif: { id: 'vif', hp: 30 } };
+  const ko = { mort: { round: 1, init: 6 } };   // tue au creneau 6
+  // son creneau a lui est 3 : il ne le joue pas
+  assert.deepEqual(L.slotParticipants(['mort', 'vif'], byId, ko, 1, 3), ['vif']);
+});
+
+test('slotParticipants : KO PENDANT son propre creneau => agit quand meme', () => {
+  const byId = { mort: { id: 'mort', hp: 0 }, vif: { id: 'vif', hp: 30 } };
+  const ko = { mort: { round: 1, init: 3 } };   // tue AU creneau 3, qui est le sien
+  assert.deepEqual(L.slotParticipants(['mort', 'vif'], byId, ko, 1, 3), ['mort', 'vif']);
+});
+
+test('slotParticipants : KO d un round anterieur => reste hors jeu', () => {
+  const byId = { mort: { id: 'mort', hp: 0 } };
+  const ko = { mort: { round: 1, init: 3 } };
+  assert.deepEqual(L.slotParticipants(['mort'], byId, ko, 2, 3), []);
+});
+
+test('initiativeState : creneau partiellement declare => toujours actif', () => {
+  const list = [cbt('a'), cbt('b'), cbt('c')];
+  const sc = { a: okS(6), b: okS(6), c: okS(4) };
+  const st = L.initiativeState(list, sc, { a: true }, {}, 1);
+  assert.equal(st.activeInit, 6);
+  assert.deepEqual(st.active.pending, ['b']);
+  assert.equal(st.complete, false);
+});
+
+test('initiativeState : creneau entierement declare => le suivant s active', () => {
+  const list = [cbt('a'), cbt('b'), cbt('c')];
+  const sc = { a: okS(6), b: okS(6), c: okS(4) };
+  const st = L.initiativeState(list, sc, { a: true, b: true }, {}, 1);
+  assert.equal(st.activeInit, 4);          // aucune ecriture n'a ete necessaire
+  assert.deepEqual(st.active.pending, ['c']);
+  assert.equal(st.complete, false);
+});
+
+test('initiativeState : tous les creneaux declares => round complet', () => {
+  const list = [cbt('a'), cbt('b')];
+  const sc = { a: okS(6), b: okS(4) };
+  const st = L.initiativeState(list, sc, { a: true, b: true }, {}, 1);
+  assert.equal(st.active, null);
+  assert.equal(st.activeInit, null);
+  assert.equal(st.complete, true);
+});
+
+test('initiativeState : creneau entierement KO avant ouverture => saute, PAS de blocage', () => {
+  const list = [cbt('mort1', 0), cbt('mort2', 0), cbt('vif', 50)];
+  const sc = { mort1: okS(6), mort2: okS(6), vif: okS(2) };
+  const ko = { mort1: { round: 1, init: 9 }, mort2: { round: 1, init: 9 } };
+  const st = L.initiativeState(list, sc, {}, ko, 1);
+  assert.deepEqual(st.slots[0].participants, []);   // creneau 6 : personne a jouer
+  assert.equal(st.slots[0].complete, true);
+  assert.equal(st.activeInit, 2);                   // on est passe directement au suivant
+});
+
+test('initiativeState : un `done` parasite (combattant absent) est ignore', () => {
+  const st = L.initiativeState([cbt('a')], { a: okS(5) }, { fantome: true }, {}, 1);
+  assert.equal(st.activeInit, 5);
+  assert.deepEqual(st.active.pending, ['a']);
+});
+
+test('initiativeState : plateau vide ou sans score => pas de plantage, round non complet', () => {
+  const vide = L.initiativeState([], {}, {}, {}, 1);
+  assert.deepEqual(vide.slots, []);
+  assert.equal(vide.active, null);
+  assert.equal(vide.complete, false);           // rien a jouer != round termine
+  const nul = L.initiativeState(null, null, null, null, 0);
+  assert.deepEqual(nul.slots, []);
+  assert.equal(nul.complete, false);
+  // des combattants mais aucun score valide
+  const sansScore = L.initiativeState([cbt('a')], {}, {}, {}, 1);
+  assert.deepEqual(sansScore.slots, []);
+  assert.equal(sansScore.complete, false);
+});
