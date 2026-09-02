@@ -209,6 +209,7 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
   const [edit, setEdit] = useState(false);
   const [subir, setSubir] = useState('');
   const danger = enemy.hpMax > 0 && (enemy.hpCur / enemy.hpMax) * 100 < 40;
+  const ally = isAlly(enemy);
   const num = (v) => Math.max(0, parseInt(v, 10) || 0);
   const applySubir = () => {
     const n = num(subir);
@@ -229,6 +230,13 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
     );
     return (
       <div className="panel" style={{ display:'flex', flexDirection:'column', gap:10, padding:14 }}>
+        <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>
+          <span className="overline" title="Camp du combattant">Camp</span>
+          {[['enemy','Ennemi'],['ally','Allié']].map(([s, lbl]) => (
+            <button key={s} className={'btn btn-sm ' + (combatantSide(enemy) === s ? 'btn-gold' : 'btn-ghost')}
+              onClick={() => onUpdate(enemy.id, { side: s })} style={{ padding:'3px 9px', fontSize:11 }}>{lbl}</button>
+          ))}
+        </div>
         <div className="row wrap gap-2">
           {field('Nom', 'name', true)}
           {field('HP actuels', 'hpCur')}
@@ -253,9 +261,12 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
 
   return (
     <div className="panel" style={{ display:'flex', flexDirection:'column',
-      borderColor: danger ? 'rgba(200,48,42,.45)' : 'var(--line)' }}>
+      borderColor: danger ? 'rgba(200,48,42,.45)' : 'var(--line)',
+      // Liseré de camp APRÈS borderColor : il doit gagner sur le bord gauche.
+      borderLeft: '3px solid ' + (ally ? 'var(--buff)' : 'var(--debuff)') }}>
       <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:8 }}>
         <span style={{ fontFamily:'var(--font-display)', fontSize:15, color:'var(--gold-pale)', flex:1, minWidth:0 }}>{enemy.name}</span>
+        {ally && <span className="badge" style={{ background:'rgba(30,122,79,.16)', color:'var(--buff-bright)', border:'1px solid rgba(52,199,127,.35)' }}>Allié</span>}
         <button className="btn btn-sm btn-ghost" onClick={() => setEdit(true)} title="Éditer" style={{ padding:'4px 8px' }}>✎</button>
       </div>
       <div className="col gap-2" style={{ padding:'12px 14px' }}>
@@ -618,17 +629,32 @@ function MJPage({ go }) {
             <PendingHitsPanel enemies={enemies} />
           </div>
           <div style={{ marginTop:28 }}>
-            <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-              <h3 style={{ fontSize:16 }}>Ennemis <span className="mono faint" style={{ fontSize:12 }}>· {enemies.length}</span></h3>
-              <button className="btn btn-sm btn-gold" onClick={() => addEnemy()}>+ Ajouter un ennemi</button>
-            </div>
-            {enemies.length === 0
-              ? <div className="faint" style={{ fontSize:12 }}>Aucun ennemi. Ajoutez-en un pour suivre ses HP en combat.</div>
-              : <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:16, alignItems:'start' }}>
-                  {enemies.map(e => (
-                    <EnemyCard key={e.id} enemy={e} onUpdate={updateEnemy} onRemove={removeEnemy} onAttack={setAttacker} />
-                  ))}
-                </div>}
+            {(() => {
+              // Ennemis d'abord, alliés ensuite — l'ordre de COMBAT viendra de l'initiative,
+              // celui-ci n'est qu'un rangement d'affichage.
+              const { enemies: foes, allies } = splitCombatants(enemies);
+              const ordered = foes.concat(allies);
+              return (
+                <React.Fragment>
+                  <div className="row" style={{ justifyContent:'space-between', alignItems:'center', marginBottom:12, flexWrap:'wrap', gap:10 }}>
+                    <h3 style={{ fontSize:16 }}>Combattants <span className="mono faint" style={{ fontSize:12 }}>
+                      · {foes.length} ennemi{foes.length > 1 ? 's' : ''}{allies.length > 0 ? ` · ${allies.length} allié${allies.length > 1 ? 's' : ''}` : ''}
+                    </span></h3>
+                    <span className="row gap-2">
+                      <button className="btn btn-sm btn-gold" onClick={() => addEnemy()}>+ Ennemi</button>
+                      <button className="btn btn-sm btn-ghost" onClick={() => addEnemy(null, 'ally')}>+ PNJ allié</button>
+                    </span>
+                  </div>
+                  {ordered.length === 0
+                    ? <div className="faint" style={{ fontSize:12 }}>Aucun combattant. Ajoutez un ennemi ou un PNJ allié pour suivre ses HP en combat.</div>
+                    : <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:16, alignItems:'start' }}>
+                        {ordered.map(e => (
+                          <EnemyCard key={e.id} enemy={e} onUpdate={updateEnemy} onRemove={removeEnemy} onAttack={setAttacker} />
+                        ))}
+                      </div>}
+                </React.Fragment>
+              );
+            })()}
           </div>
           <div style={{ marginTop:28 }}>
             <CombatLog canClear={true} />

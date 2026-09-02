@@ -793,6 +793,26 @@
     return { mode, ko: false, showBar: false, pct: null, text: '' };
   }
 
+  /* --- Camp d'un combattant non-joueur (PNJ) ---
+     Le noeud `combat/enemies` porte desormais les DEUX camps : ennemis et PNJ allies.
+     `side` absent => 'enemy', exactement comme `reveal` absent => 'hidden' : aucune
+     migration a ecrire, les documents deja en base restent des ennemis.
+     Un allie reste un combattant a part entiere (il encaisse, il frappe) : tout le
+     moteur de combat — mitigateDamage, applyDamageToPools, enemyPublicView — s'applique
+     a lui sans changement. Seuls le ciblage et l'affichage distinguent les camps. */
+  function combatantSide(c) {
+    return (c && c.side === 'ally') ? 'ally' : 'enemy';
+  }
+  function isAlly(c) { return combatantSide(c) === 'ally'; }
+  /* Repartit une liste de combattants par camp en preservant l'ordre d'origine. */
+  function splitCombatants(list) {
+    var out = { enemies: [], allies: [] };
+    (list || []).forEach(function (c) {
+      out[isAlly(c) ? 'allies' : 'enemies'].push(c);
+    });
+    return out;
+  }
+
   /* ============================================================
      COMPÉTENCES (actif/passif) — logique pure
      Source des formules : info-mj/Codes App Script.md (le script prime).
@@ -1226,6 +1246,7 @@
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods, ADP_KEYS, runeHasAdpChoice,
     mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, enemyPublicView,
+    combatantSide, isAlly, splitCombatants,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,

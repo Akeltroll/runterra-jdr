@@ -118,17 +118,23 @@ function useSharedTurn() {
 const ENEMIES = `${CAMPAIGN}/combat/enemies`;
 let _enemySeq = 0;
 function newEnemyId() { return 'enemy_' + Date.now().toString(36) + '_' + (_enemySeq++); }
-function makeEnemy(name) {
-  return { id: newEnemyId(), name: name || 'Ennemi', hpCur: 100, hpMax: 100,
+/* `side` = camp du combattant ('enemy' par défaut, cf. combatantSide). Un PNJ allié est
+   créé visible des joueurs (reveal 'exact') : masquer les PV d'un allié n'a pas de sens,
+   alors qu'un ennemi reste caché tant que le MJ n'en décide pas autrement. Le défaut est
+   posé ICI, à la création — `enemyPublicView` n'est pas touchée. */
+function makeEnemy(name, side) {
+  const ally = side === 'ally';
+  return { id: newEnemyId(), name: name || (ally ? 'Allié' : 'Ennemi'), hpCur: 100, hpMax: 100,
     manaCur: 0, manaMax: 0, atk: 10, armure: 0, resmag: 0, note: '',
     crit: 0, dcrit: 200, lethaAD: 0, lethaAP: 0,
-    reveal: 'hidden', revealPct: 100 };
+    side: ally ? 'ally' : 'enemy',
+    reveal: ally ? 'exact' : 'hidden', revealPct: 100 };
 }
 function useMJEnemies() {
   const [map, setMap] = useState(null);
   useEffect(() => window.RTDB.subscribePath(ENEMIES, (v) => setMap(v || {})), []);
   const enemies = map ? Object.values(map).sort((a, b) => (a.id < b.id ? -1 : 1)) : [];
-  const addEnemy = useCallback((name) => { const e = makeEnemy(name); window.RTDB.updatePath(ENEMIES, { [e.id]: e }); }, []);
+  const addEnemy = useCallback((name, side) => { const e = makeEnemy(name, side); window.RTDB.updatePath(ENEMIES, { [e.id]: e }); }, []);
   const updateEnemy = useCallback((id, patch) => window.RTDB.updatePath(`${ENEMIES}/${id}`, patch), []);
   const removeEnemy = useCallback((id) => window.RTDB.updatePath(ENEMIES, { [id]: null }), []);
   return { enemies, addEnemy, updateEnemy, removeEnemy };

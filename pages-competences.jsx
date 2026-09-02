@@ -31,6 +31,24 @@ function runeModsOf(state) {
 
 const CD_LOCKED = 999999; // sentinelle « 1×/combat » (débloqué par Nouveau combat)
 
+/* Pastille d'un combattant non-joueur, vue JOUEUR : ce qu'il a le droit de voir passe
+   toujours par `enemyPublicView` (un allié est simplement créé en 'exact'). */
+function CombatantChip({ c }) {
+  const v = enemyPublicView(c);
+  return (
+    <span className="row gap-2" style={{ alignItems: 'center', fontSize: 12 }}>
+      <span className="mono" style={{ color: v.ko ? 'var(--faint)' : 'var(--ink)' }}>{c.name}</span>
+      {v.ko && <span className="mono" style={{ color: 'var(--faint)' }}>· KO</span>}
+      {v.showBar && (
+        <span style={{ display: 'inline-block', width: 64, height: 7, borderRadius: 99, background: 'var(--bg-inset)', border: '1px solid var(--line)', overflow: 'hidden', verticalAlign: 'middle' }}>
+          <span style={{ display: 'block', height: '100%', width: v.pct + '%', background: isAlly(c) ? 'var(--buff-bright)' : 'var(--hp)' }} />
+        </span>
+      )}
+      {v.text && <span className="mono faint">{v.text}</span>}
+    </span>
+  );
+}
+
 /* Petit stepper de compteur (max arbitraire, contrairement à NumberStepper borné 5). */
 function CounterStepper({ label, value, max, color, onChange }) {
   const v = value || 0;
@@ -160,6 +178,7 @@ function CompetencesBody({ char, staff }) {
   const { state, setField, setCounter, setCooldown, setSkillBuff } = useCharState(char.id);
   const { turn } = useSharedTurn();
   const { enemies } = useMJEnemies();
+  const { enemies: foes, allies } = splitCombatants(enemies);
   const { addHit } = usePendingHits();
   const [targetId, setTargetId] = useState('');
   if (!state) return <div className="panel" style={{ margin: 20, padding: 20 }}>Chargement…</div>;
@@ -316,33 +335,43 @@ function CompetencesBody({ char, staff }) {
         <div className="panel" style={{ padding: '10px 14px' }}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <div>
-              <div className="overline" style={{ marginBottom: 6 }}>Ennemis en jeu</div>
-              <div className="row gap-3 wrap">
-                {enemies.map(e => {
-                  const v = enemyPublicView(e);
-                  return (
-                    <span key={e.id} className="row gap-2" style={{ alignItems: 'center', fontSize: 12 }}>
-                      <span className="mono" style={{ color: v.ko ? 'var(--faint)' : 'var(--ink)' }}>{e.name}</span>
-                      {v.ko && <span className="mono" style={{ color: 'var(--faint)' }}>· KO</span>}
-                      {v.showBar && (
-                        <span style={{ display: 'inline-block', width: 64, height: 7, borderRadius: 99, background: 'var(--bg-inset)', border: '1px solid var(--line)', overflow: 'hidden', verticalAlign: 'middle' }}>
-                          <span style={{ display: 'block', height: '100%', width: v.pct + '%', background: 'var(--hp)' }} />
-                        </span>
-                      )}
-                      {v.text && <span className="mono faint">{v.text}</span>}
-                    </span>
-                  );
-                })}
+              <div className="row gap-4 wrap" style={{ alignItems: 'flex-start' }}>
+                <div>
+                  <div className="overline" style={{ marginBottom: 6 }}>Ennemis en jeu</div>
+                  <div className="row gap-3 wrap">
+                    {foes.length === 0
+                      ? <span className="faint" style={{ fontSize: 12 }}>aucun</span>
+                      : foes.map(e => <CombatantChip key={e.id} c={e} />)}
+                  </div>
+                </div>
+                {allies.length > 0 && (
+                  <div>
+                    <div className="overline" style={{ marginBottom: 6, color: 'var(--buff-bright)' }}>Alliés</div>
+                    <div className="row gap-3 wrap">
+                      {allies.map(e => <CombatantChip key={e.id} c={e} />)}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <label className="row gap-2" style={{ alignItems: 'center', fontSize: 12.5 }}>Cible
               <select value={targetId} onChange={e => setTargetId(e.target.value)}
                 style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '6px 9px', fontSize: 13 }}>
                 <option value="">— aucune —</option>
-                {enemies.filter(en => en.hpCur > 0).map(en => {
+                {/* Les alliés restent ciblables (soin, tir fratricide) mais dans un groupe
+                    séparé : on ne tape pas un PNJ allié par glissement de souris. */}
+                {foes.filter(en => en.hpCur > 0).map(en => {
                   const v = enemyPublicView(en);
                   return <option key={en.id} value={en.id}>{en.name}{v.mode === 'exact' ? ` (${en.hpCur} PV)` : ''}</option>;
                 })}
+                {allies.filter(en => en.hpCur > 0).length > 0 && (
+                  <optgroup label="Alliés">
+                    {allies.filter(en => en.hpCur > 0).map(en => {
+                      const v = enemyPublicView(en);
+                      return <option key={en.id} value={en.id}>{en.name}{v.mode === 'exact' ? ` (${en.hpCur} PV)` : ''}</option>;
+                    })}
+                  </optgroup>
+                )}
               </select>
             </label>
           </div>

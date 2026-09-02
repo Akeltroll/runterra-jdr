@@ -1392,3 +1392,32 @@ test('planCoinMove : rend null quand rien ne peut bouger', () => {
   assert.equal(L.planCoinMove({ arg: 5 }, { arg: 6 }, 'arg', -3), null);  // montant negatif
   assert.equal(L.planCoinMove(null, {}, 'arg', 4), null);                 // source absente
 });
+
+/* --- Camp des combattants non-joueurs (PNJ alliés) --- */
+test('combatantSide : `side` absent = ennemi (aucune migration a ecrire)', () => {
+  assert.equal(L.combatantSide({ name: 'Gobelin' }), 'enemy');
+  assert.equal(L.combatantSide({ name: 'Gobelin', side: 'enemy' }), 'enemy');
+  assert.equal(L.combatantSide({ name: 'Clerc', side: 'ally' }), 'ally');
+  // valeur inconnue ou entree vide => ennemi, jamais d'allie par accident
+  assert.equal(L.combatantSide({ side: 'bidon' }), 'enemy');
+  assert.equal(L.combatantSide(null), 'enemy');
+  assert.equal(L.combatantSide(undefined), 'enemy');
+});
+test('isAlly : vrai pour le seul camp allie', () => {
+  assert.equal(L.isAlly({ side: 'ally' }), true);
+  assert.equal(L.isAlly({ side: 'enemy' }), false);
+  assert.equal(L.isAlly({}), false);
+});
+test('splitCombatants : repartit par camp en preservant l ordre d origine', () => {
+  const list = [
+    { id: 'a', side: 'enemy' }, { id: 'b', side: 'ally' },
+    { id: 'c' }, { id: 'd', side: 'ally' },
+  ];
+  const out = L.splitCombatants(list);
+  assert.deepEqual(out.enemies.map(c => c.id), ['a', 'c']);   // 'c' sans `side` = ennemi
+  assert.deepEqual(out.allies.map(c => c.id), ['b', 'd']);
+});
+test('splitCombatants : liste vide ou absente = deux camps vides', () => {
+  assert.deepEqual(L.splitCombatants([]), { enemies: [], allies: [] });
+  assert.deepEqual(L.splitCombatants(null), { enemies: [], allies: [] });
+});
