@@ -559,9 +559,9 @@ arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, 
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
 ## État actuel (2026-09-02)
-- **Chantier « gestion des tours » — lots 1 à 3 livrés** (initiative, créneaux, PNJ alliés).
-  Cache `20260902-2`, **202 tests verts** (game-logic 191 + auth 11), ✅ **RÈGLES RTDB PUBLIÉES ET
-  VÉRIFIÉES le 2026-09-02** (relecture en ligne avant/après : aucune dérive console préalable, diff
+- **Chantier « gestion des tours » — LES 6 LOTS SONT LIVRÉS** (initiative, créneaux, PNJ alliés,
+  UI MJ + UI joueur, assistant de stats PNJ). Cache `20260902-6`, **206 tests verts**
+  (game-logic 195 + auth 11), ✅ **RÈGLES RTDB PUBLIÉES ET VÉRIFIÉES le 2026-09-02** (relecture en ligne avant/après : aucune dérive console préalable, diff
   post-publication limité aux 2 additions attendues).
   📄 **Spec complète et source de vérité des règles de jeu** :
   `docs/superpowers/specs/2026-09-02-initiative-creneaux-design.md` — les règles du MJ (§2) ne sont
@@ -601,8 +601,24 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   `initiativeStatus`/`initiativeReady`/`combatantJoinRound`/`initiativeSlots`/`slotParticipants`/
   `initiativeState` (game-logic, purs, testés) ; `useInitiative` + `INITIATIVE` (data-state) ; PNJ alliés
   dans la vue MJ (section « Combattants », bouton `+ PNJ allié`, bascule Camp) et côté joueur (bandeau
-  séparé + `<optgroup>` de ciblage). **Restent les lots 4 (liste MJ), 5 (UI joueur), 6 (assistant
-  caracs → stats PNJ)**.
+  séparé + `<optgroup>` de ciblage) ; `InitiativePanel` (colonne MJ : créneaux, validation des jets,
+  badge de score `4+1`, `IniScoreEditor` = bonus + placement, « forcer la fin du créneau ») ;
+  `MyTurnBar` + `InitiativeBoard` (onglet Combat joueur) ; `useAllHp` ; `npcStatsFromAttrs`.
+  ⚠️ **`useAllHp` s'abonne aux FEUILLES `state/hpCur`, jamais au nœud `characters`** (staff-only) —
+  même piège que le bug de bourse écrasée d'août ; `useAllCharStates()` vaut `null` pour un joueur.
+  ⚠️ **`npcStatsFromAttrs` est un ASSISTANT, pas un modèle dérivé** : il pré-remplit les champs plats
+  de l'ennemi, qui restent la source de vérité. Ne PAS le transformer en calcul live — `applySubir` et
+  `applyHitToEnemy` écrivent `hpCur` en direct et entreraient en conflit avec un max recalculé.
+  ⚠️ **Le `bonus` d'initiative est le champ RÉEL** (préparation −2…+2, potion, buff) ; le « Créneau »
+  de l'éditeur n'est qu'un confort qui le calcule. Les deux écrivent `bonus`, **jamais `d6`** : le dé
+  appartient au joueur.
+  🐞 **Corrigé au passage (bug ANTÉRIEUR au chantier)** : un PNJ ne pouvait toucher que les PJ —
+  `EnemyAttackModal` ne listait que `CHARACTERS` **et** écrivait les dégâts en supposant une fiche de
+  PJ. Un ennemi ne pouvait frapper ni un autre ennemi, ni un allié, ni lui-même. Voir §2.6 de la spec.
+  👉 **RESTE À FAIRE** : la **recette en conditions réelles à deux sessions** (§11 de la spec) — rien
+  n'a encore été joué à une vraie table. Et les points ouverts de la §10 (geste de drag entre créneaux,
+  et si « ⟲ Combat » doit remettre les `bonus` à 0 : un malus de surprise ne vaut sans doute que pour
+  le combat en cours).
 
 ## État actuel (2026-08-21)
 - **Capacité du coffre commun + attelage du groupe (lot 3/3 du chantier « poids »)** — cache

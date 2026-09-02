@@ -543,3 +543,61 @@ Elles sont reportées dans les sections concernées ; résumé et conséquences 
 - [ ] un ennemi tué avant son créneau est sauté et ne bloque pas
 - [ ] « ⟲ Combat » vide `scores`, `done` et `ko`
 - [ ] les cooldowns et durées de buffs **n'ont pas bougé d'un round** (non-régression)
+
+---
+
+## 12. Reprise de session (état au 2026-09-02, fin de journée)
+
+**Les 6 lots sont écrits, testés et commités sur `Woolost`. Les règles RTDB sont
+publiées et vérifiées en ligne.** Ce qui manque n'est pas du code : c'est de l'usage.
+
+### Ce qui a été validé, et comment
+
+Les lots 1, 4 et 5 ont été testés **par le MJ dans le navigateur**, sur une seule
+session à la fois. Les lots 2 et 3 sont couverts par 19 tests unitaires. Aucun test
+n'a encore été fait **à deux sessions simultanées**, ni à une vraie table.
+
+### La toute première chose à faire à la reprise
+
+**La recette à deux fenêtres** (§11) : compte MJ d'un côté, compte joueur en fenêtre
+privée de l'autre. C'est le seul moyen de valider les deux propriétés qui portent
+tout le système et qu'aucun test unitaire ne peut atteindre :
+
+1. **La dérivation.** Quand le dernier membre d'un créneau clique « J'ai fini », le
+   créneau suivant doit s'activer **simultanément sur les deux écrans**, sans que
+   personne ne touche à rien. S'il y a un décalage, le modèle dérivé de la §4 est en
+   cause et il faut le regarder avant toute autre chose.
+2. **L'ouverture de `hpCur`.** Les deux écrans doivent afficher **le même créneau
+   actif**. S'ils divergent, c'est que la lecture des PV ne remonte pas côté joueur
+   (regarder la console pour un `permission_denied`) — cf. §6.1.
+
+Ensuite seulement : le cycle de validation (le joueur lance → le MJ refuse → le
+joueur relance → le MJ valide), et un créneau à deux PJ qui ne doit avancer que
+lorsque **les deux** ont déclaré.
+
+### Points ouverts, par ordre de gêne probable
+
+1. **Le `bonus` survit-il à « ⟲ Combat » ?** Aujourd'hui **oui** (le nœud entier est
+   purgé, donc non — à vérifier : `resetCombat` efface `INITIATIVE` en entier, donc
+   les bonus partent avec). Un malus de surprise ne vaut que pour un combat, donc
+   c'est probablement le bon comportement — mais un bonus durable (potion longue) le
+   subit aussi. À trancher après une séance réelle.
+2. **Le geste de drag entre créneaux** (§9) : déposer sur un créneau existant marche ;
+   créer un créneau *entre* deux existants n'est pas possible au doigt. Le champ
+   « Créneau » de `IniScoreEditor` couvre le cas, mais moins vite.
+3. **La place dans la colonne MJ** : avec 5 PJ + beaucoup de PNJ, les 264 px peuvent
+   être serrés sur un écran peu haut. La liste de la table est en `flexShrink:0` ; si
+   ça coince, la replier pendant un combat.
+4. **L'arrivée tardive (`joinRound`) n'a aucune UI.** Le hook expose `setJoinRound`,
+   mais rien ne l'appelle : un renfort entre donc au round courant, pas au suivant.
+   La règle §2.4 est implémentée et testée dans le moteur, **elle n'est simplement pas
+   pilotable depuis l'écran**. C'est le seul écart connu entre la spec et l'app.
+
+### Ce qu'il ne faut surtout pas « améliorer » sans relire la spec
+
+- Le sens de `combat/turn` (§3) — cinq mécanismes en dépendent, la casse serait muette.
+- Le créneau actif dérivé et non stocké (§4.1) — persister un `activeId` réintroduirait
+  la course entre deux clics simultanés que ce design élimine.
+- L'ouverture de la **feuille** `scores/$id/d6` et non du nœud (§6) — sur le nœud, un
+  joueur s'auto-validerait.
+- `npcStatsFromAttrs` comme assistant et non comme calcul live (§7, lot 6).
