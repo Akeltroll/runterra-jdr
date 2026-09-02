@@ -4,7 +4,7 @@ Design du chantier « gestion des tours ». Rédigé le 2026-09-02 d'après les 
 données par le MJ en session. **Les règles de jeu de la §2 ne sont écrites nulle part
 ailleurs** — ni dans `info-mj/`, ni dans l'Excel. Ce document en est la source.
 
-Statut : **lots 1, 2 et 3 livrés** ; règles RTDB de la §6 **rédigées mais NON PUBLIÉES**. Lots 4 à 6 à faire.
+Statut : **lots 1 à 4 livrés**, règles RTDB **publiées et vérifiées le 2026-09-02**. Lots 5 et 6 à faire.
 
 ---
 
@@ -156,6 +156,22 @@ encore une fois, aucune migration.
 - Un **joueur** clique « j'ai fini » pour **son** personnage.
 - Le **MJ** clique pour les ennemis et les PNJ alliés.
 - L'état n'avance que quand **tous les participants du créneau actif** ont déclaré.
+
+
+### 2.6 — Un PNJ peut viser n'importe qui (constaté au test du lot 4)
+
+Trou fonctionnel révélé par les tests du MJ : `EnemyAttackModal` ne listait que les
+5 PJ, **et son code écrivait les dégâts en supposant que la cible était une fiche de
+personnage**. Un PNJ ne pouvait donc pas en toucher un autre, quel que soit le camp.
+
+Règle retenue : **aucune restriction de cible**. Un ennemi peut frapper un autre
+ennemi, un PNJ allié, un PJ, ou **lui-même** ; un allié de même. Dégâts de zone,
+sacrifice, contrôle mental, tir fratricide — tout cela existe en jeu.
+
+La résolution se dédouble selon la cible : PJ → sa fiche avec ses stats effectives ;
+PNJ → `applyHitToEnemy`, qui applique l'armure et la résistance magique du PNJ. Le
+journal, les toasts et l'horodatage du KO fonctionnent dans les deux branches. Un
+combattant à terre reste ciblable (signalé « — à terre ») : on peut vouloir l'achever.
 
 ---
 
@@ -394,7 +410,7 @@ bouton « j'ai fini » dès sa première version.
 | **1** | Drapeau `side` — les PNJ alliés existent | aucune | ✅ **livré** |
 | **2** | Moteur pur : créneaux, participation, complétude + tests | aucune | ✅ **livré** |
 | **3** | Nœud `combat/initiative`, hook, bouclage → `turn + 1` | **§6** (non publiées) | ✅ **livré** |
-| **4** | UI MJ — liste des créneaux sous la table, drag, créneau actif | aucune | à faire |
+| **4** | UI MJ — liste des créneaux sous la table, drag, créneau actif | aucune | ✅ **livré** |
 | **5** | UI joueur — bas de l'onglet Combat + bouton « J'ai fini » | aucune | à faire |
 | **6** | Assistant caracs → stats PNJ (indépendant) | aucune | à faire |
 

@@ -213,28 +213,75 @@ function MJCompactCard({ c, st, turn, onFull }) {
 /* Pastille de camp : PJ (or) / allié (vert) / ennemi (rouge). */
 const INI_SIDE_COLOR = { pj: 'var(--gold)', ally: 'var(--buff)', enemy: 'var(--debuff)' };
 
-/* Une ligne de combattant dans un créneau. Cliquer bascule sa déclaration de fin de tour
-   (le MJ peut cocher pour tout le monde, y compris à la place d'un joueur absent). */
-function IniRow({ id, meta, done, isDone, onToggle, onDragStart, dim }) {
+/* Score en clair : « 4+1 » / « 4−1 » / « 4 » (spec §2.1 — deux champs, total dérivé). */
+function iniScoreLabel(entry) {
+  if (!entry || entry.d6 == null) return '—';
+  const b = entry.bonus | 0;
+  return String(entry.d6) + (b > 0 ? '+' + b : b < 0 ? '−' + Math.abs(b) : '');
+}
+
+/* Une ligne de combattant dans un créneau.
+   - le NOM bascule la déclaration de fin de tour (le MJ coche pour tout le monde) ;
+   - le SCORE ouvre le placement direct dans un autre créneau.
+   Un non-participant (KO avant l'ouverture du créneau, spec §2.3) est atténué et son
+   nom n'est PAS cliquable : il est sauté automatiquement, lui mettre « fin de tour »
+   n'aurait aucun sens. */
+function IniRow({ id, meta, entry, isDone, participant, onToggle, onDragStart, onEditScore }) {
   const m = meta[id] || { name: id, side: 'enemy' };
+  const nameTitle = !participant
+    ? 'Hors combat pour ce créneau (à terre avant son ouverture) — passé automatiquement'
+    : isDone ? 'A terminé son tour — cliquer pour annuler' : 'Marquer comme ayant fini';
   return (
-    <button onClick={onToggle} draggable onDragStart={onDragStart}
-      title={isDone ? 'A terminé son tour — cliquer pour annuler' : 'Marquer comme ayant fini'}
-      style={{ display:'flex', alignItems:'center', gap:7, width:'100%', textAlign:'left',
-        padding:'5px 7px', borderRadius:6, border:'1px solid transparent', cursor:'grab',
-        background:'transparent', opacity: dim ? 0.45 : 1 }}
+    <div draggable onDragStart={onDragStart}
+      style={{ display:'flex', alignItems:'center', gap:6, width:'100%',
+        padding:'4px 6px', borderRadius:6, cursor:'grab', opacity: participant ? 1 : 0.45 }}
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
       <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0,
         background: INI_SIDE_COLOR[m.side] || 'var(--debuff)' }} />
-      <span style={{ flex:1, minWidth:0, fontSize:12.5, color: isDone ? 'var(--ink-faint)' : 'var(--ink)',
-        textDecoration: isDone ? 'line-through' : 'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+      <button onClick={participant ? onToggle : undefined} title={nameTitle}
+        style={{ flex:1, minWidth:0, textAlign:'left', background:'transparent', border:'none', padding:0,
+          cursor: participant ? 'pointer' : 'default', fontSize:12.5,
+          color: isDone ? 'var(--ink-faint)' : 'var(--ink)',
+          textDecoration: isDone ? 'line-through' : 'none',
+          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
         {m.name}
+      </button>
+      <button className="mono" onClick={onEditScore} title="Dé + bonus — cliquer pour changer de créneau"
+        style={{ fontSize:10.5, flexShrink:0, background:'var(--bg-inset)', border:'1px solid var(--line)',
+          borderRadius:4, padding:'1px 5px', color:'var(--gold-pale)', cursor:'pointer' }}>
+        {iniScoreLabel(entry)}
+      </button>
+      <span className="mono" style={{ fontSize:11, flexShrink:0, width:10, textAlign:'center',
+        color: isDone ? 'var(--buff-bright)' : 'var(--ink-faint)' }}>
+        {!participant ? '·' : isDone ? '✓' : '…'}
       </span>
-      <span className="mono" style={{ fontSize:11, color: isDone ? 'var(--buff-bright)' : 'var(--ink-faint)', flexShrink:0 }}>
-        {isDone ? '✓' : '…'}
+    </div>
+  );
+}
+
+/* Placement direct : le MJ saisit le créneau visé. Comme le total est dérivé (d6 + bonus)
+   et que le dé appartient au joueur, on ajuste le BONUS — c'est la circonstance que le MJ
+   corrige, jamais le jet. */
+function IniPlacer({ entry, onPlace, onCancel }) {
+  const d6 = entry && entry.d6 != null ? entry.d6 : null;
+  const [v, setV] = useState(String(d6 != null ? d6 + (entry.bonus | 0) : ''));
+  if (d6 == null) return null;
+  const n = parseInt(v, 10);
+  const commit = () => { if (Number.isFinite(n)) onPlace(n); else onCancel(); };
+  return (
+    <div className="row gap-1" style={{ alignItems:'center', padding:'2px 6px 6px 18px' }}>
+      <span className="overline" style={{ fontSize:9 }}>Créneau</span>
+      <input value={v} autoFocus
+        onChange={e => setV(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onCancel(); }}
+        style={{ ...ENEMY_FLD, width:44, padding:'2px 5px', fontSize:11 }} />
+      <button className="btn btn-sm btn-ghost" onClick={commit} style={{ padding:'1px 5px', fontSize:11, color:'var(--buff-bright)' }}>✓</button>
+      <button className="btn btn-sm btn-ghost" onClick={onCancel} style={{ padding:'1px 5px', fontSize:11 }}>✗</button>
+      <span className="mono faint" style={{ fontSize:9.5 }}>
+        dé {d6} · bonus {Number.isFinite(n) ? (n - d6 >= 0 ? '+' : '−') + Math.abs(n - d6) : (entry.bonus | 0)}
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -242,6 +289,7 @@ function InitiativePanel({ ini, meta, ids, turn }) {
   const toast = useToast();
   const { state, scores, done, roll, setDone, setBonus, validate, refuse, forceSlot } = ini;
   const [drag, setDrag] = useState(null);
+  const [placing, setPlacing] = useState(null);   // id dont on édite le créneau
 
   // Combattants sans score validé : ils n'entrent pas dans les créneaux (spec §2.1.bis).
   const waiting = ids.filter(id => initiativeStatus(scores[id]) !== 'ok');
@@ -322,11 +370,19 @@ function InitiativePanel({ ini, meta, ids, turn }) {
                     {slot.complete && <span className="mono" style={{ fontSize:10, color:'var(--buff-bright)' }}>terminé</span>}
                   </div>
                   {slot.members.map(id => (
-                    <IniRow key={id} id={id} meta={meta} done={done}
-                      isDone={done[id] === true}
-                      dim={slot.participants.indexOf(id) === -1}
-                      onToggle={() => setDone(id, done[id] !== true)}
-                      onDragStart={() => setDrag(id)} />
+                    <React.Fragment key={id}>
+                      <IniRow id={id} meta={meta} entry={scores[id]}
+                        isDone={done[id] === true}
+                        participant={slot.participants.indexOf(id) !== -1}
+                        onToggle={() => setDone(id, done[id] !== true)}
+                        onDragStart={() => setDrag(id)}
+                        onEditScore={() => setPlacing(placing === id ? null : id)} />
+                      {placing === id && (
+                        <IniPlacer entry={scores[id]}
+                          onPlace={(n) => { setBonus(id, n - scores[id].d6); setPlacing(null); }}
+                          onCancel={() => setPlacing(null)} />
+                      )}
+                    </React.Fragment>
                   ))}
                 </div>
               );
@@ -449,7 +505,7 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack, stampKo }) {
   );
 }
 
-function EnemyAttackModal({ enemy, stOf, turn, onClose, stampKo }) {
+function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
   const toast = useToast();
   const baseAtk = Math.max(0, enemy.atk || 0);
   // Crit roulé par l'app à l'ouverture (mirroir du flux joueur). Le MJ ajuste le montant si besoin.
@@ -467,8 +523,25 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose, stampKo }) {
     const raw = Math.max(0, parseInt(amount, 10) || 0);
     // Léthalité selon le type : AD (armure) si physique, AP (rés. mag) si magique, rien en brut.
     const lethaNum = Math.max(0, type === 'physique' ? (parseInt(lethaAD, 10) || 0) : type === 'magique' ? (parseInt(lethaAP, 10) || 0) : 0);
+    if (raw <= 0) { onClose(); return; }
+    // La cible peut etre un PNJ (ennemi, allie, ou l'attaquant lui-meme) : les degats
+    // s'appliquent alors sur combat/enemies et non sur une fiche de PJ.
+    const npc = (enemies || []).find(x => x.id === targetId);
+    if (npc) {
+      const r = applyHitToEnemy(npc, raw, type, lethaNum);
+      if (stampKo) stampKo(npc.id, npc.hpCur, r.hpCur);
+      const critTagN = cr.didCrit ? ' 🎲 CRIT' : '';
+      const lethaTagN = lethaNum > 0 ? `, léth. ${type === 'magique' ? 'mag.' : 'phys.'} ${lethaNum}` : '';
+      const selfTag = npc.id === enemy.id ? ' (sur lui-même)' : '';
+      toast(`<b>${enemy.name}</b> inflige <b>${r.applied}</b> (${type}${critTagN}) à <b>${npc.name}</b>${selfTag}${r.hpCur === 0 ? ' — KO !' : ''}`,
+        r.hpCur === 0 ? 'debuff' : 'gold');
+      pushLog(`<b>${enemy.name}</b> inflige <b>${r.applied}</b> (${type}${critTagN}${lethaTagN}) à <b>${npc.name}</b>${selfTag}${r.hpCur === 0 ? ' — KO !' : ''}`,
+        r.hpCur === 0 ? 'debuff' : 'gold');
+      onClose();
+      return;
+    }
     const c = CHARACTERS.find(x => x.id === targetId);
-    if (!c || raw <= 0) { onClose(); return; }
+    if (!c) { onClose(); return; }
     const st = stOf(c.id);
     const L = mjLive(c, st, turn);
     const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag }, lethaNum);
@@ -530,7 +603,24 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose, stampKo }) {
         <label className="col" style={{ gap:4 }}>
           <span className="overline">Cible</span>
           <select style={ENEMY_FLD} value={targetId} onChange={e => setTargetId(e.target.value)}>
-            {CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <optgroup label="Joueurs">
+              {CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </optgroup>
+            {(() => {
+              // Un PNJ peut viser n'importe qui : l'autre camp, son propre camp, ou
+              // lui-meme (degats de zone, sacrifice, controle mental...).
+              const parts = splitCombatants(enemies || []);
+              const grp = (label, list) => list.length === 0 ? null : (
+                <optgroup label={label} key={label}>
+                  {list.map(e => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}{e.id === enemy.id ? ' (lui-même)' : ''}{e.hpCur <= 0 ? ' — à terre' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+              return [grp('Ennemis', parts.enemies), grp('Alliés', parts.allies)];
+            })()}
           </select>
         </label>
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
@@ -830,7 +920,7 @@ function MJPage({ go }) {
       {!active && !decided && <SessionStartModal onStart={() => { start(); setDecided(true); }} onVisit={() => setDecided(true)} />}
       {rewards && <SessionRewardsModal onLoot={() => go('inv')} onCancel={() => setRewards(false)} onDone={() => { setRewards(false); close(); }} />}
       {full && <FullScreenSheet char={full} onClose={() => setFull(null)} />}
-      {attacker && <EnemyAttackModal enemy={attacker} stOf={stOf} turn={turn} onClose={() => setAttacker(null)} stampKo={stampKo} />}
+      {attacker && <EnemyAttackModal enemy={attacker} enemies={enemies} stOf={stOf} turn={turn} onClose={() => setAttacker(null)} stampKo={stampKo} />}
     </div>
   );
 }
