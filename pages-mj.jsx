@@ -260,27 +260,46 @@ function IniRow({ id, meta, entry, isDone, participant, onToggle, onDragStart, o
   );
 }
 
-/* Placement direct : le MJ saisit le créneau visé. Comme le total est dérivé (d6 + bonus)
-   et que le dé appartient au joueur, on ajuste le BONUS — c'est la circonstance que le MJ
-   corrige, jamais le jet. */
-function IniPlacer({ entry, onPlace, onCancel }) {
+/* Éditeur de score. DEUX entrées pour la même grandeur, parce qu'elles répondent à deux
+   intentions différentes du MJ (spec §2.1) :
+   - « Bonus » = le champ RÉEL du modèle — préparation au combat (−2…+2), potion, buff
+     de clerc. C'est ce que le MJ pose avant ou pendant le combat.
+   - « Créneau » = confort : on vise un emplacement, l'app en déduit le bonus.
+   Les deux écrivent `bonus` et jamais `d6` : le dé appartient au joueur. */
+function IniScoreEditor({ entry, onSetBonus, onCancel }) {
   const d6 = entry && entry.d6 != null ? entry.d6 : null;
-  const [v, setV] = useState(String(d6 != null ? d6 + (entry.bonus | 0) : ''));
-  if (d6 == null) return null;
-  const n = parseInt(v, 10);
-  const commit = () => { if (Number.isFinite(n)) onPlace(n); else onCancel(); };
+  const bonus0 = (entry && entry.bonus | 0) || 0;
+  const [b, setB] = useState(String(bonus0));
+  const [slot, setSlot] = useState(String(d6 != null ? d6 + bonus0 : ''));
+  const bn = parseInt(b, 10);
+  const sn = parseInt(slot, 10);
+  const commitBonus = () => { onSetBonus(Number.isFinite(bn) ? bn : 0); };
+  const commitSlot  = () => { if (d6 != null && Number.isFinite(sn)) onSetBonus(sn - d6); else onCancel(); };
+  const fld = { ...ENEMY_FLD, width:46, padding:'2px 5px', fontSize:11 };
   return (
-    <div className="row gap-1" style={{ alignItems:'center', padding:'2px 6px 6px 18px' }}>
-      <span className="overline" style={{ fontSize:9 }}>Créneau</span>
-      <input value={v} autoFocus
-        onChange={e => setV(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onCancel(); }}
-        style={{ ...ENEMY_FLD, width:44, padding:'2px 5px', fontSize:11 }} />
-      <button className="btn btn-sm btn-ghost" onClick={commit} style={{ padding:'1px 5px', fontSize:11, color:'var(--buff-bright)' }}>✓</button>
-      <button className="btn btn-sm btn-ghost" onClick={onCancel} style={{ padding:'1px 5px', fontSize:11 }}>✗</button>
-      <span className="mono faint" style={{ fontSize:9.5 }}>
-        dé {d6} · bonus {Number.isFinite(n) ? (n - d6 >= 0 ? '+' : '−') + Math.abs(n - d6) : (entry.bonus | 0)}
-      </span>
+    <div className="col" style={{ gap:3, padding:'2px 6px 7px 18px' }}>
+      <div className="row gap-1" style={{ alignItems:'center' }}>
+        <span className="overline" style={{ fontSize:9, width:44 }} title="Préparation au combat, potion, buff…">Bonus</span>
+        <input value={b} autoFocus onChange={e => setB(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') commitBonus(); if (e.key === 'Escape') onCancel(); }}
+          style={fld} />
+        <button className="btn btn-sm btn-ghost" onClick={commitBonus} style={{ padding:'1px 5px', fontSize:11, color:'var(--buff-bright)' }}>✓</button>
+        <span className="mono faint" style={{ fontSize:9.5 }}>
+          {d6 != null ? `→ créneau ${d6 + (Number.isFinite(bn) ? bn : 0)}` : 'dé non lancé'}
+        </span>
+      </div>
+      {d6 != null && (
+        <div className="row gap-1" style={{ alignItems:'center' }}>
+          <span className="overline" style={{ fontSize:9, width:44 }} title="Placer directement dans ce créneau">Créneau</span>
+          <input value={slot} onChange={e => setSlot(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') commitSlot(); if (e.key === 'Escape') onCancel(); }}
+            style={fld} />
+          <button className="btn btn-sm btn-ghost" onClick={commitSlot} style={{ padding:'1px 5px', fontSize:11, color:'var(--buff-bright)' }}>✓</button>
+          <span className="mono faint" style={{ fontSize:9.5 }}>
+            dé {d6} → bonus {Number.isFinite(sn) ? (sn - d6 >= 0 ? '+' : '−') + Math.abs(sn - d6) : bonus0}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -324,7 +343,8 @@ function InitiativePanel({ ini, meta, ids, turn }) {
               const e = scores[id] || {};
               const st = initiativeStatus(e);
               return (
-                <div key={id} className="row" style={{ alignItems:'center', gap:6, padding:'3px 4px' }}>
+                <React.Fragment key={id}>
+                  <div className="row" style={{ alignItems:'center', gap:6, padding:'3px 4px' }}>
                   <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0,
                     background: INI_SIDE_COLOR[m.side] || 'var(--debuff)' }} />
                   <span style={{ flex:1, minWidth:0, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.name}</span>
@@ -337,13 +357,27 @@ function InitiativePanel({ ini, meta, ids, turn }) {
                         onClick={() => refuse(id)}>✗</button>
                     </span>
                   ) : (
-                    <button className="btn btn-sm btn-ghost" style={{ padding:'1px 6px', fontSize:10.5, flexShrink:0 }}
-                      title={st === 'reroll' ? 'Relance demandée — lancer à sa place' : 'Lancer le dé'}
-                      onClick={() => roll(id)}>
-                      {st === 'reroll' ? '↻ relancer' : '🎲 lancer'}
-                    </button>
+                    <span className="row gap-1" style={{ flexShrink:0, alignItems:'center' }}>
+                      <button className="mono" onClick={() => setPlacing(placing === id ? null : id)}
+                        title="Bonus d'initiative (préparation, potion, buff) — se pose avant le jet"
+                        style={{ fontSize:10, background:'var(--bg-inset)', border:'1px solid var(--line)',
+                          borderRadius:4, padding:'1px 4px', color:'var(--gold-pale)', cursor:'pointer' }}>
+                        {(e.bonus | 0) > 0 ? '+' + (e.bonus | 0) : (e.bonus | 0) < 0 ? '−' + Math.abs(e.bonus | 0) : '±0'}
+                      </button>
+                      <button className="btn btn-sm btn-ghost" style={{ padding:'1px 6px', fontSize:10.5 }}
+                        title={st === 'reroll' ? 'Relance demandée — lancer à sa place' : 'Lancer le dé'}
+                        onClick={() => roll(id)}>
+                        {st === 'reroll' ? '↻' : '🎲'}
+                      </button>
+                    </span>
                   )}
-                </div>
+                  </div>
+                  {placing === id && (
+                    <IniScoreEditor entry={e}
+                      onSetBonus={(n) => { setBonus(id, n); setPlacing(null); }}
+                      onCancel={() => setPlacing(null)} />
+                  )}
+                </React.Fragment>
               );
             })}
           </div>
@@ -378,8 +412,8 @@ function InitiativePanel({ ini, meta, ids, turn }) {
                         onDragStart={() => setDrag(id)}
                         onEditScore={() => setPlacing(placing === id ? null : id)} />
                       {placing === id && (
-                        <IniPlacer entry={scores[id]}
-                          onPlace={(n) => { setBonus(id, n - scores[id].d6); setPlacing(null); }}
+                        <IniScoreEditor entry={scores[id]}
+                          onSetBonus={(n) => { setBonus(id, n); setPlacing(null); }}
                           onCancel={() => setPlacing(null)} />
                       )}
                     </React.Fragment>
@@ -399,6 +433,70 @@ function InitiativePanel({ ini, meta, ids, turn }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+
+/* Assistant « caracs -> stats » (lot 6). Les champs plats restent la SOURCE DE VERITE :
+   ce panneau ne fait que les pre-remplir depuis les 4 caracteristiques, via le meme
+   moteur que les PJ (`computeStats`). Le MJ genere, puis corrige a la main s'il veut un
+   monstre qui n'obeit a aucune arithmetique. Les caracs sont conservees sur l'ennemi
+   pour pouvoir regenerer apres un ajustement de niveau. */
+function NpcStatGenerator({ enemy, onUpdate }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const a0 = enemy.attrs || { force:0, hab:0, mental:0, magie:0 };
+  const [a, setA] = useState({ force:a0.force|0, hab:a0.hab|0, mental:a0.mental|0, magie:a0.magie|0 });
+  const [lvl, setLvl] = useState(String(enemy.npcLevel || 1));
+  const level = Math.max(1, parseInt(lvl, 10) || 1);
+  const preview = npcStatsFromAttrs(a, level);
+  const num = (v) => Math.max(0, parseInt(v, 10) || 0);
+  const fld = { ...ENEMY_FLD, width:48, padding:'3px 5px', fontSize:11 };
+
+  if (!open) {
+    return (
+      <button className="btn btn-sm btn-ghost" onClick={() => setOpen(true)}
+        style={{ alignSelf:'flex-start', fontSize:11 }}
+        title="Pré-remplir les stats depuis Force / Habileté / Mental / Magie">
+        ⚙ Générer depuis les caractéristiques
+      </button>
+    );
+  }
+  return (
+    <div className="col gap-2" style={{ padding:10, borderRadius:8, background:'var(--bg-inset)', border:'1px solid var(--line)' }}>
+      <div className="row" style={{ justifyContent:'space-between', alignItems:'center' }}>
+        <span className="overline">Générer depuis les caractéristiques</span>
+        <button className="btn btn-sm btn-ghost" onClick={() => setOpen(false)} style={{ padding:'1px 6px', fontSize:11 }}>✗</button>
+      </div>
+      <div className="row wrap gap-2">
+        {[['force','Force'],['hab','Habileté'],['mental','Mental'],['magie','Magie']].map(([k, lbl]) => (
+          <label key={k} className="col" style={{ gap:3 }}>
+            <span className="overline" style={{ fontSize:9 }}>{lbl}</span>
+            <input style={fld} value={a[k]} onChange={e => setA(s => ({ ...s, [k]: num(e.target.value) }))} />
+          </label>
+        ))}
+        <label className="col" style={{ gap:3 }}>
+          <span className="overline" style={{ fontSize:9 }}>Niveau</span>
+          <input style={fld} value={lvl} onChange={e => setLvl(e.target.value)} />
+        </label>
+      </div>
+      <div className="mono faint" style={{ fontSize:10.5, lineHeight:1.5 }}>
+        PV {preview.hpMax} · Mana {preview.manaMax} · Atq {preview.atk} · Arm {preview.armure} ·
+        RM {preview.resmag} · Crit {preview.crit}% · DCrit {preview.dcrit}%
+      </div>
+      <button className="btn btn-sm btn-gold" style={{ alignSelf:'flex-start' }}
+        onClick={() => {
+          onUpdate(enemy.id, Object.assign({}, preview, { attrs: a, npcLevel: level }));
+          toast(`<b>${enemy.name}</b> — stats générées (niveau ${level})`, 'buff');
+          setOpen(false);
+        }}>
+        Appliquer aux champs
+      </button>
+      <span className="faint" style={{ fontSize:10 }}>
+        Écrase PV, mana, attaque, armure, rés. mag., crit et dég. crit. L'attaque prend la
+        plus élevée de AD/AP. Au-delà de 20 points, l'escalade passe en zone PNJ.
+      </span>
     </div>
   );
 }
@@ -450,6 +548,7 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack, stampKo }) {
           {field('Léth. phys.', 'lethaAD')}
           {field('Léth. mag.', 'lethaAP')}
         </div>
+        <NpcStatGenerator enemy={enemy} onUpdate={onUpdate} />
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => onRemove(enemy.id)} style={{ marginRight:'auto', color:'var(--debuff-bright)' }}>Supprimer</button>
           <button className="btn btn-sm btn-gold" onClick={() => setEdit(false)}>OK</button>

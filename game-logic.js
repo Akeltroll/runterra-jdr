@@ -1296,6 +1296,28 @@
     };
   }
 
+  /* Assistant de génération des stats d'un PNJ depuis ses 4 caractéristiques.
+     ⚠️ C'est un ASSISTANT, pas un modèle dérivé : il renvoie un patch de valeurs PLATES
+     que le MJ écrit dans les champs de l'ennemi, lesquels restent la source de vérité.
+     Ne PAS transformer ça en calcul live — `applySubir` et `applyHitToEnemy` écrivent
+     `hpCur` en direct, un max recalculé à la lecture entrerait en conflit avec les
+     dégâts déjà encaissés. Le MJ garde donc le droit de faire un monstre qui n'obéit
+     à aucune arithmétique de PJ : il génère, puis il corrige à la main.
+     `escalationFactor` gère déjà la zone PNJ au-delà de 20 points (croissance
+     quadratique, §8 de la spec hypermétrique) : les gros monstres sont prévus.
+     L'ennemi n'a qu'un champ `atk` : on y met la plus élevée de AD/AP. */
+  function npcStatsFromAttrs(attrs, level) {
+    attrs = attrs || {};
+    var s = computeStats(attrs.force, attrs.hab, attrs.mental, attrs.magie, level);
+    return {
+      hpMax: s.hp, hpCur: s.hp,
+      manaMax: s.mana, manaCur: s.mana,
+      atk: Math.max(s.ad, s.ap),
+      armure: s.armure, resmag: s.resmag,
+      crit: s.crit, dcrit: s.dcrit,
+    };
+  }
+
   /* --- Respec : répartition des 4 caractéristiques (logique pure) ---
      budget = points répartissables (LEVELS.total + bonus de création) ; cap = plafond par caracs. */
   function attrSum(attrs) {
@@ -1379,6 +1401,6 @@
     sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect, carouselTransforms, planReorder,
     runeRadialLayout,
     xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
-    escalationFactor, computeStats, charBaseStats, attrSum, respecValid,
+    escalationFactor, computeStats, charBaseStats, attrSum, respecValid, npcStatsFromAttrs,
   };
 });

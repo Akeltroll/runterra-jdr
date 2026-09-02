@@ -4,7 +4,8 @@ Design du chantier « gestion des tours ». Rédigé le 2026-09-02 d'après les 
 données par le MJ en session. **Les règles de jeu de la §2 ne sont écrites nulle part
 ailleurs** — ni dans `info-mj/`, ni dans l'Excel. Ce document en est la source.
 
-Statut : **lots 1 à 4 livrés**, règles RTDB **publiées et vérifiées le 2026-09-02**. Lots 5 et 6 à faire.
+Statut : **les 6 lots sont livrés**, règles RTDB **publiées et vérifiées le 2026-09-02**.
+Reste la recette en conditions réelles (§11) et les points ouverts de la §10.
 
 ---
 
@@ -411,8 +412,8 @@ bouton « j'ai fini » dès sa première version.
 | **2** | Moteur pur : créneaux, participation, complétude + tests | aucune | ✅ **livré** |
 | **3** | Nœud `combat/initiative`, hook, bouclage → `turn + 1` | **§6** (non publiées) | ✅ **livré** |
 | **4** | UI MJ — liste des créneaux sous la table, drag, créneau actif | aucune | ✅ **livré** |
-| **5** | UI joueur — bas de l'onglet Combat + bouton « J'ai fini » | aucune | à faire |
-| **6** | Assistant caracs → stats PNJ (indépendant) | aucune | à faire |
+| **5** | UI joueur — bas de l'onglet Combat + bouton « J'ai fini » | aucune | ✅ **livré** |
+| **6** | Assistant caracs → stats PNJ (indépendant) | aucune | ✅ **livré** |
 
 Le lot 2 est **entièrement testable en `node --test`**, sans Firebase ni UI. C'est là que
 se joue la justesse du système de créneaux : y être méticuleux évite de déboguer une

@@ -31,6 +31,151 @@ function runeModsOf(state) {
 
 const CD_LOCKED = 999999; // sentinelle « 1×/combat » (débloqué par Nouveau combat)
 
+/* ============================================================
+   INITIATIVE — panneau joueur (lot 5)
+   Le joueur lance son dé, attend la validation du MJ, puis déclare sa fin de tour.
+   Spec : docs/superpowers/specs/2026-09-02-initiative-creneaux-design.md §2.1.bis / §2.5
+   ============================================================ */
+
+const INI_DOT = { pj: 'var(--gold)', ally: 'var(--buff)', enemy: 'var(--debuff)' };
+
+/* Bandeau d'action du joueur : lancer son dé, ou déclarer sa fin de tour.
+   C'est le seul endroit de l'app où un joueur écrit dans `combat/initiative` — et
+   uniquement sur SES deux feuilles (`scores/<lui>/d6` et `done/<lui>`). */
+function MyTurnBar({ me, meName, ini, toast }) {
+  const { state, scores, done, roll, setDone } = ini;
+  const entry = scores[me];
+  const status = initiativeStatus(entry);
+  const active = state.active;
+  const isMySlot = !!(active && active.participants.indexOf(me) !== -1);
+  const iAmDone = done[me] === true;
+
+  const guard = (p, msg) => Promise.resolve(p).catch(() => toast(msg, 'debuff'));
+
+  let body;
+  if (status === 'idle' || status === 'reroll') {
+    body = (
+      <div className="row gap-3" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13 }}>
+          {status === 'reroll'
+            ? 'Le MJ demande un nouveau jet d’initiative.'
+            : 'Lance ton initiative pour entrer dans l’ordre de tour.'}
+        </span>
+        <button className="btn btn-gold" onClick={() => guard(roll(me), 'Jet refusé : droits insuffisants')}>
+          🎲 {status === 'reroll' ? 'Relancer' : 'Lancer l’initiative'}
+        </button>
+      </div>
+    );
+  } else if (status === 'pending') {
+    body = (
+      <span style={{ fontSize: 13 }}>
+        Tu as fait <b className="mono" style={{ color: 'var(--gold-pale)' }}>{entry.d6}</b> —
+        <span className="faint"> en attente de validation du MJ.</span>
+      </span>
+    );
+  } else if (!active) {
+    body = <span className="faint" style={{ fontSize: 13 }}>Aucun créneau en cours.</span>;
+  } else if (!isMySlot) {
+    body = (
+      <span style={{ fontSize: 13 }} className="faint">
+        Créneau <b className="mono">{active.init}</b> en cours — ce n’est pas ton tour.
+      </span>
+    );
+  } else if (iAmDone) {
+    body = (
+      <div className="row gap-3" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, color: 'var(--buff-bright)' }}>✓ Tu as terminé ton tour.</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => guard(setDone(me, false), 'Action refusée : droits insuffisants')}>
+          Annuler
+        </button>
+      </div>
+    );
+  } else {
+    body = (
+      <div className="row gap-3" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, color: 'var(--gold-pale)' }}>▶ C’est ton tour (créneau {active.init}).</span>
+        <button className="btn btn-gold" onClick={() => guard(setDone(me, true), 'Action refusée : droits insuffisants')}>
+          J’ai fini
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel" style={{ padding: '12px 14px', borderLeft: '3px solid var(--gold)' }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div className="col" style={{ gap: 2 }}>
+          <span className="overline">Ton tour — {meName}</span>
+          {body}
+        </div>
+        {status === 'ok' && (
+          <span className="mono" style={{ fontSize: 12, color: 'var(--gold-pale)' }}>
+            initiative {initiativeTotal(entry)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Ordre des tours en lecture seule. Le créneau actif est encadré ; les combattants qui
+   n'ont pas encore déclaré restent en clair, ceux qui ont fini sont barrés, et les
+   non-participants (à terre avant l'ouverture) sont atténués. */
+function InitiativeBoard({ ini, meta, me }) {
+  const { state, scores, done } = ini;
+  if (!state.slots.length) {
+    return (
+      <div className="panel" style={{ padding: '10px 14px' }}>
+        <div className="overline" style={{ marginBottom: 6 }}>Ordre des tours</div>
+        <span className="faint" style={{ fontSize: 12 }}>Aucune initiative validée pour l’instant.</span>
+      </div>
+    );
+  }
+  return (
+    <div className="panel" style={{ padding: '10px 14px' }}>
+      <div className="overline" style={{ marginBottom: 8 }}>Ordre des tours</div>
+      <div className="row gap-2 wrap" style={{ alignItems: 'stretch' }}>
+        {state.slots.map(slot => {
+          const isActive = state.activeInit === slot.init;
+          return (
+            <div key={slot.init} style={{ borderRadius: 8, padding: '6px 9px', minWidth: 118,
+              border: '1px solid ' + (isActive ? 'var(--line-gold)' : 'var(--line)'),
+              background: isActive ? 'var(--bg-panel-2)' : 'var(--bg-inset)',
+              opacity: slot.complete && !isActive ? 0.55 : 1 }}>
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span className="mono" style={{ fontSize: 11, color: isActive ? 'var(--gold-pale)' : 'var(--ink-faint)' }}>
+                  {isActive ? '▶ ' : ''}Créneau {slot.init}
+                </span>
+              </div>
+              {slot.members.map(id => {
+                const m = meta[id] || { name: id, side: 'enemy' };
+                const participant = slot.participants.indexOf(id) !== -1;
+                const fini = done[id] === true;
+                return (
+                  <div key={id} className="row gap-2" style={{ alignItems: 'center', opacity: participant ? 1 : 0.45 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+                      background: INI_DOT[m.side] || 'var(--debuff)' }} />
+                    <span style={{ fontSize: 12, whiteSpace: 'nowrap',
+                      fontWeight: id === me ? 700 : 400,
+                      color: fini ? 'var(--ink-faint)' : 'var(--ink)',
+                      textDecoration: fini ? 'line-through' : 'none' }}>
+                      {m.name}
+                    </span>
+                    <span className="mono" style={{ fontSize: 10, marginLeft: 'auto',
+                      color: fini ? 'var(--buff-bright)' : 'var(--ink-faint)' }}>
+                      {!participant ? '·' : fini ? '✓' : '…'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* Pastille d'un combattant non-joueur, vue JOUEUR : ce qu'il a le droit de voir passe
    toujours par `enemyPublicView` (un allié est simplement créé en 'exact'). */
 function CombatantChip({ c }) {
@@ -179,6 +324,15 @@ function CompetencesBody({ char, staff }) {
   const { turn } = useSharedTurn();
   const { enemies } = useMJEnemies();
   const { enemies: foes, allies } = splitCombatants(enemies);
+  // Initiative. Les PV des 5 PJ viennent des FEUILLES `state/hpCur` (useAllHp) : le noeud
+  // parent `characters` reste staff-only, un joueur n'y a pas acces.
+  const allHp = useAllHp();
+  const iniCombatants = CHARACTERS.map(c => ({ id: c.id, hp: allHp[c.id] }))
+    .concat(enemies.map(e => ({ id: e.id, hp: e.hpCur })));
+  const ini = useInitiative(iniCombatants, turn);
+  const iniMeta = {};
+  CHARACTERS.forEach(c => { iniMeta[c.id] = { name: c.name, side: 'pj' }; });
+  enemies.forEach(e => { iniMeta[e.id] = { name: e.name, side: combatantSide(e) }; });
   const { addHit } = usePendingHits();
   const [targetId, setTargetId] = useState('');
   if (!state) return <div className="panel" style={{ margin: 20, padding: 20 }}>Chargement…</div>;
@@ -411,6 +565,8 @@ function CompetencesBody({ char, staff }) {
             locked={!skillUnlocked(i, level)} minLevel={i + 1} />
         ))}
       </div>
+      <MyTurnBar me={char.id} meName={char.name} ini={ini} toast={toast} />
+      <InitiativeBoard ini={ini} meta={iniMeta} me={char.id} />
       <CombatLog canClear={false} />
     </div>
   );

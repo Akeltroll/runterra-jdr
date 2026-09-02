@@ -131,6 +131,25 @@ function useSharedTurn() {
   return { turn, nextTurn, prevTurn: () => persist(turn - 1), resetCombat };
 }
 
+/* PV courants des 5 PJ, lisibles par TOUT inscrit.
+   ⚠️ Ne surtout PAS passer par `useAllCharStates()` : ce hook s'abonne au nœud PARENT
+   `characters`, resté staff-only — pour un joueur il vaut `null` (cf. le bug de bourse
+   écrasée du 2026-08-21). On s'abonne aux FEUILLES `state/hpCur`, seules ouvertes par
+   la règle du 2026-09-02. Même motif que `useGroupCarry` pour `attrs`/`level`.
+   N'alimente que de l'affichage et le calcul des créneaux : aucune écriture n'en dépend. */
+function useAllHp() {
+  const [hp, setHp] = useState({});
+  useEffect(() => {
+    const offs = [];
+    CHARACTERS.forEach((c) => {
+      offs.push(window.RTDB.subscribePath(`${charPath(c.id)}/hpCur`, (v) =>
+        setHp((prev) => Object.assign({}, prev, { [c.id]: v }))));
+    });
+    return () => offs.forEach((off) => { if (typeof off === 'function') off(); });
+  }, []);
+  return hp;
+}
+
 /* Initiative : jets, validation MJ, déclarations de fin de tour et créneaux.
    `combatants` = liste NORMALISÉE `[{ id, hp }]` construite par l'appelant (les PJ
    viennent de `characters`, les PNJ de `combat/enemies`) ; `round` = `combat/turn`.
@@ -586,7 +605,7 @@ Object.assign(window, {
   useAuthIdentity, useAllUsers, setUserAssignment, removeUser,
   seedIfEmpty, charPath, CAMPAIGN, SHARED_INV, SHARED_COINS, moveItem, moveCoins,
   useSharedTurn, COMBAT_TURN,
-  useInitiative, INITIATIVE,
+  useInitiative, INITIATIVE, useAllHp,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   usePendingHits, applyHitToEnemy, healCharacter, PENDING_HITS,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,

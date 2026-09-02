@@ -1568,3 +1568,42 @@ test('initiativeState : plateau vide ou sans score => pas de plantage, round non
   assert.deepEqual(sansScore.slots, []);
   assert.equal(sansScore.complete, false);
 });
+
+/* --- Assistant caracs -> stats PNJ (lot 6) --- */
+test('npcStatsFromAttrs : patch complet, coherent avec computeStats', () => {
+  const a = { force: 5, hab: 3, mental: 4, magie: 2 };
+  const s = L.computeStats(5, 3, 4, 2, 6);
+  const p = L.npcStatsFromAttrs(a, 6);
+  assert.equal(p.hpMax, s.hp);
+  assert.equal(p.hpCur, s.hp);          // le PNJ nait au maximum
+  assert.equal(p.manaMax, s.mana);
+  assert.equal(p.manaCur, s.mana);
+  assert.equal(p.armure, s.armure);
+  assert.equal(p.resmag, s.resmag);
+  assert.equal(p.crit, s.crit);
+  assert.equal(p.dcrit, s.dcrit);
+  // l'ennemi n'a qu'un champ `atk` : la plus elevee de AD/AP
+  assert.equal(p.atk, Math.max(s.ad, s.ap));
+});
+test('npcStatsFromAttrs : un profil magique prend son AP comme attaque', () => {
+  const p = L.npcStatsFromAttrs({ force: 0, hab: 0, mental: 0, magie: 10 }, 5);
+  const s = L.computeStats(0, 0, 0, 10, 5);
+  assert.ok(s.ap > s.ad, 'profil cense etre magique');
+  assert.equal(p.atk, s.ap);
+});
+test('npcStatsFromAttrs : zone PNJ (>20 pts) — croissance SUPER-LINEAIRE', () => {
+  const atk = (f) => L.npcStatsFromAttrs({ force: f, hab: 0, mental: 0, magie: 0 }, 10).atk;
+  // Meme ecart de 6 points, une fois SOUS le seuil PNJ et une fois AU-DESSUS :
+  // au-dela de 20 l'escalade devient quadratique (§8), le second gain doit dominer.
+  const dansLaNorme = atk(20) - atk(14);
+  const zonePNJ     = atk(26) - atk(20);
+  assert.ok(zonePNJ > dansLaNorme,
+    `zone PNJ non appliquee : +${dansLaNorme} sous le seuil contre +${zonePNJ} au-dessus`);
+  // NB : ne PAS tester ce ratio sur hpMax — son socle plat (50 + 30*niveau) dilue
+  // l'escalade et masque la propriete qu'on veut verifier.
+});
+test('npcStatsFromAttrs : arguments absents = pas de plantage', () => {
+  const p = L.npcStatsFromAttrs(null, null);
+  assert.ok(Number.isFinite(p.hpMax) && p.hpMax > 0);
+  assert.ok(Number.isFinite(p.atk));
+});
