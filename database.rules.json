@@ -71,6 +71,22 @@
               ".validate": "newData.hasChildren(['attackerId', 'targetId', 'computedDmg'])"
             }
           },
+          "initiative": {
+            "done": {
+              "$combatantId": {
+                ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('charId').val() === $combatantId)",
+                ".validate": "!newData.exists() || newData.isBoolean()"
+              }
+            },
+            "scores": {
+              "$combatantId": {
+                "d6": {
+                  ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('charId').val() === $combatantId)",
+                  ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 6 && newData.val() % 1 === 0)"
+                }
+              }
+            }
+          },
           "log": {
             ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",
             "$logId": {

@@ -205,7 +205,7 @@ function MJCompactCard({ c, st, turn, onFull }) {
   );
 }
 
-function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
+function EnemyCard({ enemy, onUpdate, onRemove, onAttack, stampKo }) {
   const [edit, setEdit] = useState(false);
   const [subir, setSubir] = useState('');
   const danger = enemy.hpMax > 0 && (enemy.hpCur / enemy.hpMax) * 100 < 40;
@@ -216,6 +216,7 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
     if (n <= 0) return;
     const nhp = Math.max(0, enemy.hpCur - n);
     onUpdate(enemy.id, { hpCur: nhp });
+    if (stampKo) stampKo(enemy.id, enemy.hpCur, nhp);   // KO differe (spec §4.2)
     pushLog(`<b>${enemy.name}</b> subit <b>${n}</b> dégâts${nhp === 0 ? ' — KO !' : ''}`, nhp === 0 ? 'debuff' : 'gold');
     setSubir('');
   };
@@ -306,7 +307,7 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack }) {
   );
 }
 
-function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
+function EnemyAttackModal({ enemy, stOf, turn, onClose, stampKo }) {
   const toast = useToast();
   const baseAtk = Math.max(0, enemy.atk || 0);
   // Crit roulé par l'app à l'ouverture (mirroir du flux joueur). Le MJ ajuste le montant si besoin.
@@ -331,6 +332,7 @@ function EnemyAttackModal({ enemy, stOf, turn, onClose }) {
     const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag }, lethaNum);
     const res = applyDamageToPools({ hpCur: L.hp, shield: L.shield }, degats);
     window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
+    if (stampKo) stampKo(c.id, L.hp, res.hpCur);   // KO differe (spec §4.2)
     // Passif Rathael — Chair gelée : +1 charge de Glaciation par coup subi (tout stackable en 1 tour, max 5 ;
     // +2/coup pendant Souverain Glacial). La perte -3/tour sans dégât est gérée en fin de tour (glaciationDecay).
     if (c.id === 'rathael' && degats > 0) {
@@ -451,12 +453,16 @@ function PendingHitRow({ hit, enemies, onApply, onReject }) {
     </div>
   );
 }
-function PendingHitsPanel({ enemies }) {
+function PendingHitsPanel({ enemies, stampKo }) {
   const toast = useToast();
   const { hits, removeHit } = usePendingHits();
   if (!hits.length) return null;
   const apply = async (hit, enemy, finalDmg, type, letha) => {
     const r = applyHitToEnemy(enemy, finalDmg, type, letha || 0);
+    // KO differe (spec §4.2) : on horodate la transition vivant -> a terre pour que le
+    // moteur sache si l'ennemi est tombe PENDANT son propre creneau (il agit quand meme)
+    // ou avant (il est saute).
+    if (stampKo) stampKo(enemy.id, enemy.hpCur, r.hpCur);
     const lethaTag = letha > 0 ? `, léth. ${type === 'magique' ? 'mag.' : 'phys.'} ${letha}` : '';
     toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
     pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}${lethaTag}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
@@ -573,6 +579,13 @@ function MJPage({ go }) {
   const { turn, nextTurn, prevTurn, resetCombat } = useSharedTurn();
   const [attacker, setAttacker] = useState(null); // ennemi en cours d'attaque (Task 4)
   const stOf = (id) => (all && all[id] && all[id].state) || null;
+  // Combattants NORMALISES pour le moteur d'initiative : PJ (etat Firebase) + PNJ des
+  // deux camps. Le moteur ignore tout du camp ; il ne veut qu'un id et des PV.
+  // A ce stade (lot 3) le hook ne sert qu'a horodater les KO et a purger les
+  // declarations ; la liste des creneaux a l'ecran arrive au lot 4.
+  const combatants = CHARACTERS.map(c => ({ id: c.id, hp: (stOf(c.id) || {}).hpCur }))
+    .concat(enemies.map(e => ({ id: e.id, hp: e.hpCur })));
+  const { stampKo } = useInitiative(combatants, turn);
   const { active, start, close } = useSession();
   const [decided, setDecided] = useState(false);
   const [rewards, setRewards] = useState(false);
@@ -609,8 +622,11 @@ function MJPage({ go }) {
             <div className="row gap-2" style={{ alignItems:'center', padding:'6px 10px', background:'var(--bg-inset)', border:'1px solid var(--line)', borderRadius:8 }}>
               <span className="mono" style={{ fontSize:13, color:'var(--gold-pale)', whiteSpace:'nowrap' }}>⏱ Tour {turn}</span>
               <button className="btn btn-sm btn-ghost" onClick={prevTurn} title="Tour précédent" style={{ padding:'4px 8px' }}>◂</button>
-              <button className="btn btn-sm btn-gold" onClick={nextTurn} style={{ whiteSpace:'nowrap' }}>Fin de tour ▸</button>
-              <button className="btn btn-sm btn-ghost" onClick={() => { if (confirm('Nouveau combat : remettre le tour à 1 et vider toutes les charges + cooldowns ?')) resetCombat().then((r) => { if (r && !r.logCleared) toast('Combat réinitialisé, mais le journal n’a pas pu être vidé : droits insuffisants', 'debuff'); }); }} title="Nouveau combat (reset charges + cooldowns)" style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>⟲ Combat</button>
+              <button className="btn btn-sm btn-gold" onClick={() => nextTurn().then(r => { if (r && !r.doneCleared) toast('Tour avancé, mais les fins de tour n’ont pas pu être purgées : droits insuffisants', 'debuff'); })} style={{ whiteSpace:'nowrap' }}>Fin de tour ▸</button>
+              <button className="btn btn-sm btn-ghost" onClick={() => { if (confirm('Nouveau combat : remettre le tour à 1 et vider toutes les charges + cooldowns ?')) resetCombat().then((r) => {
+                if (r && !r.logCleared) toast('Combat réinitialisé, mais le journal n’a pas pu être vidé : droits insuffisants', 'debuff');
+                if (r && !r.initCleared) toast('Combat réinitialisé, mais l’initiative n’a pas pu être vidée : droits insuffisants', 'debuff');
+              }); }} title="Nouveau combat (reset charges + cooldowns)" style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>⟲ Combat</button>
             </div>
             <ExportImportPanel />
           </div>
@@ -626,7 +642,7 @@ function MJPage({ go }) {
             {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} turn={turn} onFull={() => setFull(c)} />)}
           </div>
           <div style={{ marginTop:28 }}>
-            <PendingHitsPanel enemies={enemies} />
+            <PendingHitsPanel enemies={enemies} stampKo={stampKo} />
           </div>
           <div style={{ marginTop:28 }}>
             {(() => {
@@ -649,7 +665,7 @@ function MJPage({ go }) {
                     ? <div className="faint" style={{ fontSize:12 }}>Aucun combattant. Ajoutez un ennemi ou un PNJ allié pour suivre ses HP en combat.</div>
                     : <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:16, alignItems:'start' }}>
                         {ordered.map(e => (
-                          <EnemyCard key={e.id} enemy={e} onUpdate={updateEnemy} onRemove={removeEnemy} onAttack={setAttacker} />
+                          <EnemyCard key={e.id} enemy={e} onUpdate={updateEnemy} onRemove={removeEnemy} onAttack={setAttacker} stampKo={stampKo} />
                         ))}
                       </div>}
                 </React.Fragment>
@@ -665,7 +681,7 @@ function MJPage({ go }) {
       {!active && !decided && <SessionStartModal onStart={() => { start(); setDecided(true); }} onVisit={() => setDecided(true)} />}
       {rewards && <SessionRewardsModal onLoot={() => go('inv')} onCancel={() => setRewards(false)} onDone={() => { setRewards(false); close(); }} />}
       {full && <FullScreenSheet char={full} onClose={() => setFull(null)} />}
-      {attacker && <EnemyAttackModal enemy={attacker} stOf={stOf} turn={turn} onClose={() => setAttacker(null)} />}
+      {attacker && <EnemyAttackModal enemy={attacker} stOf={stOf} turn={turn} onClose={() => setAttacker(null)} stampKo={stampKo} />}
     </div>
   );
 }

@@ -63,6 +63,11 @@ function useCharState(charId) {
 /* Compteur de tour PARTAGÉ (combat). Écriture staff (règle RTDB combat/turn).
    « Nouveau combat » = remet le tour à 1 et purge compteurs + cooldowns de tous. */
 const COMBAT_TURN = `${CAMPAIGN}/combat/turn`;
+/* Initiative & créneaux de tour. Lecture tout inscrit (héritée du nœud `combat`),
+   écriture staff SAUF deux feuilles ouvertes au joueur pour SON perso : `done/$id`
+   (« j'ai fini ») et `scores/$id/d6` (son jet). Voir la spec §6 —
+   docs/superpowers/specs/2026-09-02-initiative-creneaux-design.md */
+const INITIATIVE = `${CAMPAIGN}/combat/initiative`;
 function useSharedTurn() {
   const [turn, setTurn] = useState(1);
   useEffect(() => window.RTDB.subscribePath(COMBAT_TURN, (v) => setTurn(Number.isFinite(v) && v >= 1 ? v : 1)), []);
@@ -94,13 +99,25 @@ function useSharedTurn() {
     let logCleared = true;
     try { await window.RTDB.setPath(COMBAT_LOG, null); }
     catch (e) { logCleared = false; console.error('Purge du journal de combat refusee :', e); }
-    return { logCleared };
+    // Nouveau combat = nouvelle initiative : scores, declarations, horodatages de KO
+    // et arrivees tardives repartent de zero. Meme precaution de `catch` que ci-dessus
+    // (ecriture SUR LE NOEUD, cf. les 3 bugs silencieux de permission de 2026-08-21).
+    let initCleared = true;
+    try { await window.RTDB.setPath(INITIATIVE, null); }
+    catch (e) { initCleared = false; console.error('Purge de l\'initiative refusee :', e); }
+    return { logCleared, initCleared };
   }, []);
   // Fin de tour : avance le tour, puis applique la perte de Glaciation de Rathael (-3 s'il
   // n'a pas subi de dégâts ce tour-ci). Le tour qui se termine est `turn`.
   const nextTurn = useCallback(async () => {
     const ending = turn;
     persist(ending + 1);
+    // Fin de ROUND : les « j'ai fini » du round qui s'achève sont purgés d'un coup, et
+    // tous les créneaux redeviennent à jouer. C'est la SEULE écriture de la mécanique
+    // de créneaux — le passage d'un créneau au suivant, lui, est purement dérivé.
+    let doneCleared = true;
+    try { await window.RTDB.setPath(`${INITIATIVE}/done`, null); }
+    catch (e) { doneCleared = false; console.error('Purge des fins de tour refusee :', e); }
     const p = charPath('rathael');
     const st = (await window.RTDB.getSnapshot(p)) || {};
     const dec = glaciationDecay(st.counters || {}, ending);
@@ -109,8 +126,74 @@ function useSharedTurn() {
       window.RTDB.updatePath(`${p}/counters`, { glaciation: dec.glaciation || null });
       pushLog(`<b>Rathäel</b> ne subit aucun dégât : Glaciation ${before} → ${dec.glaciation}`, 'debuff');
     }
+    return { doneCleared };
   }, [turn]);
   return { turn, nextTurn, prevTurn: () => persist(turn - 1), resetCombat };
+}
+
+/* Initiative : jets, validation MJ, déclarations de fin de tour et créneaux.
+   `combatants` = liste NORMALISÉE `[{ id, hp }]` construite par l'appelant (les PJ
+   viennent de `characters`, les PNJ de `combat/enemies`) ; `round` = `combat/turn`.
+   Le `joinRound` est recollé ici : il vit dans le nœud initiative, pas sur le combattant.
+   Tout le calcul est délégué à `initiativeState` (game-logic, pur et testé) — ce hook
+   ne fait que l'abonnement Firebase et les écritures. */
+function useInitiative(combatants, round) {
+  const [node, setNode] = useState(null);
+  useEffect(() => window.RTDB.subscribePath(INITIATIVE, (v) => setNode(v || {})), []);
+  const scores = (node && node.scores) || {};
+  const done = (node && node.done) || {};
+  const ko = (node && node.ko) || {};
+  const joinRound = (node && node.joinRound) || {};
+  const list = (combatants || []).map(c => Object.assign({}, c, { joinRound: joinRound[c.id] }));
+  const state = initiativeState(list, scores, done, ko, round);
+
+  /* --- Écritures OUVERTES AU JOUEUR pour son propre perso (règle RTDB par feuille) --- */
+  // Le jet est fait par l'APP (jamais saisi) et n'écrit QUE la feuille `d6` : un joueur
+  // n'a pas le droit d'écrire `bonus`/`ok`/`reroll`, sinon il s'auto-validerait.
+  const roll = useCallback((id) => {
+    const d6 = rollInitiative();
+    return window.RTDB.setPath(`${INITIATIVE}/scores/${id}/d6`, d6);
+  }, []);
+  const setDone = useCallback((id, v) =>
+    window.RTDB.setPath(`${INITIATIVE}/done/${id}`, v ? true : null), []);
+
+  /* --- Écritures STAFF (héritées du .write mj+admin de campaign/runeterra) --- */
+  const setBonus = useCallback((id, n) =>
+    window.RTDB.setPath(`${INITIATIVE}/scores/${id}/bonus`, n | 0), []);
+  const validate = useCallback((id) =>
+    window.RTDB.updatePath(`${INITIATIVE}/scores/${id}`, { ok: true, reroll: null }), []);
+  // Refuser = effacer le jet et demander une relance. Le joueur revoit le bouton « Lancer ».
+  const refuse = useCallback((id) =>
+    window.RTDB.updatePath(`${INITIATIVE}/scores/${id}`, { ok: null, d6: null, reroll: true }), []);
+  const clearScore = useCallback((id) =>
+    window.RTDB.updatePath(`${INITIATIVE}/scores`, { [id]: null }), []);
+  const setJoinRound = useCallback((id, r) =>
+    window.RTDB.updatePath(`${INITIATIVE}/joinRound`, { [id]: r == null ? null : Math.max(1, r | 0) }), []);
+
+  /* Horodatage du KO (spec §4.2) : appelé aux 3 endroits où des PV tombent à 0.
+     On n'enregistre QUE la transition vivant → à terre, et seulement si un créneau est
+     en cours : c'est ce qui permet de distinguer « mort pendant son propre créneau »
+     (il agit quand même) de « mort avant » (il est sauté). Une entrée périmée est
+     inoffensive : `slotParticipants` teste d'abord les PV, un ressuscité rejoue. */
+  const stampKo = useCallback((id, hpBefore, hpAfter) => {
+    if (!id) return;
+    if (!((Number(hpBefore) || 0) > 0 && (Number(hpAfter) || 0) <= 0)) return;
+    const init = state.activeInit;
+    if (init == null) return;
+    window.RTDB.updatePath(`${INITIATIVE}/ko`, { [id]: { round: Math.max(1, round | 0), init } });
+  }, [state.activeInit, round]);
+
+  /* Filet du MJ : un joueur absent ne doit pas geler la table. Coche d'un coup tout
+     ce qui reste en attente sur le créneau actif. */
+  const forceSlot = useCallback(() => {
+    if (!state.active || !state.active.pending.length) return;
+    const patch = {};
+    state.active.pending.forEach(id => { patch[id] = true; });
+    return window.RTDB.updatePath(`${INITIATIVE}/done`, patch);
+  }, [state.active]);
+
+  return { state, scores, done, ko, joinRound,
+    roll, setDone, setBonus, validate, refuse, clearScore, setJoinRound, stampKo, forceSlot };
 }
 
 /* Ennemis PARTAGÉS (Firebase). Lecture tout inscrit, écriture staff (règle combat/enemies).
@@ -503,6 +586,7 @@ Object.assign(window, {
   useAuthIdentity, useAllUsers, setUserAssignment, removeUser,
   seedIfEmpty, charPath, CAMPAIGN, SHARED_INV, SHARED_COINS, moveItem, moveCoins,
   useSharedTurn, COMBAT_TURN,
+  useInitiative, INITIATIVE,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   usePendingHits, applyHitToEnemy, healCharacter, PENDING_HITS,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
