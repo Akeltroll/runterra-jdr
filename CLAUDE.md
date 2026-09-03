@@ -615,9 +615,14 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   🐞 **Corrigé au passage (bug ANTÉRIEUR au chantier)** : un PNJ ne pouvait toucher que les PJ —
   `EnemyAttackModal` ne listait que `CHARACTERS` **et** écrivait les dégâts en supposant une fiche de
   PJ. Un ennemi ne pouvait frapper ni un autre ennemi, ni un allié, ni lui-même. Voir §2.6 de la spec.
-  👉 **RESTE À FAIRE** : la **recette en conditions réelles à deux sessions** (§11 de la spec) — rien
-  n'a encore été joué à une vraie table. Reste aussi le geste de drag *entre* deux créneaux existants
-  (§10), qui n'est pas faisable au doigt ; le champ « Créneau » de `IniScoreEditor` couvre le cas.
+  ✅ **Recette à deux sessions simultanées FAITE le 2026-09-03** (MJ + joueur en navigation privée) :
+  la **dérivation** du créneau actif se propage bien aux deux écrans sans écriture, et les deux écrans
+  voient le **même** créneau actif (donc l'ouverture de `hpCur` du §6.1 fonctionne). Le modèle
+  « dérivé, jamais stocké » tient en conditions réelles.
+  👉 **RESTE À FAIRE** : l'éprouver **à une vraie table** (confort d'usage avec beaucoup de PNJ, KO
+  différé subi pour de vrai, cooldowns sur plusieurs rounds enchaînés). Reste aussi le geste de drag
+  *entre* deux créneaux existants (§10), pas faisable au doigt ; le champ « Créneau » de
+  `IniScoreEditor` couvre le cas.
 
 ## État actuel (2026-09-03)
 - **Arrivée tardive (`joinRound`) AUTOMATIQUE + pilotable** — cache `20260902-8`, **209 tests verts**

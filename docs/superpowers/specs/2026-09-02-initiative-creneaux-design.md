@@ -533,10 +533,10 @@ Elles sont reportées dans les sections concernées ; résumé et conséquences 
 ---
 ## 11. Recette
 
-- [ ] `node --test test/game-logic.test.js` et `test/auth.test.js` verts
-- [ ] les `.jsx` modifiés compilent (`npx esbuild fichier.jsx >/dev/null`)
-- [ ] jeton de cache bumpé dans `index.html`
-- [ ] **règles publiées AVANT le déploiement du lot 3**, et relues en ligne
+- [x] `node --test test/game-logic.test.js` et `test/auth.test.js` verts *(209 le 2026-09-03)*
+- [x] les `.jsx` modifiés compilent (`npx esbuild fichier.jsx >/dev/null`)
+- [x] jeton de cache bumpé dans `index.html` *(`20260902-8`)*
+- [x] **règles publiées AVANT le déploiement du lot 3**, et relues en ligne *(2026-09-02)*
 - [ ] un joueur peut cocher son perso, **pas** celui d'un autre (`PERMISSION_DENIED` attendu)
 - [ ] un joueur ne peut pas purger `done` ; le MJ le peut
 - [ ] un ennemi tué pendant son créneau agit quand même (§2.3)
@@ -554,8 +554,25 @@ publiées et vérifiées en ligne.** Ce qui manque n'est pas du code : c'est de 
 ### Ce qui a été validé, et comment
 
 Les lots 1, 4 et 5 ont été testés **par le MJ dans le navigateur**, sur une seule
-session à la fois. Les lots 2 et 3 sont couverts par 19 tests unitaires. Aucun test
-n'a encore été fait **à deux sessions simultanées**, ni à une vraie table.
+session à la fois. Les lots 2 et 3 sont couverts par 19 tests unitaires.
+
+✅ **Recette à deux sessions simultanées faite le 2026-09-03** (compte MJ + compte
+joueur en navigation privée, sur `127.0.0.1:5050`). Les deux propriétés que la §12
+désignait comme portant tout le système sont **validées en conditions réelles** :
+
+1. **La dérivation du créneau actif** — quand le dernier membre d'un créneau déclare
+   sa fin de tour, le créneau suivant s'active sur les deux écrans sans écriture
+   supplémentaire. Le modèle « dérivé, jamais stocké » de la §4 tient.
+2. **L'ouverture de `hpCur`** (§6.1) — les deux écrans voient le **même** créneau
+   actif, donc la lecture des PV des autres PJ remonte bien côté joueur.
+
+Sont également validés au navigateur : les créneaux, les bonus, le cycle de jet et de
+validation, et l'arrivée tardive automatique du 2026-09-03.
+
+**Reste à éprouver à une vraie table** : le confort d'usage en séance (place de la
+liste dans la colonne MJ avec beaucoup de PNJ, geste de drag entre créneaux), et les
+cas de bord de la §11 qui demandent une partie en cours (KO différé subi pour de vrai,
+non-régression des cooldowns sur plusieurs rounds enchaînés).
 
 ### La toute première chose à faire à la reprise
 
