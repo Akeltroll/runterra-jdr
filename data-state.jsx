@@ -179,8 +179,20 @@ function useInitiative(combatants, round) {
   /* --- Écritures STAFF (héritées du .write mj+admin de campaign/runeterra) --- */
   const setBonus = useCallback((id, n) =>
     window.RTDB.setPath(`${INITIATIVE}/scores/${id}/bonus`, n | 0), []);
-  const validate = useCallback((id) =>
-    window.RTDB.updatePath(`${INITIATIVE}/scores/${id}`, { ok: true, reroll: null }), []);
+  /* Valider un score, c'est faire ENTRER le combattant en jeu — donc c'est ici que se
+     décide à quel round il entre (spec §2.4). Le calcul est délégué à
+     `initiativeJoinOnValidate` (pur, testé) ; il ne rend un round que si le combat est
+     déjà engagé, et jamais si le MJ en a déjà choisi un à la main.
+     ⚠️ L'écriture est faite ICI et pas au jet : un joueur n'a le droit d'écrire que la
+     feuille `d6` de son score, `joinRound` retombe sur le `.write` staff. Le calculer
+     au `roll` donnerait un `PERMISSION_DENIED` côté joueur.
+     Renvoie le round d'entrée posé (ou `null`), pour que l'appelant puisse le dire. */
+  const validate = useCallback(async (id) => {
+    const join = initiativeJoinOnValidate(round, done, joinRound[id]);
+    await window.RTDB.updatePath(`${INITIATIVE}/scores/${id}`, { ok: true, reroll: null });
+    if (join != null) await window.RTDB.updatePath(`${INITIATIVE}/joinRound`, { [id]: join });
+    return join;
+  }, [round, done, joinRound]);
   // Refuser = effacer le jet et demander une relance. Le joueur revoit le bouton « Lancer ».
   const refuse = useCallback((id) =>
     window.RTDB.updatePath(`${INITIATIVE}/scores/${id}`, { ok: null, d6: null, reroll: true }), []);

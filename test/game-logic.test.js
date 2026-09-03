@@ -1493,6 +1493,26 @@ test('initiativeSlots : le retardataire ne rejoint qu au round suivant', () => {
   assert.equal(L.combatantJoinRound({ id: 'x', joinRound: 4 }), 4);
 });
 
+test('initiativeJoinOnValidate : entree immediate au tout debut du combat', () => {
+  // round 1, personne n'a encore declare : c'est l'ajout de setup, il joue tout de suite
+  assert.equal(L.initiativeJoinOnValidate(1, {}, null), null);
+  assert.equal(L.initiativeJoinOnValidate(1, { a: false }, null), null);
+});
+
+test('initiativeJoinOnValidate : combat engage => entree au round suivant', () => {
+  // round 1 mais quelqu'un a fini son tour : le combat est lance
+  assert.equal(L.initiativeJoinOnValidate(1, { a: true }, null), 2);
+  // round > 1 : engage meme si personne n'a encore agi ce round-ci
+  assert.equal(L.initiativeJoinOnValidate(3, {}, null), 4);
+  assert.equal(L.initiativeJoinOnValidate(3, { a: true }, null), 4);
+});
+
+test('initiativeJoinOnValidate : un choix manuel du MJ n est jamais ecrase', () => {
+  // renfort annonce pour le round 7 : la validation ne le ramene pas a round+1
+  assert.equal(L.initiativeJoinOnValidate(3, { a: true }, 7), null);
+  assert.equal(L.initiativeJoinOnValidate(1, {}, 2), null);
+});
+
 test('slotParticipants : KO AVANT son creneau => saute', () => {
   const byId = { mort: { id: 'mort', hp: 0 }, vif: { id: 'vif', hp: 30 } };
   const ko = { mort: { round: 1, init: 6 } };   // tue au creneau 6

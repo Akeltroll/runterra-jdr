@@ -392,7 +392,11 @@ function InitiativePanel({ ini, meta, ids, turn }) {
                     <span className="row gap-1" style={{ flexShrink:0, alignItems:'center' }}>
                       <span className="mono" style={{ fontSize:11.5, color:'var(--gold-pale)' }}>🎲{e.d6}</span>
                       <button className="btn btn-sm btn-ghost" title="Valider ce jet" style={{ padding:'1px 5px', fontSize:11, color:'var(--buff-bright)' }}
-                        onClick={() => validate(id)}>✓</button>
+                        onClick={() => validate(id).then(join => {
+                          // Le decalage au round suivant est automatique (spec §2.4) : on le DIT,
+                          // sinon le MJ croit son renfort en jeu et le cherche dans les creneaux.
+                          if (join != null) toast(`<b>${m.name}</b> entre en jeu au round ${join}`, 'gold');
+                        })}>✓</button>
                       <button className="btn btn-sm btn-ghost" title="Refuser — le joueur relance" style={{ padding:'1px 5px', fontSize:11, color:'var(--debuff-bright)' }}
                         onClick={() => refuse(id)}>✗</button>
                     </span>

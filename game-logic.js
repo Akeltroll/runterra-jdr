@@ -861,6 +861,30 @@
     return (j == null) ? 1 : Math.max(1, j | 0);
   }
 
+  /* Round d'entree a poser QUAND LE MJ VALIDE un score (spec §2.4, automatise le
+     2026-09-03 apres test du MJ : le poser a la main en plein combat, ca s'oublie).
+     Renvoie le round a ecrire, ou `null` s'il n'y a rien a ecrire.
+
+     « Combat deja engage » = round > 1 OU quelqu'un a deja declare sa fin de tour
+     dans ce round. C'est le critere du MJ, volontairement plus large que la seule
+     justification « ne pas surgir en amont de qui a deja agi » : au round 3, meme si
+     personne n'a encore agi, le nouveau venu n'etait pas la aux rounds 1 et 2 et son
+     arrivee se joue au round suivant. Le cas « tout debut de combat » (round 1, aucune
+     declaration) reste l'ajout de setup : entree immediate.
+
+     `existingJoin` non nul = le MJ a deja choisi un round a la main : on n'ecrase PAS
+     (un renfort annonce pour le round 7 ne doit pas retomber a round+1 a la validation). */
+  function initiativeJoinOnValidate(round, done, existingJoin) {
+    if (existingJoin != null) return null;
+    round = Math.max(1, round | 0);
+    var engaged = round > 1;
+    if (!engaged) {
+      var d = done || {};
+      for (var k in d) { if (d[k] === true) { engaged = true; break; } }
+    }
+    return engaged ? round + 1 : null;
+  }
+
   /* Creneaux du round : valeurs distinctes de score, triees DECROISSANT.
      `combatants` = [{ id, hp, joinRound }] (forme normalisee : les PJ viennent de
      `characters`, les PNJ de `combat/enemies`, l'appelant les uniformise).
@@ -1391,7 +1415,7 @@
     mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, enemyPublicView,
     combatantSide, isAlly, splitCombatants,
     INIT_DIE, rollInitiative, initiativeTotal, initiativeStatus, initiativeReady,
-    combatantJoinRound, initiativeSlots, slotParticipants, initiativeState,
+    combatantJoinRound, initiativeJoinOnValidate, initiativeSlots, slotParticipants, initiativeState,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,

@@ -610,6 +610,36 @@ lorsque **les deux** ont déclaré.
      (staff, déjà couvert) et le moteur (`combatantJoinRound`, `initiativeSlots`)
      était déjà écrit et testé. Ce lot n'est que du câblage d'écran.
 
+### 2026-09-03 — l'arrivée tardive devient AUTOMATIQUE (retour de test du MJ)
+
+Rendre la règle *pilotable* ne suffisait pas : **le MJ n'a pas à y penser en plein
+combat, ça s'oublie.** Constat de test — un combattant dont l'initiative est validée
+alors que le combat a commencé entrait immédiatement, y compris après que d'autres
+aient déjà déclaré leur fin de tour.
+
+**La règle est maintenant posée à la validation**, par
+`initiativeJoinOnValidate(round, done, existingJoin)` (game-logic, pure, 3 tests) :
+
+- « Combat déjà engagé » = **round > 1** OU **quelqu'un a déjà déclaré sa fin de tour
+  dans ce round** → le combattant entre au **round suivant**.
+- Round 1 sans aucune déclaration = l'ajout de **setup** : entrée immédiate. C'est le
+  cas normal du début de combat, il ne doit rien décaler.
+- Un `joinRound` déjà posé **à la main n'est jamais écrasé** — un renfort annoncé pour
+  le round 7 ne doit pas retomber à `round + 1` à la validation.
+
+⚠️ **L'écriture est faite à la VALIDATION, pas au jet.** Un joueur n'a le droit
+d'écrire que la feuille `d6` de son score (§6) ; `joinRound` retombe sur le `.write`
+staff. Calculer la règle au `roll` donnerait un `PERMISSION_DENIED` côté joueur.
+Sémantiquement c'est aussi le bon moment : valider un score, c'est faire entrer le
+combattant en jeu.
+
+⚠️ **Le décalage est TOASTÉ** (« X entre en jeu au round N »). Sans ça le MJ croit son
+renfort en jeu et le cherche dans les créneaux. Le toast est aussi le garde-fou du seul
+cas où la règle peut surprendre : commencer un combat **sans avoir fait « ⟲ Combat »**
+laisse `combat/turn` au round du combat précédent, donc tout le monde est décalé — le
+toast le dit tout de suite. (`resetCombat` remet bien le round à 1 : le cas n'existe que
+si on oublie de l'utiliser.)
+
 ### Ce qu'il ne faut surtout pas « améliorer » sans relire la spec
 
 - Le sens de `combat/turn` (§3) — cinq mécanismes en dépendent, la casse serait muette.

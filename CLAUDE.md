@@ -620,8 +620,20 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   (§10), qui n'est pas faisable au doigt ; le champ « Créneau » de `IniScoreEditor` couvre le cas.
 
 ## État actuel (2026-09-03)
-- **Arrivée tardive (`joinRound`) pilotable depuis l'écran** — cache `20260902-7`, **206 tests verts**
-  (inchangés : le moteur était déjà écrit et testé), **aucune règle RTDB**, aucune migration.
+- **Arrivée tardive (`joinRound`) AUTOMATIQUE + pilotable** — cache `20260902-8`, **209 tests verts**
+  (game-logic 198 + auth 11), **aucune règle RTDB**, aucune migration.
+  **La règle §2.4 est posée à la VALIDATION du score** par `initiativeJoinOnValidate(round, done,
+  existingJoin)` (game-logic, pure, testée) : « combat déjà engagé » (= round > 1 **ou** quelqu'un a
+  déjà déclaré sa fin de tour ce round) → entrée au **round suivant** ; round 1 sans déclaration =
+  ajout de **setup**, entrée immédiate ; un `joinRound` posé **à la main n'est jamais écrasé**.
+  ⚠️ **L'écriture est à la validation, PAS au jet** : un joueur n'a le droit d'écrire que la feuille
+  `d6` de son score, `joinRound` retombe sur le `.write` staff — le calculer dans `roll` donnerait un
+  `PERMISSION_DENIED` côté joueur.
+  ⚠️ **Le décalage est TOASTÉ** (« X entre en jeu au round N ») : sinon le MJ croit son renfort en jeu
+  et le cherche dans les créneaux. C'est aussi le garde-fou du seul cas où la règle surprend — démarrer
+  un combat **sans « ⟲ Combat »** laisse `combat/turn` au round précédent et décale tout le monde
+  (`resetCombat` remet bien le round à 1 ; le cas n'existe que si on l'oublie).
+  Le MJ garde la main : le champ « Entrée » de `IniScoreEditor` corrige ou annule le décalage.
   C'était le **seul écart connu** entre la spec et l'app : `setJoinRound` existait dans le hook mais
   n'était appelé nulle part, donc un renfort entrait au round courant au lieu du round suivant (§2.4).
   Livré : ligne « Entrée » dans `IniScoreEditor` (champ de round + bouton **⏳** = `round + 1` d'un
