@@ -266,15 +266,21 @@ function IniRow({ id, meta, entry, isDone, participant, onToggle, onDragStart, o
      de clerc. C'est ce que le MJ pose avant ou pendant le combat.
    - « Créneau » = confort : on vise un emplacement, l'app en déduit le bonus.
    Les deux écrivent `bonus` et jamais `d6` : le dé appartient au joueur. */
-function IniScoreEditor({ entry, onSetBonus, onCancel }) {
+function IniScoreEditor({ entry, onSetBonus, onCancel, joinRound, round, onSetJoinRound }) {
   const d6 = entry && entry.d6 != null ? entry.d6 : null;
   const bonus0 = (entry && entry.bonus | 0) || 0;
+  const join0 = joinRound == null ? '' : String(Math.max(1, joinRound | 0));
   const [b, setB] = useState(String(bonus0));
   const [slot, setSlot] = useState(String(d6 != null ? d6 + bonus0 : ''));
+  const [j, setJ] = useState(join0);
   const bn = parseInt(b, 10);
   const sn = parseInt(slot, 10);
+  const jn = parseInt(j, 10);
   const commitBonus = () => { onSetBonus(Number.isFinite(bn) ? bn : 0); };
   const commitSlot  = () => { if (d6 != null && Number.isFinite(sn)) onSetBonus(sn - d6); else onCancel(); };
+  // Champ vide (ou <= round courant) = present des le debut : on efface la cle plutot
+  // que d'ecrire un round depasse, pour que le noeud reste propre.
+  const commitJoin  = () => { onSetJoinRound(Number.isFinite(jn) && jn > 1 ? jn : null); };
   const fld = { ...ENEMY_FLD, width:46, padding:'2px 5px', fontSize:11 };
   return (
     <div className="col" style={{ gap:3, padding:'2px 6px 7px 18px' }}>
@@ -300,18 +306,43 @@ function IniScoreEditor({ entry, onSetBonus, onCancel }) {
           </span>
         </div>
       )}
+      {/* Arrivee tardive (spec §2.4) : un renfort lance son de tout de suite mais n'entre
+          qu'au ROUND ENTIER suivant, pour ne pas surgir en amont de joueurs ayant deja agi.
+          Le bouton ⏳ pose le cas courant d'un clic ; le champ sert aux cas prevus a l'avance. */}
+      <div className="row gap-1" style={{ alignItems:'center' }}>
+        <span className="overline" style={{ fontSize:9, width:44 }}
+          title="Round a partir duquel ce combattant entre en jeu (renfort arrive en cours de combat)">Entrée</span>
+        <input value={j} onChange={e => setJ(e.target.value)} placeholder="1"
+          onKeyDown={e => { if (e.key === 'Enter') commitJoin(); if (e.key === 'Escape') onCancel(); }}
+          style={fld} />
+        <button className="btn btn-sm btn-ghost" onClick={commitJoin} style={{ padding:'1px 5px', fontSize:11, color:'var(--buff-bright)' }}>✓</button>
+        <button className="btn btn-sm btn-ghost" title={'Renfort : entre au round ' + (round + 1)}
+          onClick={() => { setJ(String(round + 1)); onSetJoinRound(round + 1); }}
+          style={{ padding:'1px 5px', fontSize:11 }}>⏳</button>
+        <span className="mono faint" style={{ fontSize:9.5 }}>
+          {Number.isFinite(jn) && jn > round ? `round ${jn}` : 'en jeu'}
+        </span>
+      </div>
     </div>
   );
 }
 
 function InitiativePanel({ ini, meta, ids, turn }) {
   const toast = useToast();
-  const { state, scores, done, roll, setDone, setBonus, validate, refuse, forceSlot } = ini;
+  const { state, scores, done, joinRound, roll, setDone, setBonus, validate, refuse,
+    setJoinRound, forceSlot } = ini;
   const [drag, setDrag] = useState(null);
   const [placing, setPlacing] = useState(null);   // id dont on édite le créneau
 
-  // Combattants sans score validé : ils n'entrent pas dans les créneaux (spec §2.1.bis).
-  const waiting = ids.filter(id => initiativeStatus(scores[id]) !== 'ok');
+  /* Retardataire : son score peut être validé, il n'entre qu'à un round ultérieur
+     (spec §2.4). `initiativeSlots` l'exclut donc des créneaux — sans cette liste il
+     serait invisible à l'écran, et le MJ n'aurait plus aucun moyen de le corriger. */
+  const lateRound = (id) => {
+    const r = combatantJoinRound({ joinRound: joinRound[id] });
+    return r > turn ? r : null;
+  };
+  // Combattants hors créneaux : score non validé (spec §2.1.bis) ou entrée différée.
+  const waiting = ids.filter(id => initiativeStatus(scores[id]) !== 'ok' || lateRound(id));
 
   /* Déposer un combattant sur un créneau = l'y déplacer. Comme le total est dérivé
      (d6 + bonus) et que le dé appartient au joueur, on ajuste le BONUS — ce qui se
@@ -342,12 +373,21 @@ function InitiativePanel({ ini, meta, ids, turn }) {
               const m = meta[id] || { name:id, side:'enemy' };
               const e = scores[id] || {};
               const st = initiativeStatus(e);
+              const late = lateRound(id);
               return (
                 <React.Fragment key={id}>
                   <div className="row" style={{ alignItems:'center', gap:6, padding:'3px 4px' }}>
                   <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0,
                     background: INI_SIDE_COLOR[m.side] || 'var(--debuff)' }} />
                   <span style={{ flex:1, minWidth:0, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.name}</span>
+                  {late && (
+                    <button className="mono" onClick={() => setPlacing(placing === id ? null : id)}
+                      title={'Renfort : entre en jeu au round ' + late + ' — cliquer pour changer'}
+                      style={{ fontSize:9.5, flexShrink:0, background:'var(--bg-inset)', border:'1px solid var(--line)',
+                        borderRadius:4, padding:'1px 4px', color:'var(--ink-faint)', cursor:'pointer' }}>
+                      ⏳R{late}
+                    </button>
+                  )}
                   {st === 'pending' ? (
                     <span className="row gap-1" style={{ flexShrink:0, alignItems:'center' }}>
                       <span className="mono" style={{ fontSize:11.5, color:'var(--gold-pale)' }}>🎲{e.d6}</span>
@@ -359,22 +399,27 @@ function InitiativePanel({ ini, meta, ids, turn }) {
                   ) : (
                     <span className="row gap-1" style={{ flexShrink:0, alignItems:'center' }}>
                       <button className="mono" onClick={() => setPlacing(placing === id ? null : id)}
-                        title="Bonus d'initiative (préparation, potion, buff) — se pose avant le jet"
+                        title={st === 'ok' ? 'Score validé — cliquer pour ajuster' : "Bonus d'initiative (préparation, potion, buff) — se pose avant le jet"}
                         style={{ fontSize:10, background:'var(--bg-inset)', border:'1px solid var(--line)',
                           borderRadius:4, padding:'1px 4px', color:'var(--gold-pale)', cursor:'pointer' }}>
-                        {(e.bonus | 0) > 0 ? '+' + (e.bonus | 0) : (e.bonus | 0) < 0 ? '−' + Math.abs(e.bonus | 0) : '±0'}
+                        {st === 'ok'
+                          ? iniScoreLabel(e)
+                          : (e.bonus | 0) > 0 ? '+' + (e.bonus | 0) : (e.bonus | 0) < 0 ? '−' + Math.abs(e.bonus | 0) : '±0'}
                       </button>
-                      <button className="btn btn-sm btn-ghost" style={{ padding:'1px 6px', fontSize:10.5 }}
-                        title={st === 'reroll' ? 'Relance demandée — lancer à sa place' : 'Lancer le dé'}
-                        onClick={() => roll(id)}>
-                        {st === 'reroll' ? '↻' : '🎲'}
-                      </button>
+                      {st !== 'ok' && (
+                        <button className="btn btn-sm btn-ghost" style={{ padding:'1px 6px', fontSize:10.5 }}
+                          title={st === 'reroll' ? 'Relance demandée — lancer à sa place' : 'Lancer le dé'}
+                          onClick={() => roll(id)}>
+                          {st === 'reroll' ? '↻' : '🎲'}
+                        </button>
+                      )}
                     </span>
                   )}
                   </div>
                   {placing === id && (
-                    <IniScoreEditor entry={e}
+                    <IniScoreEditor entry={e} round={turn} joinRound={joinRound[id]}
                       onSetBonus={(n) => { setBonus(id, n); setPlacing(null); }}
+                      onSetJoinRound={(r) => setJoinRound(id, r)}
                       onCancel={() => setPlacing(null)} />
                   )}
                 </React.Fragment>
@@ -412,8 +457,9 @@ function InitiativePanel({ ini, meta, ids, turn }) {
                         onDragStart={() => setDrag(id)}
                         onEditScore={() => setPlacing(placing === id ? null : id)} />
                       {placing === id && (
-                        <IniScoreEditor entry={scores[id]}
+                        <IniScoreEditor entry={scores[id]} round={turn} joinRound={joinRound[id]}
                           onSetBonus={(n) => { setBonus(id, n); setPlacing(null); }}
+                          onSetJoinRound={(r) => setJoinRound(id, r)}
                           onCancel={() => setPlacing(null)} />
                       )}
                     </React.Fragment>

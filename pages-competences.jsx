@@ -42,11 +42,16 @@ const INI_DOT = { pj: 'var(--gold)', ally: 'var(--buff)', enemy: 'var(--debuff)'
 /* Bandeau d'action du joueur : lancer son dé, ou déclarer sa fin de tour.
    C'est le seul endroit de l'app où un joueur écrit dans `combat/initiative` — et
    uniquement sur SES deux feuilles (`scores/<lui>/d6` et `done/<lui>`). */
-function MyTurnBar({ me, meName, ini, toast }) {
-  const { state, scores, done, roll, setDone } = ini;
+function MyTurnBar({ me, meName, ini, toast, round }) {
+  const { state, scores, done, joinRound, roll, setDone } = ini;
   const entry = scores[me];
   const status = initiativeStatus(entry);
   const active = state.active;
+  /* Renfort arrivé en cours de combat (spec §2.4) : son score est validé, mais il
+     n'entre qu'au round suivant. Sans ce cas explicite il lirait « ce n'est pas ton
+     tour » round après round sans comprendre pourquoi il n'est dans aucun créneau. */
+  const joinAt = combatantJoinRound({ joinRound: joinRound[me] });
+  const late = joinAt > round ? joinAt : null;
   const isMySlot = !!(active && active.participants.indexOf(me) !== -1);
   const iAmDone = done[me] === true;
 
@@ -71,6 +76,13 @@ function MyTurnBar({ me, meName, ini, toast }) {
       <span style={{ fontSize: 13 }}>
         Tu as fait <b className="mono" style={{ color: 'var(--gold-pale)' }}>{entry.d6}</b> —
         <span className="faint"> en attente de validation du MJ.</span>
+      </span>
+    );
+  } else if (late) {
+    body = (
+      <span style={{ fontSize: 13 }}>
+        Tu rejoins le combat au <b className="mono" style={{ color: 'var(--gold-pale)' }}>round {late}</b> —
+        <span className="faint"> ton initiative est déjà validée.</span>
       </span>
     );
   } else if (!active) {
@@ -565,7 +577,7 @@ function CompetencesBody({ char, staff }) {
             locked={!skillUnlocked(i, level)} minLevel={i + 1} />
         ))}
       </div>
-      <MyTurnBar me={char.id} meName={char.name} ini={ini} toast={toast} />
+      <MyTurnBar me={char.id} meName={char.name} ini={ini} toast={toast} round={turn} />
       <InitiativeBoard ini={ini} meta={iniMeta} me={char.id} />
       <CombatLog canClear={false} />
     </div>

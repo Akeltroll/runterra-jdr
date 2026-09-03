@@ -577,21 +577,38 @@ lorsque **les deux** ont déclaré.
 
 ### Points ouverts, par ordre de gêne probable
 
-1. **Le `bonus` survit-il à « ⟲ Combat » ?** Aujourd'hui **oui** (le nœud entier est
-   purgé, donc non — à vérifier : `resetCombat` efface `INITIATIVE` en entier, donc
-   les bonus partent avec). Un malus de surprise ne vaut que pour un combat, donc
-   c'est probablement le bon comportement — mais un bonus durable (potion longue) le
-   subit aussi. À trancher après une séance réelle.
+1. **Le `bonus` survit-il à « ⟲ Combat » ?** ✅ **Vérifié dans le code le 2026-09-03 :
+   NON.** `resetCombat` (data-state.jsx) fait `setPath(INITIATIVE, null)` — le nœud
+   entier part, `scores` et donc les `bonus` avec. C'est le comportement attendu pour
+   un malus de surprise, qui ne vaut que pour le combat en cours. Le cas non couvert
+   reste un bonus **durable** (potion longue) : il faut le reposer au combat suivant.
+   À trancher seulement si ça gêne à une vraie table — rien à changer d'ici là.
 2. **Le geste de drag entre créneaux** (§9) : déposer sur un créneau existant marche ;
    créer un créneau *entre* deux existants n'est pas possible au doigt. Le champ
    « Créneau » de `IniScoreEditor` couvre le cas, mais moins vite.
 3. **La place dans la colonne MJ** : avec 5 PJ + beaucoup de PNJ, les 264 px peuvent
    être serrés sur un écran peu haut. La liste de la table est en `flexShrink:0` ; si
    ça coince, la replier pendant un combat.
-4. **L'arrivée tardive (`joinRound`) n'a aucune UI.** Le hook expose `setJoinRound`,
-   mais rien ne l'appelle : un renfort entre donc au round courant, pas au suivant.
-   La règle §2.4 est implémentée et testée dans le moteur, **elle n'est simplement pas
-   pilotable depuis l'écran**. C'est le seul écart connu entre la spec et l'app.
+4. ~~**L'arrivée tardive (`joinRound`) n'a aucune UI.**~~ ✅ **Comblé le 2026-09-03**
+   (cache `20260902-7`) — c'était le seul écart connu entre la spec et l'app.
+   - **Côté MJ** : `IniScoreEditor` gagne une 3e ligne « Entrée » (champ de round +
+     bouton **⏳** qui pose `round + 1` d'un clic, le cas courant du renfort). Un champ
+     vide ou ≤ 1 **efface la clé** au lieu d'écrire un round dépassé, pour garder le
+     nœud propre.
+   - **Le trou d'affichage qu'elle ouvrait est bouché** : un retardataire au score
+     **validé** n'est ni dans `waiting` (il est `ok`) ni dans un créneau
+     (`initiativeSlots` l'exclut) — il était donc invisible, et le MJ n'avait plus
+     aucun moyen de le corriger. La liste « En attente » inclut désormais les
+     retardataires, avec un badge **⏳R{n}** cliquable.
+   - **Un score déjà validé n'expose plus le bouton de relance** dans cette liste :
+     `roll` n'écrit que `d6` et laisserait `ok:true` en place, donc le score aurait
+     changé **dans le dos du MJ**, sans repasser par la validation.
+   - **Côté joueur** : `MyTurnBar` a une branche dédiée « Tu rejoins le combat au
+     round N ». Sans elle, un renfort lisait « ce n'est pas ton tour » round après
+     round sans comprendre pourquoi son initiative validée ne le plaçait nulle part.
+   - **Zéro règle RTDB, zéro test modifié** : `setJoinRound` écrit sous `INITIATIVE`
+     (staff, déjà couvert) et le moteur (`combatantJoinRound`, `initiativeSlots`)
+     était déjà écrit et testé. Ce lot n'est que du câblage d'écran.
 
 ### Ce qu'il ne faut surtout pas « améliorer » sans relire la spec
 

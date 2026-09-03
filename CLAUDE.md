@@ -616,9 +616,27 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   `EnemyAttackModal` ne listait que `CHARACTERS` **et** écrivait les dégâts en supposant une fiche de
   PJ. Un ennemi ne pouvait frapper ni un autre ennemi, ni un allié, ni lui-même. Voir §2.6 de la spec.
   👉 **RESTE À FAIRE** : la **recette en conditions réelles à deux sessions** (§11 de la spec) — rien
-  n'a encore été joué à une vraie table. Et les points ouverts de la §10 (geste de drag entre créneaux,
-  et si « ⟲ Combat » doit remettre les `bonus` à 0 : un malus de surprise ne vaut sans doute que pour
-  le combat en cours).
+  n'a encore été joué à une vraie table. Reste aussi le geste de drag *entre* deux créneaux existants
+  (§10), qui n'est pas faisable au doigt ; le champ « Créneau » de `IniScoreEditor` couvre le cas.
+
+## État actuel (2026-09-03)
+- **Arrivée tardive (`joinRound`) pilotable depuis l'écran** — cache `20260902-7`, **206 tests verts**
+  (inchangés : le moteur était déjà écrit et testé), **aucune règle RTDB**, aucune migration.
+  C'était le **seul écart connu** entre la spec et l'app : `setJoinRound` existait dans le hook mais
+  n'était appelé nulle part, donc un renfort entrait au round courant au lieu du round suivant (§2.4).
+  Livré : ligne « Entrée » dans `IniScoreEditor` (champ de round + bouton **⏳** = `round + 1` d'un
+  clic) ; badge **⏳R{n}** dans la liste « En attente » du MJ ; branche « Tu rejoins le combat au
+  round N » dans `MyTurnBar` côté joueur.
+  ⚠️ **Le trou d'affichage que la règle ouvrait est bouché** : un retardataire au score **validé**
+  n'est ni dans `waiting` (statut `ok`) ni dans un créneau (`initiativeSlots` l'exclut) — il était donc
+  **invisible**, et le MJ n'avait plus aucun moyen de le corriger. La liste « En attente » liste
+  désormais aussi les retardataires. Toute future règle qui exclut un combattant des créneaux devra
+  se poser la même question : *où le voit-on encore ?*
+  ⚠️ **Un score déjà validé n'expose plus le bouton de relance** : `roll` n'écrit que `d6` et laisse
+  `ok:true` en place — relancer aurait changé le score **sans repasser par la validation du MJ**.
+  ✅ **Point ouvert n°1 de la §12 tranché par lecture du code** : les `bonus` d'initiative **ne
+  survivent pas** à « ⟲ Combat » (`resetCombat` fait `setPath(INITIATIVE, null)`, le nœud entier part).
+  C'est le bon comportement pour un malus de surprise ; seul un bonus *durable* doit être reposé.
 
 ## État actuel (2026-08-21)
 - **Capacité du coffre commun + attelage du groupe (lot 3/3 du chantier « poids »)** — cache
