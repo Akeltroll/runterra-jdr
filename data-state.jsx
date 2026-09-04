@@ -45,19 +45,39 @@ function useCharState(charId) {
   const setSkillBuff = useCallback((skillId, mods, until) =>
     window.RTDB.updatePath(`${charPath(charId)}/skillBuffs`,
       { [skillId]: mods ? { mods, until: until != null ? until : null } : null }), [charId]);
-  // Respec : écrit les 4 caracs + le verrou atomiquement (sanitisé en entiers ≥ 0).
-  const setAttrs = useCallback((attrs, locked) => {
+  // Respec : écrit les 4 caracs + la répartition de l'Habileté (AD/AP/Mana) + le verrou,
+  // atomiquement (sanitisé en entiers ≥ 0).
+  // ⚠️ `habSplit` est écrit dans la MÊME opération que `attrs` : les deux doivent rester
+  // cohérents (somme ≤ hab). Un habSplit écrit seul après une baisse d'Habileté laisserait
+  // une valeur hors bornes — la fonction `habSplit` la normaliserait à la lecture, mais la
+  // base mentirait. Absent → on n'écrit rien et le défaut par carac dominante s'applique.
+  // `habAd: null` purge l'ancienne forme (AD seul) qui a vécu une journée.
+  const setAttrs = useCallback((attrs, locked, split) => {
     const a = attrs || {};
     const clean = {
       force: Math.max(0, a.force | 0), hab: Math.max(0, a.hab | 0),
       mental: Math.max(0, a.mental | 0), magie: Math.max(0, a.magie | 0),
     };
-    return window.RTDB.updatePath(charPath(charId), { attrs: clean, attrsLocked: locked ? true : null });
+    const patch = { attrs: clean, attrsLocked: locked ? true : null };
+    if (split) {
+      patch.habSplit = habSplit(clean.force, clean.hab, clean.magie, split);
+      patch.habAd = null;
+      patch.habSplitOpen = null;   // confirmer referme la fenêtre de redistribution
+    }
+    return window.RTDB.updatePath(charPath(charId), patch);
   }, [charId]);
+  /* Rouvre (ou referme) la répartition d'Habileté pour le JOUEUR : tant que le drapeau
+     est posé, la page Progression ne lui oppose plus le plancher de ses points déjà
+     placés. Réservé au staff côté UI, refermé automatiquement à la confirmation.
+     ⚠️ On ne remet PAS `habSplit` à null pour rouvrir : le joueur repartirait du défaut
+     par carac dominante au lieu de sa propre répartition, ce qui lui ferait perdre son
+     placement au moment même où on lui rend la main. */
+  const setHabSplitOpen = useCallback((open) =>
+    window.RTDB.updatePath(charPath(charId), { habSplitOpen: open ? true : null }), [charId]);
   const setAttrsLocked = useCallback((locked) =>
     window.RTDB.updatePath(charPath(charId), { attrsLocked: locked ? true : null }), [charId]);
   return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment,
-    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked };
+    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked, setHabSplitOpen };
 }
 
 /* Compteur de tour PARTAGÉ (combat). Écriture staff (règle RTDB combat/turn).
@@ -240,7 +260,7 @@ function makeEnemy(name, side) {
   const ally = side === 'ally';
   return { id: newEnemyId(), name: name || (ally ? 'Allié' : 'Ennemi'), hpCur: 100, hpMax: 100,
     manaCur: 0, manaMax: 0, atk: 10, armure: 0, resmag: 0, note: '',
-    crit: 0, dcrit: 200, lethaAD: 0, lethaAP: 0,
+    crit: 0, dcrit: 200, lethaAD: 0, lethaAP: 0, rescrit: 0,
     side: ally ? 'ally' : 'enemy',
     reveal: ally ? 'exact' : 'hidden', revealPct: 100 };
 }

@@ -737,6 +737,23 @@
     return { didCrit: true, tiers: 1 + tiersSupp, multiplier: (dcritBase + 50 * tiersSupp) / 100 };
   }
 
+  /* --- Résistance critique (refonte 2026-09-04) ---
+     Le défenseur ne réduit PAS la chance de crit : il réduit la part de dégâts que le
+     crit ajoute AU-DESSUS d'un coup normal. Un crit à 150 % contre 15 % de rés. crit
+     inflige 100 + 50×0,85 = 142,5 % ; contre 60 %, 100 + 50×0,40 = 120 %.
+     ⚠️ C'est cette forme (réduction de la part > 100 %, pas du multiplicateur entier)
+     qui garantit qu'un critique ne peut JAMAIS faire moins qu'un coup normal — pas
+     besoin de plancher artificiel. Elle vaut aussi pour les paliers de surcrit
+     (×2,5 → 1 + 1,5×(1−r)). La résistance est bornée à 100 % : au-delà, un crit
+     rendrait des dégâts inférieurs au coup de base.
+     S'applique APRÈS le jet (`rollCrit`) et AVANT la mitigation armure/rés. mag. */
+  function critMultAfterResist(multiplier, rescritPct) {
+    var m = Number(multiplier);
+    if (!isFinite(m) || m <= 1) return 1;           // pas de crit : rien à réduire
+    var r = Math.max(0, Math.min(100, Number(rescritPct) || 0));
+    return 1 + (m - 1) * (1 - r / 100);
+  }
+
   // Applique des dégâts DÉJÀ mitigés : bouclier d'abord, puis HP. KO si HP atteint 0.
   function applyDamageToPools(pools, degats) {
     const hpCur = Math.max(0, Number((pools && pools.hpCur) || 0));
@@ -1293,30 +1310,97 @@
     return f;
   }
 
-  /* --- Moteur de stats refondu (info-mj/SPECIFICATION) ---
-     8 stats dérivées de 4 caracs + niveau. Magnitude escaladée, crit linéaire.
+  /* Bonus de départ d'Habileté : PV dégressifs sur les 5 premiers points (25/20/15/10/5),
+     soit 75 PV au plafond. Table CUMULÉE, indexée par min(H,5).
+     ⚠️ L'Habileté ne donne plus d'armure ni de rés. magique (refonte 2026-09-04). */
+  var HAB_START_HP = [0, 25, 45, 60, 70, 75];
+
+  /* --- Répartition de l'Habileté : AD / AP / Mana (refonte 2026-09-04) ---
+     Chaque point d'Habileté donne, au choix du joueur (onglet Progression),
+     **+5 AD**, **+5 AP** ou **+10 Mana**. Stocké dans `state.habSplit` = nombre de
+     points par destination `{ad, ap, mana}`.
+     ⚠️ **L'ESCALADE EST GARANTIE À CHAQUE POINT** (ruling MJ, 2026-09-04) : le facteur
+     est calculé sur le TOTAL d'Habileté puis distribué au prorata, si bien qu'un point
+     vaut autant où qu'il aille. **Répartir ne coûte donc RIEN** — c'est délibéré, le MJ
+     veut encourager des répartitions personnelles. ⚠️ Ne PAS revenir à une escalade
+     appliquée à chaque part séparément (une version intermédiaire le faisait) : ça
+     pénalisait l'hybridation de ~20 % à 20 points, exactement l'inverse de l'intention.
+     ⚠️ Défaut quand rien n'est enregistré : tout du côté de la carac de dégâts
+     dominante (Force ≥ Magie → AD, sinon AP). C'est ce qui donne une valeur juste aux
+     5 PJ existants **sans migration de données** — Jett (F1/C4) part en AP, les quatre
+     autres en AD. Ce n'est qu'un défaut : le joueur le change quand il veut, et tant
+     qu'il n'a rien confirmé la page Progression ne lui oppose aucun plancher. */
+  var HAB_DESTS = ['ad', 'ap', 'mana'];
+  function defaultHabSplit(F, H, C) {
+    H = Math.max(0, H | 0);
+    return (F | 0) >= (C | 0) ? { ad: H, ap: 0, mana: 0 } : { ad: 0, ap: H, mana: 0 };
+  }
+  /* Normalise une répartition stockée. `split` accepte aussi l'ancienne forme
+     `{ad}` seule (compat : le champ `habAd` d'une version antérieure d'un jour).
+     ⚠️ Sur-allocation : on sert les destinations dans l'ordre ad → ap → mana et on
+     coupe au budget. Sous-allocation (le joueur a gagné un niveau et n'a pas encore
+     placé son point) : le RELIQUAT PART SUR LA DESTINATION PAR DÉFAUT plutôt que
+     d'être perdu — un point non placé qui ne rendrait rien serait un vol silencieux. */
+  function habSplit(F, H, C, split) {
+    H = Math.max(0, H | 0);
+    if (split == null) return defaultHabSplit(F, H, C);
+    var out = { ad: 0, ap: 0, mana: 0 }, left = H;
+    for (var i = 0; i < HAB_DESTS.length; i++) {
+      var k = HAB_DESTS[i];
+      var n = Math.max(0, Math.min(left, split[k] | 0));
+      out[k] = n; left -= n;
+    }
+    if (left > 0) {
+      var d = defaultHabSplit(F, left, C);
+      out.ad += d.ad; out.ap += d.ap; out.mana += d.mana;
+    }
+    return out;
+  }
+
+  /* --- Moteur de stats refondu (info-mj/SPECIFICATION, révisé 2026-09-04) ---
+     9 stats dérivées de 4 caracs + niveau. Magnitude escaladée, POURCENTAGES LINÉAIRES.
+     ⚠️ Cette asymétrie est volontaire : `escalationFactor` ne s'applique qu'aux grandeurs
+     de magnitude (PV/Mana/AD/AP/AR/RM). Le crit, les dégâts crit et la résistance critique
+     se calculent sur les points BRUTS — les escalader ferait exploser des pourcentages
+     (3 %/pt de Mental donnerait 86 % de rés. crit à 20 points au lieu de 60 %).
      ⚠️ RÈGLE MJ (2026-08-17, figée) : la léthalité (letha/lethaMag) et les soins liés
      aux dégâts (vol de vie, sapience, omnivamp) ne dérivent JAMAIS des caractéristiques.
      Elles viennent exclusivement de l'équipement, des runes et des modificateurs — ne
-     pas les ajouter ici. C'est aussi pour ça que la Sapience a été retirée du socle. */
-  function computeStats(F, H, M, C, level) {
+     pas les ajouter ici. C'est aussi pour ça que la Sapience a été retirée du socle.
+     Répartition (2026-09-04) — par point :
+       Force     20 PV,  5 Mana, 25 AD, 2 Armure
+       Habileté  bonus de départ (table ci-dessus), au choix par point +5 AD **OU**
+                 +5 AP **OU** +10 Mana (cf. habSplit), 10 %Crit, 6 %D.Crit
+       Mental    60 PV, 20 Mana, 3 %Rés.Crit
+       Magie     10 PV, 30 Mana, 25 AP, 2 Rés. Magique
+     La Force et la Magie ne donnent plus de dégâts crit ; le Mental ne donne plus ni
+     crit, ni AD/AP.
+     `hab` (6e param, optionnel) = répartition `{ad, ap, mana}` des points d'Habileté ;
+     absent → défaut par carac dominante (voir `habSplit`). Crit, dégâts crit et bonus
+     de PV de départ restent calculés sur le TOTAL d'Habileté : seule la valeur
+     « dirigeable » (attaque / mana) est répartie. */
+  function computeStats(F, H, M, C, level, hab) {
     F = Math.max(0, F | 0); H = Math.max(0, H | 0);
     M = Math.max(0, M | 0); C = Math.max(0, C | 0);
     level = Math.max(1, level | 0);
-    var eF = escalationFactor(F), eH = escalationFactor(H),
-        eM = escalationFactor(M), eC = escalationFactor(C);
-    var nH = Math.min(H, 5);                 // bonus de départ Habileté plafonné
-    var habPV = 20 * nH, habRes = nH;        // +20 PV, +1 Arm, +1 RM / pt (max 5)
+    // eH n'existe plus : l'Habileté escalade PAR PART (AD / AP), pas en bloc.
+    var eF = escalationFactor(F), eM = escalationFactor(M), eC = escalationFactor(C);
+    var habPV = HAB_START_HP[Math.min(H, 5)];  // bonus de départ Habileté plafonné
     var fondu = Math.max(0, 20 - 4 * (F + C)); // frappe de base des profils sans dégâts
+    var hs = habSplit(F, H, C, hab);           // points d'Habileté dirigés AD / AP / Mana
+    // Escalade GARANTIE À CHAQUE POINT : facteur moyen du total, appliqué au prorata.
+    // Un point vaut donc pareil où qu'il aille, et répartir ne coûte rien.
+    var hUnit = H > 0 ? escalationFactor(H) / H : 0;
     return {
-      hp:     Math.round(50 + 30 * level + 20 * eF + 20 * eC + 42 * eM + habPV),
-      mana:   Math.round(50 + 17 * eF + 17 * eC + 38 * eM),
-      ad:     Math.round(20 * eF + 8 * eH + 3 * eM + fondu),
-      ap:     Math.round(20 * eC + 8 * eH + 3 * eM + fondu),
-      armure: Math.round(level + 4 * eF + habRes),
-      resmag: Math.round(level + 4 * eC + habRes),
-      crit:   5 + 10 * H + 2 * M,
-      dcrit:  150 + 2 * F + 2 * C + 6 * H,
+      hp:      Math.round(50 + 30 * level + 20 * eF + 10 * eC + 60 * eM + habPV),
+      mana:    Math.round(50 + 15 * level + 5 * eF + 30 * eC + 20 * eM + 10 * hUnit * hs.mana),
+      ad:      Math.round(25 * eF + 5 * hUnit * hs.ad + fondu),
+      ap:      Math.round(25 * eC + 5 * hUnit * hs.ap + fondu),
+      armure:  Math.round(level + 2 * eF),
+      resmag:  Math.round(level + 2 * eC),
+      crit:    5 + 10 * H,
+      dcrit:   150 + 6 * H,
+      rescrit: 3 * M,
     };
   }
 
@@ -1332,13 +1416,13 @@
      L'ennemi n'a qu'un champ `atk` : on y met la plus élevée de AD/AP. */
   function npcStatsFromAttrs(attrs, level) {
     attrs = attrs || {};
-    var s = computeStats(attrs.force, attrs.hab, attrs.mental, attrs.magie, level);
+    var s = computeStats(attrs.force, attrs.hab, attrs.mental, attrs.magie, level, attrs.habSplit);
     return {
       hpMax: s.hp, hpCur: s.hp,
       manaMax: s.mana, manaCur: s.mana,
       atk: Math.max(s.ad, s.ap),
       armure: s.armure, resmag: s.resmag,
-      crit: s.crit, dcrit: s.dcrit,
+      crit: s.crit, dcrit: s.dcrit, rescrit: s.rescrit,
     };
   }
 
@@ -1366,7 +1450,12 @@
   function charBaseStats(char, state) {
     var a = (state && state.attrs) || (char && char.attrs) || { force: 0, hab: 0, mental: 0, magie: 0 };
     var level = (state && state.level != null ? state.level : (char && char.level)) || 1;
-    return computeStats(a.force, a.hab, a.mental, a.magie, level);
+    // Répartition de l'Habileté : `state.habSplit` si le joueur l'a confirmée, sinon
+    // `char.habSplit`, sinon le défaut par carac dominante (habSplit).
+    // Compat : `state.habAd` (forme d'un jour, AD seul) est encore relu.
+    var hs = (state && state.habSplit) || (char && char.habSplit) || null;
+    if (!hs && state && state.habAd != null) hs = { ad: state.habAd };
+    return computeStats(a.force, a.hab, a.mental, a.magie, level, hs);
   }
 
   /* XP & niveau : courbe officielle du MJ (info-mj/tableau_XP.png).
@@ -1412,7 +1501,7 @@
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
     canSelectRune, canDeselectRune, sumRuneMods, mergeMods, ADP_KEYS, runeHasAdpChoice,
-    mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, enemyPublicView,
+    mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, critMultAfterResist, enemyPublicView,
     combatantSide, isAlly, splitCombatants,
     INIT_DIE, rollInitiative, initiativeTotal, initiativeStatus, initiativeReady,
     combatantJoinRound, initiativeJoinOnValidate, initiativeSlots, slotParticipants, initiativeState,
@@ -1426,5 +1515,6 @@
     runeRadialLayout,
     xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
     escalationFactor, computeStats, charBaseStats, attrSum, respecValid, npcStatsFromAttrs,
+    defaultHabSplit, habSplit, HAB_DESTS,
   };
 });

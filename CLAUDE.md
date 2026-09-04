@@ -52,10 +52,54 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 - `game-logic.js` — **logique pure** (UMD : testable en Node + `window`). `clamp`,
   `clampGauge`, `DEFAULT_MODIFIERS`, `BUFF_STAT_MAP`, `computeEffective`,
   `applyHealMods`, `buildDefaultState`. **Moteur de stats refondu** (système hypermétrique) :
-  `computeStats(F,H,M,C,level)` (8 stats dérivées : magnitude escaladée via `escalationFactor(p)`
-  [tranches de 4, table §4.3, zone PNJ quadratique >20] + socle de niveau + bonus de départ Habileté/fondu ;
-  **sans Sapience**, retirée du socle) + `charBaseStats(char,state)` (base **live** : caracs effectives
-  `state.attrs ?? char.attrs`, niveau `state.level ?? char.level`). Validé contre les profils §9.
+  `computeStats(F,H,M,C,level,hab)` (**9 stats** dérivées, **répartition rechiffrée par le MJ le 2026-09-04** :
+  magnitude escaladée via `escalationFactor(p)` [tranches de 4, table §4.3, zone PNJ quadratique >20]
+  + socle de niveau + bonus de départ Habileté (`HAB_START_HP`, PV dégressifs 25/20/15/10/5, **plus
+  d'AR/RM**) + fondu ; **sans Sapience**, retirée du socle)
+  + `charBaseStats(char,state)` (base **live** : caracs effectives
+  `state.attrs ?? char.attrs`, niveau `state.level ?? char.level`).
+  ⚠️ **Asymétrie volontaire : la magnitude est escaladée, les POURCENTAGES sont LINÉAIRES**
+  (`crit`, `dcrit`, `rescrit` se calculent sur les points BRUTS — les escalader donnerait 86 % de
+  rés. crit à 20 Mental au lieu de 60 %). Par point : Force 20 PV/5 Mana/25 AD/**2 Armure** ;
+  Habileté bonus de départ/**au choix par point : +5 AD, +5 AP ou +10 Mana**/10 %Crit/6 %D.Crit ;
+  Mental 60 PV/20 Mana/**3 %Rés.Crit** ;
+  Magie 10 PV/30 Mana/25 AP/**2 Rés.Mag**. Socle : `50+30·niv` PV, `50+15·niv` Mana, `+1` AR et RM/niveau.
+  ⚠️ Les cibles de PV du **§9 de la spec hypermétrique ne sont plus valides** (le test les a
+  remplacées par un verrou de non-régression du nouveau modèle, pas une preuve de conformité).
+  **`critMultAfterResist(multiplier, rescritPct)`** (pure, testée) = application de la **résistance
+  critique** : elle ne réduit PAS la chance de crit mais la part de dégâts **au-dessus de 100 %**
+  (150 % contre 15 % de rés. → **142,5 %** ; contre 60 % → 120 %). ⚠️ C'est cette forme qui garantit
+  qu'un crit ne peut jamais faire **moins** qu'un coup normal — ne pas la remplacer par une réduction
+  du multiplicateur entier, il faudrait alors un plancher artificiel. Bornée à 100 %.
+  ⚠️ **Appliquée à la RÉSOLUTION MJ, jamais au cast** : le crit est roulé côté joueur, mais la cible
+  peut changer (`EnemyAttackModal`) et seul le MJ voit les stats du défenseur. Les deux sites sont
+  `PendingHitRow` (joueur→ennemi, lit `enemy.rescrit`) et `EnemyAttackModal` (PNJ→PJ via
+  `mjLive(...).eff.rescrit`, PNJ→PNJ via le champ de l'ennemi).
+  **`habSplit(F,H,C,split)`** / **`defaultHabSplit(F,H,C)`** / `HAB_DESTS` (purs, testés) =
+  **répartition de l'Habileté** : chaque point donne, au choix du joueur, **+5 AD**, **+5 AP** ou
+  **+10 Mana** (onglet Progression, persisté dans `state.habSplit = {ad, ap, mana}` = nombre de
+  points par destination).
+  ⚠️ **L'ESCALADE EST GARANTIE À CHAQUE POINT** (ruling MJ, 2026-09-04) : le facteur est calculé sur
+  le **TOTAL** d'Habileté puis distribué **au prorata** (`hUnit = escalationFactor(H)/H`), si bien
+  qu'un point vaut autant où qu'il aille et que **répartir ne coûte rien**. C'est délibéré — le MJ
+  veut encourager des répartitions personnelles. ⚠️ Ne PAS revenir à une escalade appliquée à chaque
+  part séparément : une version intermédiaire le faisait et pénalisait l'hybridation de ~20 % à
+  20 points, exactement l'inverse de l'intention.
+  ⚠️ **`habSplit` absent ≠ tout à 0** : absent = jamais confirmé → défaut par **carac de dégâts
+  dominante** (Force ≥ Magie → AD, sinon AP), ce qui donne une valeur juste aux 5 PJ **sans
+  migration** (Jett part en AP, les 4 autres en AD). La page Progression n'oppose son plancher (pas
+  de re-routage des points déjà placés) **qu'une fois la répartition confirmée** — sinon un défaut
+  deviné deviendrait un choix imposé. Une répartition **sous-allouée** voit son reliquat partir sur
+  la destination par défaut plutôt que d'être perdu (un point non placé qui ne rendrait rien serait
+  un vol silencieux) ; **sur-allouée**, elle est servie dans l'ordre `ad → ap → mana` et coupée au
+  budget. Compat : l'ancien champ `state.habAd` (AD seul, a vécu une journée) est encore relu par
+  `charBaseStats` et purgé au prochain « Confirmer ».
+  ⚠️ Le crit, les dégâts crit et le bonus de PV de départ restent calculés sur le **TOTAL**
+  d'Habileté : seule la valeur « dirigeable » (attaque / mana) est répartie.
+  ⚠️ **`clampSplitDraft` (pages-progression) n'est PAS `habSplit`** : le brouillon de l'UI ne
+  réaffecte **pas** le reliquat, sinon un point retiré d'une ligne y reviendrait aussitôt et le
+  « + » des autres lignes resterait inerte. Un point retiré retourne dans une réserve « à placer »,
+  et « Confirmer » attend qu'elle soit vide — même contrat que les points de caractéristiques.
   **XP** : `xpToNext(level)` (courbe officielle du MJ
   `180 + 100*level` = `info-mj/tableau_XP.png` ; **cap niveau 18** → `Infinity` au cap, `MAX_LEVEL=18`)
   + `applyXp(level, xp, gain)` (montée auto avec report du surplus en cascade, figée au cap)
@@ -431,7 +475,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     hpCur, manaCur, shield (valeurs ABSOLUES), fatigue (0-5), eau (0-5)
     xp:        0   ← progression DANS le niveau courant (entier ≥ 0, < xpToNext(level)) ; via addXp ; montée auto → level
     buffs:     { [buffId]: true }
-    modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, letha, lethaMag, sapience, vol, omni }
+    modifiers: { hp, mana, ad, ap, armure, resmag, crit, dcrit, rescrit, letha, lethaMag, sapience, vol, omni }
                ↑ liste unique `MOD_STATS` (components.jsx), partagée éditeur d'item + panneau Modificateurs MJ
                letha = léthalité PHYSIQUE (réduit l'armure) ; lethaMag = léthalité MAGIQUE (réduit la rés. mag.)
                sapience/vol/omni sont des POURCENTAGES (cf. lifestealHeal), pas des valeurs plates
@@ -445,6 +489,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     runeBonus: 0   ← points de rune bonus accordés par le MJ (test / montée de niveau) ; budget = level + runeBonus
     level:     2   ← niveau effectif (entier ≥ 1, stepper staff onglet Compétences) ; défaut = char.level ; pilote déblocage des comps + passif + budget runes + STATS (socle moteur refondu)
     attrs:       { force, hab, mental, magie }   ← caracs (respec, onglet Progression) ; ABSENT par défaut → repli char.attrs ; lu par charBaseStats ; écrit par setAttrs
+    habSplit:    { ad, ap, mana }   ← répartition des points d'Habileté (+5 AD / +5 AP / +10 Mana par point) ; onglet Progression, écrit par setAttrs EN MÊME TEMPS que attrs (cohérence somme <= hab)
+                     ABSENT = jamais confirmé → défaut par carac dominante (habSplit, game-logic)
+    habSplitOpen: true   ← drapeau MJ : suspend le plancher du joueur pour lui rendre UNE redistribution libre de ses points d'Habileté déjà placés ; posé/retiré par setHabSplitOpen (bouton « ↺ Rouvrir au joueur », staff), effacé automatiquement à la confirmation suivante
+    habAd:       4   ← LEGACY (forme AD-seul, a vécu une journée) : encore relue par charBaseStats, purgée au prochain « Confirmer »
     attrsLocked: true   ← verrou après respec joueur unique ; le staff peut éditer/déverrouiller (setAttrsLocked)
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
@@ -457,7 +505,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
                                           QUE placé ici — la simple présence dans le coffre ne suffit pas
 /campaign/runeterra/sharedCoins/   ← monnaie COMMUNE (coffre) : { plat, or, arg, cuiv } (R/W tout participant)
 /campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
-/campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, crit, dcrit, lethaAD, lethaAP, reveal, revealPct } ; lecture inscrits, écriture staff
+/campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, crit, dcrit, rescrit, lethaAD, lethaAP, reveal, revealPct } ; lecture inscrits, écriture staff
                                               crit (%) + dcrit (% dég. crit, défaut 200) + lethaAD/lethaAP (léthalité physique/magique) = crit/léthalité ennemi→joueur (rollCrit au lancement ; léthalité AD→armure si physique, AP→rés. mag si magique, via mitigateDamage)
                                               reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
 /campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, lethaMag, crit, dcrit, vol, sapience, omni, hpMax, targetId, ts } ; crit roulé au cast ; le MJ ajuste+applique
@@ -623,6 +671,70 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   différé subi pour de vrai, cooldowns sur plusieurs rounds enchaînés). Reste aussi le geste de drag
   *entre* deux créneaux existants (§10), pas faisable au doigt ; le champ « Créneau » de
   `IniScoreEditor` couvre le cas.
+
+## État actuel (2026-09-04)
+- **Répartition des caractéristiques rechiffrée + Rés. critique + Habileté au choix (AD/AP/Mana)** —
+  cache `20260904-3`, **220 tests verts** (game-logic 209 + auth 11), **aucune règle RTDB à republier**
+  (ni `state/modifiers`, ni `combat/enemies`, ni `pendingHits` ne valident les clés de stats),
+  **aucune migration de données**.
+  Décisions du MJ, par point de carac : **Force** 20 PV / 5 Mana / 25 AD / **2 Armure** ;
+  **Habileté** : **au choix du joueur, par point : +5 AD, +5 AP ou +10 Mana** (au lieu de 8 AD
+  ET 8 AP), **plus aucun bonus d'AR/RM de départ**, bonus de PV **dégressif 25/20/15/10/5**
+  (75 max, `HAB_START_HP`), crit et dégâts crit inchangés ;
+  **Mental** 60 PV / 20 Mana / **+3 % Rés. Crit**, et **plus de crit ni d'AD/AP** ;
+  **Magie** 10 PV / 30 Mana / 25 AP / **2 Rés. Mag**. La Force et la Magie ne donnent **plus de
+  dégâts crit** → `crit = 5 + 10·H`, `dcrit = 150 + 6·H`. Socle de Mana passé à `50 + 15·niveau`.
+  **Résistance critique** (`rescrit`) : réduit la part de dégâts **au-dessus de 100 %**, pas la
+  chance de crit (150 % contre 15 % → 142,5 %). Appliquée à la **résolution MJ** (`critMultAfterResist`).
+  ⚠️ **L'ARMURE S'EFFONDRE À BAS NIVEAU, c'est assumé et il faut le surveiller en jeu** : la Force
+  passe de 4 à 2 d'armure par point ET l'Habileté n'en donne plus du tout. Urskaar tombe de 28 à 15
+  d'armure, soit — via `AR/(AR+120)` — de **19 % à 11 %** de réduction des dégâts physiques ; un Tank
+  niveau 18 de 41 % à **29 %**. Le pari est que les **armures d'équipement** (backlog « équipement en
+  stats finales », §7 de la spec hypermétrique) prennent le relais ; **tant qu'elles n'existent pas
+  dans `ITEM_CATALOG`, les PJ encaissent quasiment à nu**.
+  ⚠️ **Le passif de Rathael est à rebaser** : « +5 %/charge d'Armure+RM **de base** » sur une base
+  divisée par ~2 ne vaut presque plus rien (5 charges ≈ +3 d'armure sur ses 10). Pas touché ici — c'est une
+  décision de game design, pas un effet de bord à corriger en douce.
+  ⚠️ **PV et Mana COURANTS sont stockés en absolu** : le Mana de Rathael passant de 287 à 210, un
+  **« ⟲ Combat »** est nécessaire après déploiement pour recaler tout le monde sur les nouveaux caps.
+  **Rouvrir la répartition d'un joueur** (`setHabSplitOpen`, data-state ; bouton
+  « ↺ Rouvrir au joueur » dans l'en-tête de `HabSplitRow`, **staff only**) : pose
+  `state.habSplitOpen`, ce qui **suspend le plancher** du joueur — il peut alors déplacer TOUS ses
+  points d'Habileté, et le drapeau se referme tout seul à sa prochaine confirmation.
+  ⚠️ **Rouvrir n'efface PAS `habSplit`** : remettre le champ à `null` aurait aussi « rouvert », mais
+  le joueur serait reparti du **défaut par carac dominante** au lieu de sa propre répartition — on
+  lui aurait fait perdre son placement au moment même où on lui rend la main.
+  ⚠️ C'est un confort d'UI, pas une sécurité : les règles RTDB ne valident rien sous
+  `characters/$charId/state`, donc un joueur peut déjà écrire `attrs` ou `habSplit` à la console.
+  Le vrai garde-fou reste le MJ qui relit les fiches.
+  **Répartition de l'Habileté (3 destinations)** : nouveau champ persisté
+  `state.habSplit = {ad, ap, mana}`, contrôle `HabSplitRow` sous la ligne Habileté de l'onglet
+  Progression (une ligne par destination avec −/+, réserve « N pts à placer », gain réel affiché
+  par ligne). « Confirmer » exige la réserve vide, comme pour les points de caractéristiques.
+  ⚠️ **L'escalade est garantie à chaque point** (facteur du total distribué au prorata) →
+  **répartir ne coûte rien**, 10/10 rend autant que 20/0. Ruling explicite du MJ : encourager les
+  répartitions personnelles. **Une version intermédiaire escaladait chaque part séparément** et
+  pénalisait l'hybridation de ~20 % — ne pas y revenir par inadvertance.
+  ⚠️ **Aucune migration** : `habSplit` absent retombe sur le défaut par carac dominante — Jett
+  (F1/C4) part en tout-AP, les 4 autres en tout-AD, ce qui correspond à leur build actuel. L'ancien
+  champ `habAd` reste relu et se purge au prochain « Confirmer ».
+  ⚠️ **`setAttrs(attrs, locked, split)` écrit les deux dans la MÊME opération** : un `habSplit` seul
+  après une baisse d'Habileté laisserait une somme hors bornes (la fonction `habSplit` la
+  normaliserait à la lecture, mais la base mentirait).
+  Livré : `computeStats(…, hab)` réécrite + `HAB_START_HP` + `habSplit`/`defaultHabSplit`/`HAB_DESTS`
+  + `critMultAfterResist` (game-logic, purs, testés) ;
+  `rescrit` dans `MOD_STATS`/`STAT_LABEL`/`STAT_LABEL_SHORT`/`STAT_GLYPH`/`STAT_FAMILY` (components) ;
+  affichage fiche (**la 6e case « réservée » des stats secondaires est enfin occupée**), Équipement,
+  Progression, assistant `npcStatsFromAttrs` et champ éditable de `EnemyCard` ;
+  libellés `ATTRIBUTES` (data.jsx) remis à jour — ils annonçaient encore l'ancienne répartition ;
+  réduction appliquée dans `PendingHitRow` et `EnemyAttackModal` (badge `CRIT ×2,00 − R.Crit 15 % →
+  ×1,85`, pré-remplissage du champ dégâts, mention au journal de combat).
+  ⚠️ **`EnemyAttackModal` : la suggestion de dégâts suit la cible tant que le MJ n'a pas saisi son
+  d20** (drapeau `touched`) — la cible y est modifiable, et écraser une saisie manuelle au changement
+  de cible aurait été pire que de laisser une valeur périmée.
+  👉 **Non fait volontairement** : le joueur voit toujours son crit **brut** au cast (« en attente MJ »),
+  la réduction n'apparaît qu'à la résolution. Il pourrait la calculer (il lit `combat/enemies`), mais
+  le nombre qui compte est celui que le MJ applique — deux affichages divergents seraient pires.
 
 ## État actuel (2026-09-03)
 - **Arrivée tardive (`joinRound`) AUTOMATIQUE + pilotable** — cache `20260902-8`, **209 tests verts**
@@ -870,8 +982,8 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   un MJ qui saisissait 30 croyait donner du plat et donnait 30 %. Corrigé sur les 3 sites.
   **Dette ramassée** : les deux listes `MOD_STATS` dupliquées (éditeur d'item + panneau Modificateurs MJ)
   sont **fusionnées en une seule** (components.jsx, exportée) — une nouvelle stat s'ajoute à un seul endroit.
-  ✅ **Tranché par le MJ (2026-08-17)** : `computeStats` ne dérive **que 8 stats** des caracs, et **c'est
-  définitif** — la **léthalité** (`letha`/`lethaMag`) et les **soins liés aux dégâts** (`vol`, `sapience`,
+  ✅ **Tranché par le MJ (2026-08-17)** : `computeStats` ne dérive **que les stats du socle** des caracs
+  (8 à l'époque, **9 depuis l'ajout de `rescrit` le 2026-09-04**), et **c'est définitif** — la **léthalité** (`letha`/`lethaMag`) et les **soins liés aux dégâts** (`vol`, `sapience`,
   `omni`) **ne proviendront jamais** de Force/Habileté/Mental/Magie. Elles viennent exclusivement de
   l'**équipement**, des **runes** et des **modificateurs** ; elles valent donc 0 par défaut, et c'est normal.
   Ne pas les ajouter au socle de `computeStats` (rappel écrit aussi en commentaire au-dessus de la fonction).

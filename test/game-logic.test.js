@@ -564,39 +564,122 @@ test('escalationFactor : zone PNJ (>20) quadratique', () => {
   assert.ok(approx(L.escalationFactor(25), 45.82, 0.01));
 });
 
-/* --- Refonte : computeStats (profils §9, niveau 18) --- */
-test('computeStats : PV des 5 profils types §9 (±2)', () => {
+/* --- Refonte 2026-09-04 : computeStats (nouvelle répartition des caracs) ---
+   ⚠️ Les PV ci-dessous NE SONT PLUS les cibles du §9 de la spec hypermétrique : la
+   répartition a été rechiffrée par le MJ (Mental 60 PV/pt, Force 20, Magie 10, plus
+   de bonus d'armure d'Habileté...). Ce test verrouille le NOUVEAU modèle contre une
+   régression silencieuse, il ne prouve pas la conformité à l'ancienne spec. */
+test('computeStats : PV des 5 profils types, niveau 18 (±2)', () => {
   // (F,H,M,C) à 33 pts, niveau 18
-  assert.ok(approx(L.computeStats(13, 0, 20, 0, 18).hp, 2111)); // Tank
-  assert.ok(approx(L.computeStats(20, 0, 0, 13, 18).hp, 1481)); // Carry
+  assert.ok(approx(L.computeStats(13, 0, 20, 0, 18).hp, 2626)); // Tank
+  assert.ok(approx(L.computeStats(20, 0, 0, 13, 18).hp, 1322)); // Carry
   assert.ok(approx(L.computeStats(0, 0, 13, 20, 18).hp, 1832)); // Mage
-  assert.ok(approx(L.computeStats(13, 20, 0, 0, 18).hp, 1009)); // Assassin
-  assert.ok(approx(L.computeStats(20, 13, 0, 0, 18).hp, 1262)); // Bruiser
+  assert.ok(approx(L.computeStats(13, 20, 0, 0, 18).hp, 984));  // Assassin
+  assert.ok(approx(L.computeStats(20, 13, 0, 0, 18).hp, 1237)); // Bruiser
 });
-test('computeStats : crit/dcrit linéaires', () => {
+test('computeStats : les pourcentages sont LINÉAIRES (jamais escaladés)', () => {
+  // eH(20) = 28.62 : si le crit était escaladé on lirait 291 et non 205.
   const s = L.computeStats(0, 20, 0, 0, 18);
   assert.equal(s.crit, 205);   // 5 + 10*20
   assert.equal(s.dcrit, 270);  // 150 + 6*20
+  // Rés. crit : 3 %/pt de Mental, sur les points bruts → 60 % à 20 points (pas 86 %).
+  assert.equal(L.computeStats(0, 0, 20, 0, 18).rescrit, 60);
 });
-test('computeStats : socle + bonus de départ au niveau 1, caracs nulles', () => {
+test('computeStats : seules Force et Habileté portent AD, Magie et Habileté portent AP', () => {
+  // Le Mental ne donne plus ni AD/AP, ni crit, ni dégâts crit.
+  const m = L.computeStats(0, 0, 20, 0, 1);
+  assert.equal(m.crit, 5);
+  assert.equal(m.dcrit, 150);
+  assert.equal(m.ad, 20);   // fondu seul
+  assert.equal(m.ap, 20);
+  // La Force et la Magie ne donnent plus de dégâts crit.
+  assert.equal(L.computeStats(20, 0, 0, 13, 18).dcrit, 150);
+});
+test('computeStats : Force/Magie donnent 2 AR/RM par point (escaladés) + 1 par niveau', () => {
+  assert.equal(L.computeStats(4, 0, 0, 0, 2).armure, 10);  // 2 (niveau) + 2*4
+  assert.equal(L.computeStats(0, 0, 0, 4, 2).resmag, 10);
+  assert.equal(L.computeStats(0, 0, 0, 0, 18).armure, 18); // socle de niveau seul
+});
+test('computeStats : socle de niveau au niveau 1, caracs nulles', () => {
   const s = L.computeStats(0, 0, 0, 0, 1);
   assert.equal(s.hp, 80);      // 50 universel + 30*1 socle
-  assert.equal(s.mana, 50);    // 50 universel
-  assert.equal(s.armure, 1);   // 1*level
-  assert.equal(s.resmag, 1);   // 1*level
+  assert.equal(s.mana, 65);    // 50 universel + 15*1 socle
+  assert.equal(s.armure, 1);   // 1*level (l'Habileté ne donne plus d'AR/RM)
+  assert.equal(s.resmag, 1);
   assert.equal(s.ad, 20);      // fondu = max(0, 20 - 0)
   assert.equal(s.ap, 20);      // fondu
+  assert.equal(s.rescrit, 0);
 });
-test('computeStats : bonus Habileté plafonné à 5 points', () => {
-  const s = L.computeStats(0, 5, 0, 0, 1);
-  assert.equal(s.hp, 180);     // 80 + 20*min(5,5)
-  assert.equal(s.armure, 6);   // 1*level + 1*min(5,5)
-  assert.equal(s.resmag, 6);
+test('computeStats : bonus de départ Habileté dégressif 25/20/15/10/5, plafonné', () => {
+  // PV cumulés attendus par point d'Habileté (socle 80 au niveau 1).
+  assert.deepEqual([1, 2, 3, 4, 5].map(h => L.computeStats(0, h, 0, 0, 1).hp),
+    [105, 125, 140, 150, 155]);
   // au-delà de 5, le bonus de départ ne grimpe plus
-  assert.equal(L.computeStats(0, 8, 0, 0, 1).hp, 180);
+  assert.equal(L.computeStats(0, 8, 0, 0, 1).hp, 155);
+  // et il ne donne plus ni armure ni rés. magique
+  assert.equal(L.computeStats(0, 5, 0, 0, 1).armure, 1);
+  assert.equal(L.computeStats(0, 5, 0, 0, 1).resmag, 1);
 });
-test('computeStats : pas de Sapience dans la base', () => {
-  assert.equal(L.computeStats(20, 20, 20, 20, 18).sapience, undefined);
+test('computeStats : pas de Sapience ni de léthalité dans la base', () => {
+  const s = L.computeStats(20, 20, 20, 20, 18);
+  assert.equal(s.sapience, undefined);
+  assert.equal(s.letha, undefined);
+  assert.equal(s.lethaMag, undefined);
+});
+test('habSplit : defaut par carac de degats dominante (Force >= Magie -> AD)', () => {
+  assert.deepEqual(L.habSplit(3, 6, 2, null), { ad: 6, ap: 0, mana: 0 });   // Smith F3/C2
+  assert.deepEqual(L.habSplit(1, 6, 4, null), { ad: 0, ap: 6, mana: 0 });   // Jett  F1/C4
+  assert.deepEqual(L.habSplit(0, 4, 0, null), { ad: 4, ap: 0, mana: 0 });   // egalite -> AD
+  assert.deepEqual(L.habSplit(3, 0, 2, null), { ad: 0, ap: 0, mana: 0 });   // aucun point
+});
+test('habSplit : normalise une repartition sur- ou sous-allouee', () => {
+  assert.deepEqual(L.habSplit(3, 6, 2, { ad: 2, ap: 2, mana: 2 }), { ad: 2, ap: 2, mana: 2 });
+  // sur-allocation : servie dans l'ordre ad -> ap -> mana, coupee au budget
+  assert.deepEqual(L.habSplit(3, 6, 2, { ad: 5, ap: 5, mana: 5 }), { ad: 5, ap: 1, mana: 0 });
+  // sous-allocation : le reliquat part sur la destination par defaut, jamais perdu
+  assert.deepEqual(L.habSplit(3, 6, 2, { ad: 2 }),            { ad: 6, ap: 0, mana: 0 });
+  assert.deepEqual(L.habSplit(1, 6, 4, { mana: 2 }),          { ad: 0, ap: 4, mana: 2 });
+  // valeurs negatives ignorees
+  assert.deepEqual(L.habSplit(3, 6, 2, { ad: -5, ap: 6, mana: 0 }), { ad: 0, ap: 6, mana: 0 });
+});
+test('computeStats : un point d\u2019Habilete vaut +5 AD, +5 AP OU +10 Mana', () => {
+  const nu = L.computeStats(0, 0, 0, 0, 1);
+  const d = (sp, k) => L.computeStats(0, 6, 0, 0, 1, sp)[k] - nu[k];
+  // escalade(6) = 6.36 -> chaque point porte un facteur moyen de 1.06
+  assert.equal(d({ ad: 6, ap: 0, mana: 0 }, 'ad'), 32);     // 5 * 6.36
+  assert.equal(d({ ad: 0, ap: 6, mana: 0 }, 'ap'), 32);
+  assert.equal(d({ ad: 0, ap: 0, mana: 6 }, 'mana'), 64);   // 10 * 6.36
+  // le Mana d'Habilete s'ajoute au socle sans toucher AD/AP
+  assert.equal(d({ ad: 0, ap: 0, mana: 6 }, 'ad'), 0);
+});
+test('computeStats : l\u2019escalade est GARANTIE a chaque point (repartir ne coute rien)', () => {
+  const nu = L.computeStats(0, 0, 0, 0, 18);
+  const att = (sp) => (L.computeStats(0, 20, 0, 0, 18, sp).ad - nu.ad)
+                    + (L.computeStats(0, 20, 0, 0, 18, sp).ap - nu.ap);
+  const tout = att({ ad: 20, ap: 0, mana: 0 });
+  // 10/10 doit rendre AUTANT que 20/0 (a l'arrondi pres) : c'est tout l'enjeu du ruling.
+  assert.ok(Math.abs(att({ ad: 10, ap: 10, mana: 0 }) - tout) <= 2);
+  assert.ok(Math.abs(att({ ad: 7, ap: 13, mana: 0 }) - tout) <= 2);
+  // et un point vaut le meme facteur quelle que soit la destination
+  const mana = L.computeStats(0, 20, 0, 0, 18, { mana: 20 }).mana - nu.mana;
+  assert.equal(mana, 2 * tout);   // 10/pt contre 5/pt
+});
+test('computeStats : la repartition ne touche NI le crit NI les degats crit NI les PV', () => {
+  const a = L.computeStats(0, 6, 0, 0, 1, { ad: 6 });
+  const b = L.computeStats(0, 6, 0, 0, 1, { mana: 6 });
+  assert.equal(a.crit, b.crit);
+  assert.equal(a.dcrit, b.dcrit);
+  assert.equal(a.hp, b.hp);      // le bonus de PV de depart suit le TOTAL d'Habilete
+});
+test('charBaseStats : state.habSplit prime, defaut sinon, compat habAd', () => {
+  const char = { attrs: { force: 1, hab: 6, mental: 0, magie: 4 }, level: 1 };
+  // aucune repartition enregistree -> defaut (F1 < C4 -> tout AP)
+  assert.deepEqual(L.charBaseStats(char, null), L.computeStats(1, 6, 0, 4, 1, { ap: 6 }));
+  // state.habSplit prime sur le defaut
+  assert.deepEqual(L.charBaseStats(char, { habSplit: { ad: 2, ap: 2, mana: 2 } }),
+    L.computeStats(1, 6, 0, 4, 1, { ad: 2, ap: 2, mana: 2 }));
+  // compat : l'ancienne forme `habAd` (AD seul) est encore relue
+  assert.deepEqual(L.charBaseStats(char, { habAd: 6 }), L.computeStats(1, 6, 0, 4, 1, { ad: 6 }));
 });
 test('charBaseStats : repli char.attrs / override state.attrs', () => {
   const char = { attrs: { force: 4, hab: 3, mental: 4, magie: 1 }, level: 2 };
@@ -620,6 +703,22 @@ test('rollCrit : >= 100 % = crit garanti + paliers de surcrit', () => {
   assert.deepEqual(L.rollCrit(200, 200, () => 0.9), { didCrit: true, tiers: 2, multiplier: 2.5 });
   assert.deepEqual(L.rollCrit(250, 200, () => 0.9), { didCrit: true, tiers: 2, multiplier: 2.5 });
   assert.deepEqual(L.rollCrit(250, 200, () => 0.1), { didCrit: true, tiers: 3, multiplier: 3 });
+});
+test('critMultAfterResist : réduit la part AU-DESSUS de 100 %', () => {
+  // exemple du MJ : crit à 150 %, 15 % de rés. crit → 142,5 %
+  assert.ok(approx(L.critMultAfterResist(1.5, 15), 1.425, 1e-9));
+  assert.ok(approx(L.critMultAfterResist(1.5, 60), 1.2, 1e-9));
+  // vaut aussi pour les paliers de surcrit : 250 % − 60 % → 1 + 1,5*0,4
+  assert.ok(approx(L.critMultAfterResist(2.5, 60), 1.6, 1e-9));
+});
+test('critMultAfterResist : un crit ne fait JAMAIS moins que le coup normal', () => {
+  assert.equal(L.critMultAfterResist(1.5, 100), 1);
+  assert.equal(L.critMultAfterResist(1.5, 250), 1);   // rés. bornée à 100 %
+  assert.equal(L.critMultAfterResist(1.5, -30), 1.5); // rés. négative ignorée
+});
+test('critMultAfterResist : sans crit (×1), rien à réduire', () => {
+  assert.equal(L.critMultAfterResist(1, 50), 1);
+  assert.equal(L.critMultAfterResist(undefined, 50), 1);
 });
 test('rollCrit : espérance §6.3 (sanity, tolérance)', () => {
   let sum = 0, n = 4000;

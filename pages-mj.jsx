@@ -533,7 +533,7 @@ function NpcStatGenerator({ enemy, onUpdate }) {
       </div>
       <div className="mono faint" style={{ fontSize:10.5, lineHeight:1.5 }}>
         PV {preview.hpMax} · Mana {preview.manaMax} · Atq {preview.atk} · Arm {preview.armure} ·
-        RM {preview.resmag} · Crit {preview.crit}% · DCrit {preview.dcrit}%
+        RM {preview.resmag} · Crit {preview.crit}% · DCrit {preview.dcrit}% · RCrit {preview.rescrit}%
       </div>
       <button className="btn btn-sm btn-gold" style={{ alignSelf:'flex-start' }}
         onClick={() => {
@@ -544,7 +544,7 @@ function NpcStatGenerator({ enemy, onUpdate }) {
         Appliquer aux champs
       </button>
       <span className="faint" style={{ fontSize:10 }}>
-        Écrase PV, mana, attaque, armure, rés. mag., crit et dég. crit. L'attaque prend la
+        Écrase PV, mana, attaque, armure, rés. mag., crit, dég. crit et rés. crit. L'attaque prend la
         plus élevée de AD/AP. Au-delà de 20 points, l'escalade passe en zone PNJ.
       </span>
     </div>
@@ -595,6 +595,7 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack, stampKo }) {
           {field('Rés. magique', 'resmag')}
           {field('% Crit', 'crit')}
           {field('% Dég. Crit', 'dcrit')}
+          {field('% Rés. Crit', 'rescrit')}
           {field('Léth. phys.', 'lethaAD')}
           {field('Léth. mag.', 'lethaAP')}
         </div>
@@ -659,14 +660,30 @@ function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
   const baseAtk = Math.max(0, enemy.atk || 0);
   // Crit roulé par l'app à l'ouverture (mirroir du flux joueur). Le MJ ajuste le montant si besoin.
   const [cr, setCr] = useState(() => rollCrit(enemy.crit || 0, enemy.dcrit || 200));
-  const critAtk = Math.round(baseAtk * cr.multiplier);
-  const [amount, setAmount] = useState(String(cr.didCrit ? critAtk : baseAtk));
   const [type, setType] = useState('physique');
   const [lethaAD, setLethaAD] = useState(String(enemy.lethaAD != null ? enemy.lethaAD : (enemy.letha || 0)));
   const [lethaAP, setLethaAP] = useState(String(enemy.lethaAP || 0));
   const [targetId, setTargetId] = useState(CHARACTERS[0] ? CHARACTERS[0].id : '');
+  // Résistance critique de la CIBLE (PJ via ses stats effectives, PNJ via son champ).
+  // La cible est modifiable dans ce modal : la suggestion doit suivre le changement.
+  const tgtRescrit = (() => {
+    const npc = (enemies || []).find(x => x.id === targetId);
+    if (npc) return npc.rescrit || 0;
+    const c = CHARACTERS.find(x => x.id === targetId);
+    if (!c) return 0;
+    const L = mjLive(c, stOf(c.id), turn);
+    return (L.eff && L.eff.rescrit) || 0;
+  })();
+  const redMult = critMultAfterResist(cr.multiplier, tgtRescrit);
+  const critAtk = Math.round(baseAtk * redMult);
+  const suggested = cr.didCrit ? critAtk : baseAtk;
+  const [amount, setAmount] = useState(String(suggested));
+  // Le champ suit la suggestion tant que le MJ n'y a pas touché ; dès qu'il saisit son
+  // d20 ajusté, on ne l'écrase plus (changer de cible ne doit pas effacer sa saisie).
+  const [touched, setTouched] = useState(false);
+  useEffect(() => { if (!touched) setAmount(String(suggested)); }, [suggested, touched]);
   const info = critInfo(enemy.crit || 0);
-  const reroll = () => { const n = rollCrit(enemy.crit || 0, enemy.dcrit || 200); setCr(n); setAmount(String(n.didCrit ? Math.round(baseAtk * n.multiplier) : baseAtk)); };
+  const reroll = () => { setCr(rollCrit(enemy.crit || 0, enemy.dcrit || 200)); setTouched(false); };
 
   const submit = () => {
     const raw = Math.max(0, parseInt(amount, 10) || 0);
@@ -679,7 +696,7 @@ function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
     if (npc) {
       const r = applyHitToEnemy(npc, raw, type, lethaNum);
       if (stampKo) stampKo(npc.id, npc.hpCur, r.hpCur);
-      const critTagN = cr.didCrit ? ' 🎲 CRIT' : '';
+      const critTagN = cr.didCrit ? (' 🎲 CRIT' + (tgtRescrit > 0 ? ` −${tgtRescrit}% R.Crit` : '')) : '';
       const lethaTagN = lethaNum > 0 ? `, léth. ${type === 'magique' ? 'mag.' : 'phys.'} ${lethaNum}` : '';
       const selfTag = npc.id === enemy.id ? ' (sur lui-même)' : '';
       toast(`<b>${enemy.name}</b> inflige <b>${r.applied}</b> (${type}${critTagN}) à <b>${npc.name}</b>${selfTag}${r.hpCur === 0 ? ' — KO !' : ''}`,
@@ -706,7 +723,7 @@ function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
         if (gp.glaciation != null) pushLog(`<b>${c.name}</b> gagne une charge de Glaciation (${gp.glaciation}/5)`, 'buff');
       }
     }
-    const critTag = cr.didCrit ? ' 🎲 CRIT' : '';
+    const critTag = cr.didCrit ? (' 🎲 CRIT' + (tgtRescrit > 0 ? ` −${tgtRescrit}% R.Crit` : '')) : '';
     const lethaTag = lethaNum > 0 ? `, léth. ${type === 'magique' ? 'mag.' : 'phys.'} ${lethaNum}` : '';
     toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}${critTag}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
       res.ko ? 'debuff' : 'gold');
@@ -721,7 +738,10 @@ function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
         <div className="row gap-2 wrap" style={{ alignItems:'center', fontSize:11, color:'var(--ink-faint)' }}>
           <span>Base : <b>{baseAtk}</b></span>
           {cr.didCrit
-            ? <span className="mono" style={{ color:'var(--skillbuff)' }}>🎲 CRIT ×{cr.multiplier.toFixed(2)} → <b>{critAtk}</b></span>
+            ? <span className="mono" style={{ color:'var(--skillbuff)' }}>
+                🎲 CRIT ×{cr.multiplier.toFixed(2)}
+                {tgtRescrit > 0 && <span className="faint"> − R.Crit {tgtRescrit}% → ×{redMult.toFixed(2)}</span>} → <b>{critAtk}</b>
+              </span>
             : <span className="mono faint">pas de crit</span>}
           <span className="faint">%Crit {enemy.crit || 0}{info.guaranteedTiers ? ` · ${info.guaranteedTiers} palier(s) garanti(s)` : ''}{info.extraChancePct ? ` · +${info.extraChancePct}%` : ''}</span>
           <button className="btn btn-sm btn-ghost" onClick={reroll} title="Relancer le jet de crit" style={{ padding:'2px 8px', fontSize:11 }}>🎲 relancer</button>
@@ -729,7 +749,7 @@ function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
         <div className="row gap-2" style={{ alignItems:'flex-end' }}>
           <label className="col" style={{ gap:4, flex:1 }}>
             <span className="overline">Dégâts</span>
-            <input style={ENEMY_FLD} value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
+            <input style={ENEMY_FLD} value={amount} onChange={e => { setTouched(true); setAmount(e.target.value); }} autoFocus />
           </label>
           <label className="col" style={{ gap:4, width:84 }} title="Léthalité physique — réduit l'armure de la cible (dégât physique)">
             <span className="overline" style={{ color: type === 'physique' ? 'var(--stat-phys)' : undefined }}>Léth. phys.</span>
@@ -785,7 +805,14 @@ function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
    de toucher) + type + léthalité + appliquer/rejeter. */
 function PendingHitRow({ hit, enemies, onApply, onReject }) {
   const enemy = enemies.find(e => e.id === hit.targetId);
-  const rolled = hit.didCrit ? (hit.critDmg != null ? hit.critDmg : hit.computedDmg) : hit.computedDmg;
+  // Résistance critique de la CIBLE, appliquée ici et pas au cast : le crit est roulé
+  // côté joueur, mais seul le MJ voit la fiche de l'ennemi visé (§ refonte 2026-09-04).
+  // Elle ne rogne que la part de dégâts au-dessus du coup normal.
+  const rescrit = (enemy && enemy.rescrit) || 0;
+  const critMult = hit.critMult || 1;
+  const redMult = critMultAfterResist(critMult, rescrit);
+  const critShown = hit.didCrit ? Math.round((hit.computedDmg || 0) * redMult) : null;
+  const rolled = hit.didCrit ? critShown : hit.computedDmg;
   const [dmg, setDmg] = useState(String(rolled || 0));
   const [type, setType] = useState(hit.type || 'physique');
   // Deux léthalités snapshotées au cast ; le champ visible suit le type choisi par le MJ
@@ -803,12 +830,15 @@ function PendingHitRow({ hit, enemies, onApply, onReject }) {
       <div className="row" style={{ justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
         <span style={{ fontSize:13 }}><b className="gold">{hit.attackerName}</b> · {hit.skillName} → <b>{enemy ? enemy.name : '— cible disparue —'}</b></span>
         {hit.didCrit
-          ? <span className="mono" style={{ fontSize:11, color:'var(--skillbuff)' }}>🎲 CRIT ×{(hit.critMult || 1).toFixed(2)}</span>
+          ? <span className="mono" style={{ fontSize:11, color:'var(--skillbuff)' }}>
+              🎲 CRIT ×{critMult.toFixed(2)}
+              {rescrit > 0 && <span className="faint"> − R.Crit {rescrit}% → ×{redMult.toFixed(2)}</span>}
+            </span>
           : <span className="mono faint" style={{ fontSize:11 }}>normal</span>}
       </div>
       <div className="row gap-2 wrap" style={{ fontSize:11, color:'var(--ink-faint)' }}>
         <span>Base : <b>{hit.computedDmg}</b></span>
-        {hit.critDmg != null && <span>Crit : <b>{hit.critDmg}</b></span>}
+        {critShown != null && <span>Crit : <b>{critShown}</b>{rescrit > 0 && <span className="faint"> (brut {hit.critDmg})</span>}</span>}
         <span>%Crit {hit.crit || 0}{info.guaranteedTiers ? ` · ${info.guaranteedTiers} palier(s) garanti(s)` : ''}{info.extraChancePct ? ` · +${info.extraChancePct}%` : ''}</span>
       </div>
       <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>

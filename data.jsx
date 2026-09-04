@@ -36,10 +36,10 @@ const LEVELS = [
 
 /* --- Attributs principaux et sous-stats dérivées (page Progression) --- */
 const ATTRIBUTES = [
-  { key:'force', name:'Force',          color:'var(--hp)',     sub:['+20 AD / pt', '+20 PV / pt', '+4 Armure / pt', '+2 D.Crit / pt'] },
-  { key:'hab',   name:'Habileté',       color:'var(--gold)',   sub:['+8 AD / pt', '+8 AP / pt', '+10% Crit / pt', '+6 D.Crit / pt', 'Départ : +20 PV/+1 Arm/+1 RM (max 5 pts)'] },
-  { key:'mental',name:'Mental',         color:'var(--buff)',   sub:['+42 PV / pt', '+38 Mana / pt', '+3 AD/AP / pt', '+2% Crit / pt'] },
-  { key:'magie', name:'Magie/Cosmique', color:'var(--silver)', sub:['+20 AP / pt', '+20 PV / pt', '+17 Mana / pt', '+4 Rés. Mag / pt', '+2 D.Crit / pt'] },
+  { key:'force', name:'Force',          color:'var(--hp)',     sub:['+25 AD / pt', '+20 PV / pt', '+5 Mana / pt', '+2 Armure / pt'] },
+  { key:'hab',   name:'Habileté',       color:'var(--gold)',   sub:['Au choix / pt : +5 AD, +5 AP ou +10 Mana', '+10% Crit / pt', '+6 D.Crit / pt', 'Départ : +25/20/15/10/5 PV (max 5 pts)'] },
+  { key:'mental',name:'Mental',         color:'var(--buff)',   sub:['+60 PV / pt', '+20 Mana / pt', '+3% Rés. Crit / pt'] },
+  { key:'magie', name:'Magie/Cosmique', color:'var(--silver)', sub:['+25 AP / pt', '+10 PV / pt', '+30 Mana / pt', '+2 Rés. Mag / pt'] },
 ];
 
 /* --- Les 16 buffs / débuffs réels --- */

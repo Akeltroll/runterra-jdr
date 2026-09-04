@@ -195,6 +195,7 @@ function EquipBody({ char }) {
     { k:'Rés. Magique', f:'mag',  v:sval('resmag', eff.resmag),       col:scol('resmag') },
     { k:'% Crit',                 v:sval('crit', eff.crit, true),     col:scol('crit')   },
     { k:'% D. Crit',              v:sval('dcrit', eff.dcrit, true),   col:scol('dcrit')  },
+    { k:'% Rés. Crit',            v:sval('rescrit', eff.rescrit, true), col:scol('rescrit') },
     { k:'Léth. phys.',  f:'phys', v:sval('letha', eff.letha),         col:scol('letha')  },
     { k:'Léth. mag.',   f:'mag',  v:sval('lethaMag', eff.lethaMag),   col:scol('lethaMag') },
   ];

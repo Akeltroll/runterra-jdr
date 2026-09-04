@@ -24,18 +24,19 @@ function ResourceStack({ char, eff, hp, mana, shield }) {
 
 /* ---- Grille de stats avec décomposition base / +mod / +stuff ----
    Deux vues commutables : PRINCIPALES (offensif/défensif de base) et SECONDAIRES
-   (léthalités + drains). Les deux vues font 6 cases pour que le panneau ne
-   « saute » pas à la bascule ; la 6e case des secondaires est réservée. */
+   (léthalités + drains + rés. critique). Les deux vues font 6 cases pour que le
+   panneau ne « saute » pas à la bascule (la case réservée du bas ne sert donc plus
+   qu'en cas de vue impaire — la garder pour ça). */
 const STAT_VIEWS = {
   principales: ['ad', 'ap', 'armure', 'resmag', 'crit', 'dcrit'],
-  secondaires: ['letha', 'lethaMag', 'vol', 'sapience', 'omni'],
+  secondaires: ['letha', 'lethaMag', 'rescrit', 'vol', 'sapience', 'omni'],
 };
 function SecondaryStats({ breakdown }) {
   const b = breakdown || {};
   const [view, setView] = useState('principales');
   const items = STAT_VIEWS[view];
   // Stats exprimées en points de % (la sapience EST un %, cf. lifestealHeal).
-  const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'omni' || k === 'vol' || k === 'sapience';
+  const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'rescrit' || k === 'omni' || k === 'vol' || k === 'sapience';
   const detail = (d) => {
     const parts = [];
     if (d.buff)  parts.push(`${d.buff  > 0 ? '+' : ''}${d.buff} buff`);
