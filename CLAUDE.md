@@ -1219,9 +1219,14 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   Spec/plan : `docs/superpowers/{specs,plans}/2026-06-21-seance-recompenses*`.
   **Courbe XP officielle appliquée** (`info-mj/tableau_XP.png`) : `xpToNext = 180+100*level`, cap niveau 18.
 - **Refonte « système hypermétrique »** — `info-mj/SPECIFICATION - Système refondu.md` (livré MJ 2026-06-21).
-  Modèle de stats = **4 caractéristiques** (Force/Habileté/Mental/Magie) → 8 stats dérivées (matrice de poids,
-  escalade anti-aplatissement, socle de niveau, bonus de départ, surcrit, équipement en stats finales, zone PNJ).
-  Découpé en sous-projets. **Fondation = FAITE (2026-06-21, branche `feat/moteur-stats-refondu`)** : `computeStats(F,H,M,C,level)`
+  ⚠️ **SECTION HISTORIQUE** : les chiffres décrits ci-dessous sont ceux de la spec de juin. La
+  **répartition des caracs a été rechiffrée par le MJ le 2026-09-04** (9e stat `rescrit`, Habileté
+  au choix AD/AP/Mana, armure divisée par deux…) — voir « État actuel (2026-09-04) » en tête de
+  fichier, qui **fait foi**. Les cibles de PV du §9 de cette spec ne sont plus valides.
+  Modèle de stats = **4 caractéristiques** (Force/Habileté/Mental/Magie) → 8 stats dérivées à l'époque
+  (matrice de poids, escalade anti-aplatissement, socle de niveau, bonus de départ, surcrit,
+  équipement en stats finales, zone PNJ).
+  Découpé en sous-projets. **Fondation = FAITE (2026-06-21, branche `feat/moteur-stats-refondu`)** : `computeStats` (signature d'alors : `(F,H,M,C,level)`)
   + `escalationFactor` + `charBaseStats` (game-logic, testés §9), bascule de l'app en calcul **live** (fin du
   `char.stats` figé ; 9 fichiers migrés), modèle de données `state/attrs`+`attrsLocked` (lecture seule ici),
   caps `LEVELS` §3, libellés `ATTRIBUTES`, Sapience retirée du socle. Aucune règle RTDB. Spec/plan :

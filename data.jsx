@@ -7,8 +7,9 @@
 const ceil = Math.ceil;
 const mn = Math.min, mx = Math.max;
 
-/* Moteur de stats : voir computeStats(F,H,M,C,level) + charBaseStats dans game-logic.js
-   (refonte « système hypermétrique » — escalade, socle de niveau, bonus de départ). */
+/* Moteur de stats : voir computeStats(F,H,M,C,level,hab) + charBaseStats dans game-logic.js
+   (escalade, socle de niveau, bonus de départ ; `hab` = répartition {ad,ap,mana} des
+   points d'Habileté, cf. habSplit). Répartition rechiffrée par le MJ le 2026-09-04. */
 
 /* --- Table de progression (niveaux 1 → 18) --- */
 /* Point bonus de création (au-dessus du total de niveau). Budget de respec = LEVELS.total + CREATION_BONUS. */
@@ -85,7 +86,9 @@ function mkChar(o) {
 /* Données fidèles aux feuilles : JB→Rathäel, Baptiste→Urskaar, Erwan→Smith,
    Fab→Elias Crowe (id interne 'lunick'), Steph→Jett. Niveau 2 (total 11 + 1 point
    bonus de création = 12, limite 6).
-   HP/Mana max = formules Excel (validées : 495/265, 685/180, 290/310, 520/180, 150/460). */
+   ⚠️ Les PV/Mana ne sont plus ceux des formules Excel (valeurs historiques : 495/265, 685/180,
+   290/310, 520/180, 150/460) : ils sont calculés LIVE par `computeStats` depuis les caracs, et la
+   répartition a été rechiffrée le 2026-09-04. Ne pas s'en servir comme valeurs de référence. */
 /* Portrait réel par perso (id interne → fichier ATH/Perso). Partagé hub + équipement. */
 const PORTRAITS = {
   rathael:'ATH/Perso/Rathael.webp', urskaar:'ATH/Perso/Urskaar.webp',
