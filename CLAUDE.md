@@ -664,18 +664,17 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   ✅ **Résultat vérifié** : le TTK tient dans **±0,3 attaque du niveau 1 au 18** (ADC→ADC : 2.7 puis
   2.8), contre 1.9 → 1.1 avant. C'est le critère qui a permis de déclarer **les attaques de base
   saines** — et donc d'en faire l'**unité de mesure** du calibrage des compétences.
-  ⚠️ **RESTE À FAIRE À LA TABLE (non fait, bloquant pour les joueurs)** :
-  1. **Respec des 5 PJ, à faire EN MJ** : ils ont 12 points placés pour un budget de 10.
-     ⚠️ Dans `ProgressionPage`, `floorAttrs = staff ? {} : savedAttrs` — **le plancher d'un joueur
-     EST sa propre répartition confirmée, il ne peut donc JAMAIS descendre une carac**. Un joueur
-     qui ouvre sa page verra « 12 / 10 » et sera bloqué (ni descendre, ni confirmer). Ni
-     `setAttrsLocked` ni « ↺ Rouvrir au joueur » ne débloquent ce cas (ils gouvernent le verrou de
-     respec et la répartition d'Habileté). **Passer les 5 fiches avant d'annoncer le changement.**
-     Proposition de descente préservant chaque build : §9 de la spec.
-  2. **« ⟲ Combat »** après la respec : PV et Mana courants sont stockés en **absolu**, et le Mana
-     baisse d'environ 25 % pour les gros Mental.
-  3. Prévenir les joueurs qu'ils ont maintenant **deux répartitions** (Habileté AD/AP/Mana et
-     Mental PV/Mana). Le défaut du Mental étant tout-PV, ne rien faire préserve leurs PV exacts.
+  ✅ **BASCULE À LA TABLE FAITE le 2026-09-05** : les 5 PJ ont été respec de 12 → 10 points par le
+  MJ, « ⟲ Combat » passé (recalage des PV/Mana sur les nouveaux caps), et les joueurs sont prévenus
+  qu'ils ont désormais **deux répartitions** (Habileté AD/AP/Mana et Mental PV/Mana). **Le chantier
+  de calibrage est clos** — plus rien à faire dessus, ni en code ni en jeu.
+  ⚠️ **Leçon à garder pour tout futur abaissement de budget** : dans `ProgressionPage`,
+  `floorAttrs = staff ? {} : savedAttrs` — **le plancher d'un joueur EST sa propre répartition
+  confirmée, il ne peut donc JAMAIS descendre une carac**. Si le budget baisse, un joueur voit
+  « N / budget » en solde négatif et se retrouve bloqué (ni descendre, ni confirmer) ; ni
+  `setAttrsLocked` ni « ↺ Rouvrir au joueur » ne débloquent ce cas (ils gouvernent le verrou de
+  respec et la répartition d'Habileté). **Toute baisse de budget exige un passage du MJ sur les
+  5 fiches, AVANT d'annoncer le changement aux joueurs.**
   ⚠️ **Ce qui n'est PAS validé** (§7 de la spec) : le calibrage vaut **en isolation**, sans
   l'équipement (backlog « équipement en stats finales ») ni les runes — or la rune Sadisme donne
   déjà +15 AD/AP. À re-vérifier quand ces sources entreront en jeu. Les duels de tanks restent
