@@ -643,6 +643,30 @@ arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, 
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
 ## État actuel (2026-09-05)
+- **Bouton MJ « ↺ Rouvrir la respec » (`state.attrsOpen`)** — `f4ff3ec`, déployé sur `main`.
+  Cache `20260905-3`, **228 tests verts**, **aucune règle RTDB** (rien ne valide les clés sous
+  `characters/$charId/state`, et le staff a déjà le `.write` sur le nœud), **aucune migration**
+  (`attrsOpen` absent = comportement actuel).
+  **Le défaut corrigé** : le plancher de respec (`floorAttrs = savedAttrs` pour un joueur) le fige
+  dès sa première confirmation — il ne peut plus **descendre** une carac, et une fois tous ses
+  points placés, plus rien ne bouge du tout. Symptôme rapporté par le MJ : « les caractéristiques
+  ne sont plus modifiables après un combat ». ⚠️ **Le combat n'y était pour rien** : `resetCombat`
+  ne touche ni `attrs` ni `attrsLocked` — c'est la confirmation qui gèle, et elle tombe souvent
+  juste après une séance. Se méfier de ce genre de corrélation temporelle dans un rapport de bug.
+  ⚠️ **Et décocher « Verrouillé » (`attrsLocked`) ne levait PAS le plancher** : les deux mécanismes
+  sont distincts (l'un gèle toute la page, l'autre interdit seulement de descendre), or seul le
+  premier avait une commande dans l'UI. Le MJ devait éditer la fiche lui-même depuis son sélecteur
+  de perso. Détail des deux mécanismes : carte de `pages-progression.jsx`.
+  Livré : `setAttrsOpen` (data-state) + `attrsOpen: null` dans le patch de `setAttrs` (la fenêtre se
+  referme à la confirmation suivante) + bouton staff dans l'en-tête du panneau Caractéristiques —
+  calqué sur `habSplitOpen`/`mentalSplitOpen`, drapeau **séparé** pour les mêmes raisons qu'eux.
+  ⚠️ **Rouvrir la respec lève AUSSI les planchers des deux répartitions**, sans quoi le joueur
+  tombe dans une impasse : baisser une carac rogne la répartition dérivée via `clampSplitDraft`,
+  qui coupe dans un **ordre fixe** (mana → ap → ad), et avec le plancher maintenu tous les « − »
+  sont désactivés — il resterait figé sur une coupe qu'il n'a pas choisie.
+  🐞 Ramassé au passage : « Réinitialiser » oubliait `setDraftMent` (le brouillon du Mental).
+  ⚠️ Confort d'UI, **pas une sécurité** — comme les deux autres drapeaux : rien n'est validé sous
+  `characters/$charId/state`, un joueur peut déjà écrire ses `attrs` à la console.
 - **Calibrage des attaques de base — 4 décisions livrées et DÉPLOYÉES sur `main`**
   (`a7e6cba` spec, `eb0e77e` A/B/C, `71417c5` D). Cache `20260905-2`, **228 tests verts**
   (game-logic 217 + auth 11), **aucune règle RTDB à republier**, **aucune migration de données**.
@@ -1378,7 +1402,8 @@ prédéfinies par compétence, ou pool de points libre ?).
   testés), crit roulé au cast, **léthalité** branchée (`mitigateDamage`←`applyHitToEnemy`, snapshot au cast, éditable MJ),
   attaque de base unifiée. Aucune règle RTDB. Spec/plan : `docs/superpowers/{specs,plans}/2026-06-22-combat-refondu*`.
   **Respec joueur = FAIT et déployé** (onglet Progression, voir plus haut : budget `LEVELS.total+CREATION_BONUS`,
-  caps `LEVELS.limit`, verrou unique joueur + (dé)verrouillage staff ; `setAttrs`/`setAttrsLocked`,
+  caps `LEVELS.limit`, verrou unique joueur + (dé)verrouillage staff + réouverture du plancher
+  (`setAttrsOpen`) ; `setAttrs`/`setAttrsLocked`,
   `attrSum`/`respecValid` testés). **Reste** (sous-projets séparés) : (1) **équipement en stats finales**
   (armes 3 paliers + 18 armures §7) ; (2) **zone PNJ/divine** (escalade quadratique >20 §8 ;
   `escalationFactor` gère déjà >20). **Crit/léthalité ennemi→joueur = FAIT (2026-06-22)** : `makeEnemy`
