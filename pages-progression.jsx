@@ -117,7 +117,7 @@ function ProgressionPage({ lockedCharId }) {
   const staff = !lockedCharId;
   const [charId, setCharId] = useState(lockedCharId || 'rathael');
   const char = CHARACTERS.find(c => c.id === charId);
-  const { state, setAttrs, setAttrsLocked, setHabSplitOpen, setMentalSplitOpen } = useCharState(charId);
+  const { state, setAttrs, setAttrsLocked, setAttrsOpen, setHabSplitOpen, setMentalSplitOpen } = useCharState(charId);
 
   const effLevel = (state && state.level != null ? state.level : char.level) || 1;
   const lvlRow = LEVELS.find(l => l.lvl === effLevel) || LEVELS[LEVELS.length - 1];
@@ -126,6 +126,11 @@ function ProgressionPage({ lockedCharId }) {
   const savedAttrs = (state && state.attrs) || char.attrs;
   const locked = !!(state && state.attrsLocked);
   const canEdit = staff || !locked;
+  // Drapeau MJ : suspend le plancher de respec du joueur (ses caracs déjà confirmées).
+  // ⚠ Distinct de `locked`, et même inverse : `locked` gèle TOUTE la page (le joueur ne
+  // peut même plus placer ses nouveaux points), `attrsOpen` ne fait que lever le plancher.
+  // Décocher « Verrouillé » ne rend donc PAS la respec — c'est ce drapeau-ci qui la rend.
+  const attrsOpen = !!(state && state.attrsOpen);
 
   // Répartition AD/AP de l'Habileté (5 AD OU 5 AP par point). `state.habAd` n'existe
   // que si le joueur l'a CONFIRMÉE : tant qu'elle est absente, `habSplit` applique son
@@ -161,8 +166,9 @@ function ProgressionPage({ lockedCharId }) {
 
   const view = canEdit ? draft : savedAttrs;          // valeurs affichées (brouillon si éditable)
   // Plancher par caracs : un joueur ne peut JAMAIS descendre sous ses valeurs déjà confirmées
-  // (montée au level-up uniquement). Le staff garde la main totale (plancher 0).
-  const floorAttrs = staff ? {} : savedAttrs;
+  // (montée au level-up uniquement). Le staff garde la main totale (plancher 0), et le MJ
+  // peut rendre ponctuellement la main au joueur (bouton « ↺ Rouvrir la respec »).
+  const floorAttrs = (staff || attrsOpen) ? {} : savedAttrs;
   const sum = attrSum(view);
   const remaining = budget - sum;
   const attrsValid = respecValid(view, budget, cap, floorAttrs);
@@ -170,8 +176,13 @@ function ProgressionPage({ lockedCharId }) {
   // ne peut pas RE-router des points déjà confirmés, il ne place que les nouveaux ; le
   // staff garde la main totale. Sans répartition confirmée, aucun plancher — sinon un
   // défaut deviné deviendrait un choix imposé.
-  const splitFloors = (staff || !hasSplit || splitOpen) ? null : savedSplit;
-  const mentFloors = (staff || !hasMent || mentOpen) ? null : savedMent;
+  // ⚠ Rouvrir la respec lève AUSSI les planchers des deux répartitions : baisser une
+  // carac rogne mécaniquement la répartition dérivée (`clampSplitDraft` coupe dans un
+  // ordre fixe), et un plancher maintenu figerait le joueur sur une coupe qu'il n'a pas
+  // choisie et ne pourrait plus corriger. Les deux boutons dédiés restent là pour le cas
+  // étroit : rendre une répartition sans rendre la respec.
+  const splitFloors = (staff || !hasSplit || splitOpen || attrsOpen) ? null : savedSplit;
+  const mentFloors = (staff || !hasMent || mentOpen || attrsOpen) ? null : savedMent;
   // Bornée sur l'Habileté du BROUILLON : baisser l'Habileté rogne la répartition,
   // la monter laisse les nouveaux points « à placer ».
   const split = clampSplitDraft(draftSplit, view.hab);
@@ -199,6 +210,15 @@ function ProgressionPage({ lockedCharId }) {
     });
   };
 
+  // Rouvre la RESPEC des caracs du joueur (staff). Utile quand un joueur s'est trompé,
+  // ou quand une baisse de budget le laisse en solde négatif : il ne peut alors ni
+  // descendre (plancher) ni confirmer (somme invalide), donc plus rien ne bouge.
+  const reopenAttrs = () => {
+    setAttrsOpen(!attrsOpen);
+    toast(attrsOpen
+      ? `<b>${char.name}</b> — respec refermée`
+      : `<b>${char.name}</b> — respec rouverte au joueur`, attrsOpen ? 'gold' : 'buff');
+  };
   // Rouvre la répartition d'Habileté du joueur (staff). Utile quand un joueur s'est
   // trompé, ou quand une refonte de règles rend son placement caduc.
   const reopenSplit = () => {
@@ -250,10 +270,20 @@ function ProgressionPage({ lockedCharId }) {
         <div className="col gap-5">
           <div className="panel">
             <div className="panel-head"><h3>Caractéristiques</h3>
-              <span className="mono faint" style={{ fontSize:11 }}>
-                {sum} / {budget} pts
-                <span style={{ color: remaining === 0 ? 'var(--buff)' : (remaining < 0 ? 'var(--debuff-bright)' : 'var(--gold-bright)'), fontWeight:700 }}> · {remaining} restant{Math.abs(remaining) > 1 ? 's' : ''}</span>
-                {` · limite ${cap}`}
+              <span className="row gap-2" style={{ alignItems:'center' }}>
+                {staff && attrSum(savedAttrs) > 0 && (
+                  <button className="btn btn-sm btn-ghost" onClick={reopenAttrs}
+                    title={attrsOpen ? 'Refermer : le joueur ne pourra plus descendre sous ses valeurs confirmées'
+                                     : 'Rendre au joueur une redistribution libre de ses caractéristiques déjà confirmées'}
+                    style={{ padding:'2px 8px', fontSize:10.5, color: attrsOpen ? 'var(--buff)' : undefined }}>
+                    {attrsOpen ? '🔓 Rouverte' : '↺ Rouvrir la respec'}
+                  </button>
+                )}
+                <span className="mono faint" style={{ fontSize:11 }}>
+                  {sum} / {budget} pts
+                  <span style={{ color: remaining === 0 ? 'var(--buff)' : (remaining < 0 ? 'var(--debuff-bright)' : 'var(--gold-bright)'), fontWeight:700 }}> · {remaining} restant{Math.abs(remaining) > 1 ? 's' : ''}</span>
+                  {` · limite ${cap}`}
+                </span>
               </span>
             </div>
 
@@ -264,7 +294,9 @@ function ProgressionPage({ lockedCharId }) {
             )}
             {canEdit && !staff && attrSum(savedAttrs) > 0 && (
               <div className="faint" style={{ fontSize:12, padding:'10px 18px 0', lineHeight:1.5 }}>
-                Tu peux ajouter des points, mais pas descendre sous tes valeurs déjà confirmées.
+                {attrsOpen
+                  ? "🔓 Le MJ a rouvert ta respec : tu peux redistribuer tous tes points (répartitions comprises) jusqu'à ta prochaine confirmation."
+                  : 'Tu peux ajouter des points, mais pas descendre sous tes valeurs déjà confirmées.'}
               </div>
             )}
 
@@ -322,7 +354,7 @@ function ProgressionPage({ lockedCharId }) {
 
             {canEdit && (
               <div className="row" style={{ justifyContent:'flex-end', gap:10, padding:'0 18px 16px', alignItems:'center' }}>
-                <button className="btn btn-sm btn-ghost" onClick={() => { setDraft(savedAttrs); setDraftSplit(savedSplit); }} disabled={!dirty}>Réinitialiser</button>
+                <button className="btn btn-sm btn-ghost" onClick={() => { setDraft(savedAttrs); setDraftSplit(savedSplit); setDraftMent(savedMent); }} disabled={!dirty}>Réinitialiser</button>
                 <button className="btn btn-gold" onClick={confirm} disabled={!valid || !dirty}
                   title={!valid ? (attrsValid ? `Place tes ${splitLeft} point(s) d'Habileté`
                     : `Répartis exactement ${budget} points`) : ''}>Confirmer</button>

@@ -58,7 +58,7 @@ function useCharState(charId) {
       force: Math.max(0, a.force | 0), hab: Math.max(0, a.hab | 0),
       mental: Math.max(0, a.mental | 0), magie: Math.max(0, a.magie | 0),
     };
-    const patch = { attrs: clean, attrsLocked: locked ? true : null };
+    const patch = { attrs: clean, attrsLocked: locked ? true : null, attrsOpen: null };
     if (split) {
       patch.habSplit = habSplit(clean.force, clean.hab, clean.magie, split);
       patch.habAd = null;
@@ -86,10 +86,21 @@ function useCharState(charId) {
      `habSplitOpen` : le MJ doit pouvoir rendre l'une sans rendre l'autre. */
   const setMentalSplitOpen = useCallback((open) =>
     window.RTDB.updatePath(charPath(charId), { mentalSplitOpen: open ? true : null }), [charId]);
+  /* Rouvre (ou referme) la RESPEC des caractéristiques elles-mêmes. Même mécanisme et
+     même drapeau-esprit que `habSplitOpen`/`mentalSplitOpen`, mais drapeau SÉPARÉ : le
+     plancher des caracs et celui des répartitions ne se lèvent pas pour les mêmes raisons.
+     ⚠️ À ne pas confondre avec `attrsLocked`, qui est l'inverse et un cran plus dur :
+     `attrsLocked` gèle TOUTE la page (le joueur ne peut même plus placer ses nouveaux
+     points), `attrsOpen` ne fait que suspendre le plancher « pas en dessous de tes valeurs
+     déjà confirmées ». Décocher `attrsLocked` ne rend donc PAS la respec — c'est ce
+     drapeau-ci qui la rend. Refermé automatiquement à la confirmation suivante (cf.
+     `attrsOpen: null` dans le patch de `setAttrs`). */
+  const setAttrsOpen = useCallback((open) =>
+    window.RTDB.updatePath(charPath(charId), { attrsOpen: open ? true : null }), [charId]);
   const setAttrsLocked = useCallback((locked) =>
     window.RTDB.updatePath(charPath(charId), { attrsLocked: locked ? true : null }), [charId]);
   return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment,
-    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked, setHabSplitOpen, setMentalSplitOpen };
+    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked, setAttrsOpen, setHabSplitOpen, setMentalSplitOpen };
 }
 
 /* Compteur de tour PARTAGÉ (combat). Écriture staff (règle RTDB combat/turn).

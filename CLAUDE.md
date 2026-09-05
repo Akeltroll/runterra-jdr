@@ -426,6 +426,13 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   CREATION_BONUS`, cap = `LEVELS.limit`, plancher 0 ; **aperçu live** des stats résultantes (`computeStats`).
   **Verrou** : un joueur respec **une fois** → `setAttrs(draft,true)` (écrit `attrs`+`attrsLocked`) ; le staff
   édite librement + (dé)verrouille (`setAttrsLocked`). Logique pure `attrSum`/`respecValid` (game-logic, testées).
+  ⚠️ **Deux mécanismes DISTINCTS, souvent confondus** : `attrsLocked` (case « Verrouillé ») gèle toute la page ;
+  le **plancher** `floorAttrs = (staff || attrsOpen) ? {} : savedAttrs` interdit de *descendre* une carac déjà
+  confirmée. **Décocher « Verrouillé » ne rend PAS la respec** — c'est le bouton **« ↺ Rouvrir la respec »**
+  (staff, en-tête du panneau Caractéristiques → `setAttrsOpen` → `state.attrsOpen`) qui lève le plancher, sur le
+  modèle exact de `habSplitOpen`/`mentalSplitOpen`. ⚠️ Rouvrir la respec lève **aussi** les planchers des deux
+  répartitions : baisser une carac rogne la répartition dérivée via `clampSplitDraft`, qui coupe dans un ordre
+  fixe — un plancher maintenu figerait le joueur sur une coupe qu'il n'a pas choisie et ne pourrait plus corriger.
 - `pages-lobby.jsx` — **Hub d'accueil** (`HubPage`, onglet « Accueil », **page d'atterrissage de tous les
   rôles** via `defaultRoute → 'lobby'`). Pièce maîtresse : **`CharCarousel`** = carrousel horizontal plat
   (slider) des 5 persos, positionné par `carouselTransforms(count, activeIndex)` (game-logic, pur : carte active
@@ -518,6 +525,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     mentalSplitOpen: true   ← même mécanisme que habSplitOpen, drapeau SÉPARÉ (setMentalSplitOpen) : le MJ doit pouvoir rendre une répartition sans rendre l'autre
     habAd:       4   ← LEGACY (forme AD-seul, a vécu une journée) : encore relue par charBaseStats, purgée au prochain « Confirmer »
     attrsLocked: true   ← verrou après respec joueur unique ; le staff peut éditer/déverrouiller (setAttrsLocked)
+    attrsOpen:   true   ← drapeau MJ : suspend le PLANCHER de respec du joueur (ses caracs déjà confirmées) et, avec lui, ceux
+                     des deux répartitions ; posé/retiré par setAttrsOpen (bouton « ↺ Rouvrir la respec », staff), effacé
+                     automatiquement à la confirmation suivante. ⚠️ NE PAS confondre avec attrsLocked, qui est l'inverse et
+                     plus dur : attrsLocked gèle TOUTE la page, attrsOpen ne lève que le plancher — décocher « Verrouillé »
+                     ne rend donc PAS la respec
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
     skillBuffs: { [skillId]: { mods:{ [stat]: n }, until:<n° de tour>|null } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; until = tour de fin (auto-expiration via sumSkillBuffs(buffs,turn), ex. Mur de Givre 1/2 tours), null = permanent ; ancienne forme plate { [stat]:n } encore lue (compat) ; effacés par « ⟲ Combat »
@@ -671,10 +683,11 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   ⚠️ **Leçon à garder pour tout futur abaissement de budget** : dans `ProgressionPage`,
   `floorAttrs = staff ? {} : savedAttrs` — **le plancher d'un joueur EST sa propre répartition
   confirmée, il ne peut donc JAMAIS descendre une carac**. Si le budget baisse, un joueur voit
-  « N / budget » en solde négatif et se retrouve bloqué (ni descendre, ni confirmer) ; ni
-  `setAttrsLocked` ni « ↺ Rouvrir au joueur » ne débloquent ce cas (ils gouvernent le verrou de
-  respec et la répartition d'Habileté). **Toute baisse de budget exige un passage du MJ sur les
-  5 fiches, AVANT d'annoncer le changement aux joueurs.**
+  « N / budget » en solde négatif et se retrouve bloqué (ni descendre, ni confirmer). ⚠️ **Ni
+  `setAttrsLocked` ni « ↺ Rouvrir au joueur » (répartitions) ne débloquent ce cas** — c'est
+  **« ↺ Rouvrir la respec »** (`attrsOpen`, ajouté le 2026-09-05) qui le fait, en levant le plancher.
+  Sinon, toute baisse de budget exige un passage du MJ sur les 5 fiches, AVANT d'annoncer le
+  changement aux joueurs.
   ⚠️ **Ce qui n'est PAS validé** (§7 de la spec) : le calibrage vaut **en isolation**, sans
   l'équipement (backlog « équipement en stats finales ») ni les runes — or la rune Sadisme donne
   déjà +15 AD/AP. À re-vérifier quand ces sources entreront en jeu. Les duels de tanks restent
