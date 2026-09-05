@@ -396,16 +396,18 @@ function CompetencesBody({ char, staff }) {
   const base = charBaseStats(char, state);
   const passiveMods = sumPassiveMods(char.id, counters, level, base);
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);
-  const eff = computeEffective(base, state.modifiers, [], mergeMods(mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods), skillBuffMods));
+  // Buffs de la fiche (Bravoure +50 % AD, Aiguisage %Crit×2, Affaibli −50 % AD…) : ils
+  // DOIVENT entrer dans le eff de cette page, sinon les dégâts affichés — et surtout ceux
+  // envoyés au MJ — ignorent l'effet que le MJ vient d'appliquer. Les 3 autres pages
+  // (fiche, MJ, Équipement) les passent déjà ; cette page était la seule à passer [].
+  const activeBuffs = Object.keys(state.buffs || {});
+  const eff = computeEffective(base, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods), skillBuffMods));
   const wType = weaponTypeOf(state, char);
   const baseCtx = { counters, level, wType, hpMax: base.hp };
   // Setters de ressources : même contrat que la fiche (valeur ou updater), pour que
   // ConsumablesRow soit branchable des deux côtés sans variante.
   const setHp   = (v) => setField('hpCur',   typeof v === 'function' ? v(state.hpCur || 0) : v);
   const setMana = (v) => setField('manaCur', typeof v === 'function' ? v(state.manaCur || 0) : v);
-  // Buffs réels du perso : applyHealMods lit Miraculé/Hémorragie (±50 % soins reçus).
-  // Une potion doit donc rendre ici EXACTEMENT ce qu'elle rendrait sur la fiche.
-  const activeBuffs = Object.keys(state.buffs || {});
   const kitWithId = Object.assign({ _id: char.id }, kit);
 
   function cast(sk, ctx, dmgArg, nbHits) {

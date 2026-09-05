@@ -680,15 +680,19 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   déplace le plafond ; afficher le max de base donnerait une barre à 130 % sur un onglet et pas sur
   l'autre. `ResourceBar` borne à 100 %, donc le cas « `hpCur` > max après expiration d'un buff »
   s'affiche proprement, exactement comme sur la fiche.
-  ⚠️ **`activeBuffs` est passé à `ConsumablesRow`** (`Object.keys(state.buffs)`) alors que le `eff` de la
-  page **ignore les buffs** (`computeEffective(base, mods, [], …)`, cf. ci-dessous) : `applyHealMods` lit
-  Miraculé/Hémorragie (±50 % soins reçus), une potion doit rendre ici **exactement** ce qu'elle rendrait
-  sur la fiche. Ne pas « harmoniser » en passant `[]`.
-  🐞 **Défaut ANTÉRIEUR repéré, NON corrigé (à trancher)** : `CompetencesBody` construit son `eff` avec
-  une liste de buffs **vide** — les buffs de la fiche (Aiguisage = %Crit×2, etc.) ne s'appliquent donc
-  **pas** aux dégâts calculés ni aux attaques envoyées au MJ, alors que la fiche les affiche. Les deux
-  onglets peuvent annoncer des stats différentes pour le même perso. Corriger = passer `activeBuffs` au
-  `computeEffective` de la ligne, mais ça change des dégâts en jeu : décision MJ.
+  ⚠️ **`activeBuffs` est aussi passé à `ConsumablesRow`** : `applyHealMods` lit Miraculé/Hémorragie
+  (±50 % soins reçus), une potion doit rendre ici **exactement** ce qu'elle rendrait sur la fiche.
+  🐞 **CORRIGÉ dans la foulée — les buffs de la fiche ne s'appliquaient PAS à l'onglet Combat** (défaut
+  **antérieur**, présent depuis la création de l'onglet). `CompetencesBody` construisait son `eff` avec
+  une liste de buffs **vide** : Bravoure (+50 % AD), Foi (+50 % AP), Aiguisage (%Crit×2), Affaibli
+  (−50 % AD)… n'entraient **ni** dans les dégâts affichés, **ni** dans les attaques envoyées au MJ ni
+  dans le `rollCrit` du cast — alors que la fiche, la vue MJ et l'Équipement les affichaient. Le MJ
+  appliquait un buff, et le joueur tapait comme si de rien n'était.
+  ⚠️ **C'était bien une anomalie isolée, pas une convention** : les 3 autres appels de `computeEffective`
+  passent `activeBuffs` ; seul celui-ci passait `[]`. Le 4e `[]` (`data-state.jsx`, `resetCombat`) est
+  **délibéré** — il veut les caps de **base**, sans skillBuffs. Ne pas le « corriger » lui.
+  ⚠️ Sans effet sur les jauges du nouveau bandeau : `computeEffective` **exclut hp/mana** des buffs
+  (cohérent avec l'Excel). Sans effet non plus sur `selfBuff`, qui snapshote depuis `base`, pas `eff`.
 
 ## État actuel (2026-09-05)
 - **Bouton MJ « ↺ Rouvrir la respec » (`state.attrsOpen`)** — `f4ff3ec`, déployé sur `main`.
