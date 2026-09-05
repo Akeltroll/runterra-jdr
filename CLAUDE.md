@@ -630,6 +630,57 @@ d'une base propre. Les anciennes branches de fonctionnalité (auth-comptes-roles
 arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, catalogue-editable)
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
+## État actuel (2026-09-05)
+- **Calibrage des attaques de base — 4 décisions livrées et DÉPLOYÉES sur `main`**
+  (`a7e6cba` spec, `eb0e77e` A/B/C, `71417c5` D). Cache `20260905-2`, **228 tests verts**
+  (game-logic 217 + auth 11), **aucune règle RTDB à republier**, **aucune migration de données**.
+  📄 **Spec et source de vérité du calibrage** :
+  `docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md`. Elle contient les
+  matrices de vérification, la démonstration d'un blocage arithmétique (§6, à ne pas rouvrir sans
+  la refaire) et le diagnostic complet des kits (§10).
+  **Le diagnostic qui a tout déclenché** : au niveau 18, un ADC tuait un assassin en **1,1 attaque
+  de base**, et 3 archétypes sur 5 étaient **indiscernables au niveau 2** (12 points, cap 6 →
+  6/6 forcé : un ADC Force/Habileté et un assassin Habileté/Force étaient le MÊME personnage).
+  **A — `LEVELS` recalibré** : budget total ≈ **1,65 × cap**, donc on ne peut plus jamais monter
+  deux caracs au plafond. Niveau 2 = **10 points** (cap 6 → 6/4) ; niveau 18 = 34 (cap 20 → 20/14,
+  inchangé). ⚠️ **C'est le `limit` qui porte la contrainte**, pas le budget : il monte plus
+  lentement qu'avant (13 au niveau 10 contre 14). Baisser l'un sans l'autre ne suffirait pas.
+  **B — escalade** : `escalationFactor` ramenée à **+1 %/pt** (`p × (1 + 0,010·(p−1))`), compensée
+  par **`globalEscalation(total)` = `1 + 0,0049·total`** appliquée dans `computeStats` aux
+  4 magnitudes escaladées et à `hUnit`/`mUnit`. La prime d'un build 2 caracs sur un build 3 caracs
+  tombe de **15 % à 6 %**, le total au niveau 18 en 20/14 restant **identique** (46.2) — d'où
+  l'absence de recalibrage des dégâts. ⚠️ Ne pas remonter l'une sans baisser l'autre.
+  ⚠️ **`globalEscalation` est équivalente à un multiplicateur de niveau** : un joueur place
+  toujours TOUS ses points, donc `total` vaut toujours le budget du niveau. Ne pas promettre aux
+  joueurs qu'un point de Force « boostera leur Magie ».
+  **C — crit** : `5 + 2,5·H` / `150 + 4·H`. ⚠️ Les deux se **multipliant**, l'ancienne paire
+  (`5+10·H` / `150+6·H`) valait **×3,23** de dégâts moyens à 20 d'Habileté contre ×1,02 sans —
+  un multiplicateur de puissance déguisé en aléa, qui donnait à Urskaar le meilleur AD du jeu au
+  niveau 18 (585 contre 357 à Smith) **pour les plus faibles dégâts réels** (453 contre 621).
+  Nouvelle borne **×1,71** (coup critique ×2,30). ⚠️ Corollaire assumé : **le surcrit (seuil 100 %)
+  n'est plus atteignable par les caracs seules**, il passe par l'équipement et les runes.
+  **D — répartition du Mental** : 45 PV + 15 Mana garantis par point, **plus 15 points dirigés**
+  (+15 PV **ou** +15 Mana), persistés dans `state.mentalSplit`. Voir le modèle de données.
+  ✅ **Résultat vérifié** : le TTK tient dans **±0,3 attaque du niveau 1 au 18** (ADC→ADC : 2.7 puis
+  2.8), contre 1.9 → 1.1 avant. C'est le critère qui a permis de déclarer **les attaques de base
+  saines** — et donc d'en faire l'**unité de mesure** du calibrage des compétences.
+  ⚠️ **RESTE À FAIRE À LA TABLE (non fait, bloquant pour les joueurs)** :
+  1. **Respec des 5 PJ, à faire EN MJ** : ils ont 12 points placés pour un budget de 10.
+     ⚠️ Dans `ProgressionPage`, `floorAttrs = staff ? {} : savedAttrs` — **le plancher d'un joueur
+     EST sa propre répartition confirmée, il ne peut donc JAMAIS descendre une carac**. Un joueur
+     qui ouvre sa page verra « 12 / 10 » et sera bloqué (ni descendre, ni confirmer). Ni
+     `setAttrsLocked` ni « ↺ Rouvrir au joueur » ne débloquent ce cas (ils gouvernent le verrou de
+     respec et la répartition d'Habileté). **Passer les 5 fiches avant d'annoncer le changement.**
+     Proposition de descente préservant chaque build : §9 de la spec.
+  2. **« ⟲ Combat »** après la respec : PV et Mana courants sont stockés en **absolu**, et le Mana
+     baisse d'environ 25 % pour les gros Mental.
+  3. Prévenir les joueurs qu'ils ont maintenant **deux répartitions** (Habileté AD/AP/Mana et
+     Mental PV/Mana). Le défaut du Mental étant tout-PV, ne rien faire préserve leurs PV exacts.
+  ⚠️ **Ce qui n'est PAS validé** (§7 de la spec) : le calibrage vaut **en isolation**, sans
+  l'équipement (backlog « équipement en stats finales ») ni les runes — or la rune Sadisme donne
+  déjà +15 AD/AP. À re-vérifier quand ces sources entreront en jeu. Les duels de tanks restent
+  très longs (13 attaques au niveau 18), c'est structurel.
+
 ## État actuel (2026-09-02)
 - **Chantier « gestion des tours » — LES 6 LOTS SONT LIVRÉS** (initiative, créneaux, PNJ alliés,
   UI MJ + UI joueur, assistant de stats PNJ). Cache `20260902-6`, **206 tests verts**
@@ -1194,6 +1245,57 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   (`MOD_STATS`, 11 stats) visible si `cat==='Équipement'`. 39 tests verts.
 
 ## Chantiers en cours / backlog
+
+### 🔜 PROCHAIN CHANTIER — Rééquilibrage des compétences (diagnostic FAIT, décisions à prendre)
+Ouvert le 2026-09-05, à reprendre dans une nouvelle conversation. **Tout le diagnostic est déjà
+chiffré au §10 de `docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md`** — le
+relire AVANT de recommencer une analyse.
+
+**Le socle est prêt** : les attaques de base sont saines et servent d'**unité de mesure**
+(invariante au niveau), et le crit ne fausse plus les comparaisons entre personnages.
+
+**Le constat mesuré** (rotation optimale sur 4 tours, cooldowns et mana inclus, niveau 18) :
+**3 PJ sur 5 n'ont aucune raison de lancer une compétence**, et il leur reste **90-100 % de leur
+mana** en fin de combat. Urskaar ×1.50, Elias ×1.47, Rathael ×1.21, **Smith ×1.04, Jett ×1.00**
+(1.00 = ne fait pas mieux que taper gratuitement).
+
+**Budget cible par archétype, en multiples d'AA** (la moyenne converge, c'est la FORME qui
+distingue) : AD carry 1.4 soutenu / pic 1.8 ; **assassin 0.7 soutenu / pic 4.0 un tour sur quatre** ;
+bruiser 1.3 / 2.2 ; tank 0.8 / 1.6 ; utilitaire 1.0 / 2.5. Moyenne ~1,5 pour les DPS.
+
+**Défauts précis à traiter** :
+- **Jett** : ses 2 comps scalent sur l'**AD** alors qu'il est un build AP. Même en replaçant toute
+  son Habileté en AD, elles restent à **0,37× son attaque de base**. Ses C3/C4 n'existent pas
+  (kits jamais reçus du MJ).
+- **Rathael** : sa C1 (20 mana, **sans CD**) fait **0,57× son attaque de base gratuite**. Elle scale
+  à 40 % sur (Armure + RM), divisé par deux le 2026-09-04. Idem son passif : **+7 points au total à
+  5 charges** au niveau 2. ⚠️ **Divergence à trancher** : le code fait **+10 %/charge**
+  (`sumPassiveMods`), le CLAUDE.md et `data.jsx` annoncent **+5 %**.
+- **Smith** : passif `50 + 0,5 AP` orphelin (×1,72 sur toute la campagne). **Aucun burst** : même en
+  jouant l'enchaînement idéal (Fondu au noir → 3 tours de sournoise furtive), il plafonne à ×1,12 —
+  pour un archétype d'assassin.
+- **Elias** : passif **surpuissant** — `10 + 5(niv−1)` AD par charge × `5 + ⌊(niv−1)/3⌋` charges =
+  **+950 AD au niveau 18** sur un AD de base de 504.
+- ⚠️ **Les constantes plates (`50 +`, `100 +`, `25 +`) sont la cause n°1 du décrochage**, AVANT
+  l'absence de scaling par niveau. Dominantes à bas niveau, noyées à haut niveau. **Preuve** :
+  Urskaar n'a **aucun** scaling de niveau et son ratio comp/AA est **constant à 1,50 du niveau 2
+  au 18**, parce que ses formules sont des multiples purs d'AD. Ne pas partir sur « ajouter du
+  scaling de niveau partout » sans avoir traité les constantes.
+- **Mana non limitant** : les coûts sont dérisoires face aux pools (Jett a 782 de mana pour des
+  sorts à 40-50). À remonter une fois les compétences réparées — arbitrage MJ : « le mana doit être
+  un minimum limitant sinon il perd de son intérêt ».
+- **Jett, incohérence à trancher** : son passif dit que son attaque de base ne fait plus de dégâts
+  (elle crée des cellules), mais la carte « Attaque de base » lui affiche `eff.ap` et le bouton
+  « Attaquer » fonctionne.
+
+**❓ LA question non tranchée par le MJ** : **scaling numérique par niveau OU upgrades de
+compétences au choix du joueur à chaque montée** — le MJ veut **l'un ou l'autre, pas les deux**
+(« scale les nombres + upgrade de compétences risquent de rendre les personnages difficiles à
+équilibrer »). Recommandation déjà formulée : **les upgrades**, parce que le scaling numérique
+existe déjà gratuitement via les stats (cf. Urskaar) et qu'une montée de niveau n'offre aujourd'hui
+**aucun moment de choix** au joueur. Sous-question ouverte : format des upgrades (2-3 options
+prédéfinies par compétence, ou pool de points libre ?).
+
 - **Monnaie : durcissement des règles RTDB + journal** — ✅ **FAIT, publié et validé le 2026-08-21**
   (résultats de la campagne de tests + 2 bugs antérieurs trouvés au passage : **§9.7 et §10** du
   document de reprise). Restent 3 tests secondaires : 7 (réimport de sauvegarde), 8 (ré-amorçage),
@@ -1218,7 +1320,9 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   monnaie vivante, paperdoll, `item.mods` branchés). Reste uniquement de la **saisie de contenu** :
   créer les **armures réelles** avec leur `type` + leurs `mods` (jusqu'ici seuls armes & accessoires
   ont un `type` câblé) — pas de dev, juste remplir `ITEM_CATALOG` / l'éditeur.
-- **Compétences** : **implémentées et déployées** (Elias/Smith/Urskaar/Jett + **Rathael complet C1→C4 + ultime**).
+- **Compétences** : **implémentées et déployées**, mais ⚠️ **DÉSÉQUILIBRÉES — voir « 🔜 PROCHAIN
+  CHANTIER » en tête de ce backlog** (diagnostic chiffré du 2026-09-05). Ce qui suit décrit
+  l'existant, pas un état satisfaisant. (Elias/Smith/Urskaar/Jett + **Rathael complet C1→C4 + ultime**).
   Le passif Rathael (+5%/charge Armure+RM de base) calcule un mod plat depuis les stats de
   base (`sumPassiveMods(...,base)`). Charges Glaciation **automatisées** : +1/coup subi (tout stackable en 1 tour,
   max 5 ; +2/coup pendant Souverain Glacial via `souverainUntil`) ; −3/tour sans dégât (`glaciationDecay`). **À FAIRE
@@ -1243,10 +1347,13 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   Spec/plan : `docs/superpowers/{specs,plans}/2026-06-21-seance-recompenses*`.
   **Courbe XP officielle appliquée** (`info-mj/tableau_XP.png`) : `xpToNext = 180+100*level`, cap niveau 18.
 - **Refonte « système hypermétrique »** — `info-mj/SPECIFICATION - Système refondu.md` (livré MJ 2026-06-21).
-  ⚠️ **SECTION HISTORIQUE** : les chiffres décrits ci-dessous sont ceux de la spec de juin. La
-  **répartition des caracs a été rechiffrée par le MJ le 2026-09-04** (9e stat `rescrit`, Habileté
-  au choix AD/AP/Mana, armure divisée par deux…) — voir « État actuel (2026-09-04) » en tête de
-  fichier, qui **fait foi**. Les cibles de PV du §9 de cette spec ne sont plus valides.
+  ⚠️ **SECTION HISTORIQUE** : les chiffres décrits ci-dessous sont ceux de la spec de juin. Deux
+  refontes sont passées depuis — **2026-09-04** (9e stat `rescrit`, Habileté au choix AD/AP/Mana,
+  armure divisée par deux…) puis **2026-09-05** (courbe de points, escalade locale/globale, crit
+  divisé, répartition du Mental). **Ce qui fait foi aujourd'hui :
+  `docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md` + « État actuel
+  (2026-09-05) » en tête de fichier.** Les cibles de PV du §9 de cette spec ne sont plus valides,
+  ni sa table d'escalade §4.3, ni ses coefficients de crit.
   Modèle de stats = **4 caractéristiques** (Force/Habileté/Mental/Magie) → 8 stats dérivées à l'époque
   (matrice de poids, escalade anti-aplatissement, socle de niveau, bonus de départ, surcrit,
   équipement en stats finales, zone PNJ).
