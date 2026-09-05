@@ -61,9 +61,30 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   ⚠️ **Asymétrie volontaire : la magnitude est escaladée, les POURCENTAGES sont LINÉAIRES**
   (`crit`, `dcrit`, `rescrit` se calculent sur les points BRUTS — les escalader donnerait 86 % de
   rés. crit à 20 Mental au lieu de 60 %). Par point : Force 20 PV/5 Mana/25 AD/**2 Armure** ;
-  Habileté bonus de départ/**au choix par point : +5 AD, +5 AP ou +10 Mana**/10 %Crit/6 %D.Crit ;
-  Mental 60 PV/20 Mana/**3 %Rés.Crit** ;
+  Habileté bonus de départ/**au choix par point : +5 AD, +5 AP ou +10 Mana**/**2,5 %Crit**/**4 %D.Crit** ;
+  Mental **45 PV + 15 Mana garantis, puis 15 points AU CHOIX (+15 PV ou +15 Mana, cf. `mentalSplit`)**/**3 %Rés.Crit** ;
   Magie 10 PV/30 Mana/25 AP/**2 Rés.Mag**. Socle : `50+30·niv` PV, `50+15·niv` Mana, `+1` AR et RM/niveau.
+  ⚠️ **CALIBRAGE DU 2026-09-05 (spec `docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md`,
+  qui FAIT FOI)** : (A) `LEVELS` recalibré, budget total ≈ **1,65 × cap** — on ne peut plus monter deux
+  caracs au plafond (avant, 12 pts et cap 6 forçaient 6/6, si bien qu'un ADC et un assassin étaient le
+  MÊME perso au niveau 2) ; (B) `escalationFactor` ramenée à **+1 %/pt**, compensée par
+  **`globalEscalation(total)` à +0,49 %/pt** — la prime d'un build 2 caracs sur un build 3 caracs tombe
+  de 15 % à 6 %, le total au niveau 18 en 20/14 restant identique (46.2) ; (C) crit **`5+2,5·H`** /
+  dcrit **`150+4·H`** (au lieu de `5+10·H` / `150+6·H`) — les deux se multipliant, l'ancienne paire
+  valait **×3,23** de dégâts moyens à 20 d'Habileté contre ×1,02 sans, ce qui donnait à Urskaar le
+  meilleur AD du jeu au niveau 18 pour **les plus faibles dégâts réels**. Nouvelle borne ×1,71
+  (coup critique ×2,30). Corollaire : **le surcrit (seuil 100 %) n'est plus atteignable par les caracs
+  seules** — il passe par l'équipement et les runes.
+  ⚠️ **`mentalSplit` absent = défaut TOUT EN PV**, et c'est ce qui rend la décision D indolore :
+  45 + 15 = 60, l'ancien coefficient → **les PV des persos existants ne bougent pas d'un point** et la
+  matrice de TTK de la spec reste valide sans migration. Seul le Mana baisse de 25 %. Le total par point
+  passe de 80 à 75 : la flexibilité se paie de 5 Mana, c'est voulu. **Ne pas changer ce défaut sans
+  re-vérifier la matrice.** Même ruling que l'Habileté : escalade distribuée au prorata → répartir ne
+  coûte rien.
+  ⚠️ **Chaîne de résolution d'une attaque, à connaître pour tout calibrage** :
+  `affiché × crit × 0,625 (d20) × (1 − AR/(AR+120))`. Le **facteur d20 vaut 0,625** (1-5 échec,
+  6-10 demi, 11-20 plein). Une attaque de base retire ~20-25 % des PV d'un pair ; le TTK tient dans
+  ±0,3 attaque du niveau 1 au 18. **L'AA est l'unité de mesure du calibrage des compétences.**
   ⚠️ Les cibles de PV du **§9 de la spec hypermétrique ne sont plus valides** (le test les a
   remplacées par un verrou de non-régression du nouveau modèle, pas une preuve de conformité).
   **`critMultAfterResist(multiplier, rescritPct)`** (pure, testée) = application de la **résistance
@@ -492,6 +513,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     habSplit:    { ad, ap, mana }   ← répartition des points d'Habileté (+5 AD / +5 AP / +10 Mana par point) ; onglet Progression, écrit par setAttrs EN MÊME TEMPS que attrs (cohérence somme <= hab)
                      ABSENT = jamais confirmé → défaut par carac dominante (habSplit, game-logic)
     habSplitOpen: true   ← drapeau MJ : suspend le plancher du joueur pour lui rendre UNE redistribution libre de ses points d'Habileté déjà placés ; posé/retiré par setHabSplitOpen (bouton « ↺ Rouvrir au joueur », staff), effacé automatiquement à la confirmation suivante
+    mentalSplit: { hp, mana }   ← répartition de la part DIRIGÉE du Mental (2026-09-05) : chaque point donne 45 PV + 15 Mana garantis, PLUS 15 points au choix (+15 PV ou +15 Mana) ; onglet Progression, écrit par setAttrs EN MÊME TEMPS que attrs
+                     ABSENT = jamais confirmé → défaut TOUT EN PV (= 60 PV/pt, l'ancien coefficient) : les PV des persos existants ne bougent pas, aucune migration
+    mentalSplitOpen: true   ← même mécanisme que habSplitOpen, drapeau SÉPARÉ (setMentalSplitOpen) : le MJ doit pouvoir rendre une répartition sans rendre l'autre
     habAd:       4   ← LEGACY (forme AD-seul, a vécu une journée) : encore relue par charBaseStats, purgée au prochain « Confirmer »
     attrsLocked: true   ← verrou après respec joueur unique ; le staff peut éditer/déverrouiller (setAttrsLocked)
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels

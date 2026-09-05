@@ -49,7 +49,7 @@ const LEVELS = [
 const ATTRIBUTES = [
   { key:'force', name:'Force',          color:'var(--hp)',     sub:['+25 AD / pt', '+20 PV / pt', '+5 Mana / pt', '+2 Armure / pt'] },
   { key:'hab',   name:'Habileté',       color:'var(--gold)',   sub:['Au choix / pt : +5 AD, +5 AP ou +10 Mana', '+2,5% Crit / pt', '+4 D.Crit / pt', 'Départ : +25/20/15/10/5 PV (max 5 pts)'] },
-  { key:'mental',name:'Mental',         color:'var(--buff)',   sub:['+60 PV / pt', '+20 Mana / pt', '+3% Rés. Crit / pt'] },
+  { key:'mental',name:'Mental',         color:'var(--buff)',   sub:['+45 PV / pt', '+15 Mana / pt', 'Au choix / pt : +15 PV ou +15 Mana', '+3% Rés. Crit / pt'] },
   { key:'magie', name:'Magie/Cosmique', color:'var(--silver)', sub:['+25 AP / pt', '+10 PV / pt', '+30 Mana / pt', '+2 Rés. Mag / pt'] },
 ];
 

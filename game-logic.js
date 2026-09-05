@@ -1381,6 +1381,39 @@
     return out;
   }
 
+  /* --- Répartition du Mental : PV / Mana (2026-09-05, décision D) ---
+     Chaque point de Mental donne un SOCLE garanti de 45 PV + 15 Mana, plus **15 points
+     dirigés** au choix du joueur : soit +15 PV, soit +15 Mana. Stocké dans
+     `state.mentalSplit` = nombre de points par destination `{hp, mana}`.
+     Tout en PV → 60 PV + 15 Mana ; tout en Mana → 45 PV + 30 Mana.
+     ⚠️ Le total par point passe de 80 (60 PV + 20 Mana) à 75 : la flexibilité se paie
+     de 5 points de Mana. Volontaire (décision MJ) — ne pas « rattraper » le socle.
+     ⚠️ Même ruling que l'Habileté : l'escalade est distribuée AU PRORATA du total, donc
+     un point vaut autant où qu'il aille et répartir ne coûte rien.
+     ⚠️ `mentalSplit` absent = jamais confirmé → défaut TOUT EN PV. C'est ce qui garantit
+     que les PV des personnages existants ne bougent pas d'un point (45 + 15 = 60, l'ancien
+     coefficient) et que la matrice de TTK figée le 2026-09-05 reste valide. Seul le Mana
+     baisse. Ne pas changer ce défaut sans re-vérifier la matrice. */
+  var MENTAL_DESTS = ['hp', 'mana'];
+  var MENTAL_BASE_HP = 45, MENTAL_BASE_MANA = 15, MENTAL_DIRECTED = 15;
+  function defaultMentalSplit(M) {
+    return { hp: Math.max(0, M | 0), mana: 0 };
+  }
+  /* Normalise une répartition stockée. Sur-allocation : servie dans l'ordre hp → mana,
+     coupée au budget. Sous-allocation : le reliquat part sur le défaut (PV), jamais perdu. */
+  function mentalSplit(M, split) {
+    M = Math.max(0, M | 0);
+    if (split == null) return defaultMentalSplit(M);
+    var out = { hp: 0, mana: 0 }, left = M;
+    for (var i = 0; i < MENTAL_DESTS.length; i++) {
+      var k = MENTAL_DESTS[i];
+      var n = Math.max(0, Math.min(left, split[k] | 0));
+      out[k] = n; left -= n;
+    }
+    if (left > 0) out.hp += left;
+    return out;
+  }
+
   /* --- Moteur de stats refondu (info-mj/SPECIFICATION, révisé 2026-09-04) ---
      9 stats dérivées de 4 caracs + niveau. Magnitude escaladée, POURCENTAGES LINÉAIRES.
      ⚠️ Cette asymétrie est volontaire : `escalationFactor` ne s'applique qu'aux grandeurs
@@ -1395,7 +1428,8 @@
        Force     20 PV,  5 Mana, 25 AD, 2 Armure
        Habileté  bonus de départ (table ci-dessus), au choix par point +5 AD **OU**
                  +5 AP **OU** +10 Mana (cf. habSplit), 2,5 %Crit, 4 %D.Crit
-       Mental    60 PV, 20 Mana, 3 %Rés.Crit
+       Mental    45 PV + 15 Mana garantis, puis 15 points AU CHOIX (+15 PV **OU**
+                 +15 Mana, cf. mentalSplit), 3 %Rés.Crit
        Magie     10 PV, 30 Mana, 25 AP, 2 Rés. Magique
      La Force et la Magie ne donnent plus de dégâts crit ; le Mental ne donne plus ni
      crit, ni AD/AP.
@@ -1410,7 +1444,7 @@
      absent → défaut par carac dominante (voir `habSplit`). Crit, dégâts crit et bonus
      de PV de départ restent calculés sur le TOTAL d'Habileté : seule la valeur
      « dirigeable » (attaque / mana) est répartie. */
-  function computeStats(F, H, M, C, level, hab) {
+  function computeStats(F, H, M, C, level, hab, ment) {
     F = Math.max(0, F | 0); H = Math.max(0, H | 0);
     M = Math.max(0, M | 0); C = Math.max(0, C | 0);
     level = Math.max(1, level | 0);
@@ -1425,9 +1459,14 @@
     // Escalade GARANTIE À CHAQUE POINT : facteur moyen du total, appliqué au prorata.
     // Un point vaut donc pareil où qu'il aille, et répartir ne coûte rien.
     var hUnit = H > 0 ? escalationFactor(H) * g / H : 0;
+    var ms = mentalSplit(M, ment);             // points de Mental dirigés PV / Mana
+    var mUnit = M > 0 ? escalationFactor(M) * g / M : 0;
     return {
-      hp:      Math.round(50 + 30 * level + 20 * eF + 10 * eC + 60 * eM + habPV),
-      mana:    Math.round(50 + 15 * level + 5 * eF + 30 * eC + 20 * eM + 10 * hUnit * hs.mana),
+      hp:      Math.round(50 + 30 * level + 20 * eF + 10 * eC
+                 + MENTAL_BASE_HP * eM + MENTAL_DIRECTED * mUnit * ms.hp + habPV),
+      mana:    Math.round(50 + 15 * level + 5 * eF + 30 * eC
+                 + MENTAL_BASE_MANA * eM + MENTAL_DIRECTED * mUnit * ms.mana
+                 + 10 * hUnit * hs.mana),
       ad:      Math.round(25 * eF + 5 * hUnit * hs.ad + fondu),
       ap:      Math.round(25 * eC + 5 * hUnit * hs.ap + fondu),
       armure:  Math.round(level + 2 * eF),
@@ -1450,7 +1489,7 @@
      L'ennemi n'a qu'un champ `atk` : on y met la plus élevée de AD/AP. */
   function npcStatsFromAttrs(attrs, level) {
     attrs = attrs || {};
-    var s = computeStats(attrs.force, attrs.hab, attrs.mental, attrs.magie, level, attrs.habSplit);
+    var s = computeStats(attrs.force, attrs.hab, attrs.mental, attrs.magie, level, attrs.habSplit, attrs.mentalSplit);
     return {
       hpMax: s.hp, hpCur: s.hp,
       manaMax: s.mana, manaCur: s.mana,
@@ -1489,7 +1528,9 @@
     // Compat : `state.habAd` (forme d'un jour, AD seul) est encore relu.
     var hs = (state && state.habSplit) || (char && char.habSplit) || null;
     if (!hs && state && state.habAd != null) hs = { ad: state.habAd };
-    return computeStats(a.force, a.hab, a.mental, a.magie, level, hs);
+    // Répartition du Mental (PV/Mana) : même contrat. Absente → défaut tout en PV.
+    var ms = (state && state.mentalSplit) || (char && char.mentalSplit) || null;
+    return computeStats(a.force, a.hab, a.mental, a.magie, level, hs, ms);
   }
 
   /* XP & niveau : courbe officielle du MJ (info-mj/tableau_XP.png).
@@ -1550,5 +1591,6 @@
     xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
     escalationFactor, globalEscalation, computeStats, charBaseStats, attrSum, respecValid, npcStatsFromAttrs,
     defaultHabSplit, habSplit, HAB_DESTS,
+    defaultMentalSplit, mentalSplit, MENTAL_DESTS,
   };
 });

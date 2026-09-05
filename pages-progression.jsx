@@ -13,10 +13,13 @@
    ligne y reviendrait aussitôt et le « + » des autres lignes resterait inerte. Ici un
    point retiré retourne dans la réserve « à placer », et le bouton Confirmer attend que
    la réserve soit vide (même contrat que les points de caractéristiques). */
-function clampSplitDraft(d, H) {
-  const out = { ad: Math.max(0, d.ad | 0), ap: Math.max(0, d.ap | 0), mana: Math.max(0, d.mana | 0) };
-  let over = (out.ad + out.ap + out.mana) - Math.max(0, H | 0);
-  for (const k of ['mana', 'ap', 'ad']) {
+/* `keys` = destinations à rogner en priorité (ordre inverse de la priorité de service). */
+function clampSplitDraft(d, budget, keys) {
+  keys = keys || ['mana', 'ap', 'ad'];
+  const out = {};
+  for (const k of keys) out[k] = Math.max(0, d[k] | 0);
+  let over = keys.reduce((s, k) => s + out[k], 0) - Math.max(0, budget | 0);
+  for (const k of keys) {
     if (over <= 0) break;
     const cut = Math.min(out[k], over);
     out[k] -= cut; over -= cut;
@@ -29,17 +32,28 @@ const HAB_DEST_META = [
   { k:'ap',   label:'AP',   rate:5,  col:'var(--stat-mag)'  },
   { k:'mana', label:'Mana', rate:10, col:'var(--mana)'      },
 ];
-function HabSplitRow({ val, total, split, left, floors, canEdit, onChange, confirmed, open, onReopen }) {
-  // Escalade moyenne d'un point à ce niveau d'Habileté (cf. habSplit dans game-logic).
+/* Mental : 45 PV + 15 Mana garantis par point, puis 15 points dirigés (PV **ou** Mana).
+   Seule la part DIRIGÉE se répartit — le socle est acquis quoi qu'il arrive. */
+const MENTAL_DEST_META = [
+  { k:'hp',   label:'PV',   rate:15, col:'var(--hp)'   },
+  { k:'mana', label:'Mana', rate:15, col:'var(--mana)' },
+];
+/* Bloc de répartition partagé (Habileté : AD/AP/Mana — Mental : PV/Mana). Les deux
+   suivent le même contrat : escalade garantie à chaque point, réserve « à placer » qui
+   doit être vide pour confirmer, plancher opposé seulement une fois la répartition
+   confirmée, et réouverture par le MJ. */
+function SplitRow({ label, meta, emptyLabel, defaultHint, val, total, split, left, floors,
+                    canEdit, onChange, confirmed, open, onReopen }) {
+  // Escalade moyenne d'un point à ce niveau de carac (cf. habSplit/mentalSplit).
   // ⚠️ Le facteur GLOBAL doit être inclus, sinon l'aperçu sous-estime le gain réel :
-  // `computeStats` multiplie hUnit par globalEscalation(total des 4 caracs).
+  // `computeStats` multiplie hUnit/mUnit par globalEscalation(total des 4 caracs).
   const unit = val > 0 ? escalationFactor(val) * globalEscalation(total) / val : 0;
   const move = (k, d) => onChange(Object.assign({}, split, { [k]: split[k] + d }));
   return (
     <div className="col gap-2" style={{ marginTop:10, padding:'10px 12px', borderRadius:8,
       background:'var(--bg-inset)', border:'1px dashed var(--line-strong)' }}>
       <div className="row" style={{ justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
-        <span className="overline" style={{ fontSize:9.5 }}>Répartition de l'Habileté</span>
+        <span className="overline" style={{ fontSize:9.5 }}>{label}</span>
         <span className="row gap-2" style={{ alignItems:'center' }}>
           {onReopen && val > 0 && (
             <button className="btn btn-sm btn-ghost" onClick={onReopen}
@@ -56,10 +70,10 @@ function HabSplitRow({ val, total, split, left, floors, canEdit, onChange, confi
         </span>
       </div>
       {val === 0 ? (
-        <span className="faint" style={{ fontSize:11 }}>Aucun point d'Habileté à répartir.</span>
+        <span className="faint" style={{ fontSize:11 }}>{emptyLabel}</span>
       ) : (
         <div className="col gap-1">
-          {HAB_DEST_META.map(d => {
+          {meta.map(d => {
             const n = split[d.k];
             const floor = floors ? (floors[d.k] | 0) : 0;
             return (
@@ -88,7 +102,7 @@ function HabSplitRow({ val, total, split, left, floors, canEdit, onChange, confi
       {val > 0 && (
         <span className="faint" style={{ fontSize:11, lineHeight:1.45 }}>
           {!confirmed
-            ? "Répartition pas encore confirmée \u2014 le défaut suit ta carac de dégâts dominante. Tant que tu n'as pas confirmé, tu peux tout redistribuer librement."
+            ? defaultHint
             : open
               ? "\uD83D\uDD13 Le MJ a rouvert ta répartition : tu peux déplacer tous tes points jusqu'à ta prochaine confirmation."
               : "Un point rapporte autant où qu'il aille : répartis selon ton style, sans pénalité."}
@@ -103,7 +117,7 @@ function ProgressionPage({ lockedCharId }) {
   const staff = !lockedCharId;
   const [charId, setCharId] = useState(lockedCharId || 'rathael');
   const char = CHARACTERS.find(c => c.id === charId);
-  const { state, setAttrs, setAttrsLocked, setHabSplitOpen } = useCharState(charId);
+  const { state, setAttrs, setAttrsLocked, setHabSplitOpen, setMentalSplitOpen } = useCharState(charId);
 
   const effLevel = (state && state.level != null ? state.level : char.level) || 1;
   const lvlRow = LEVELS.find(l => l.lvl === effLevel) || LEVELS[LEVELS.length - 1];
@@ -126,6 +140,13 @@ function ProgressionPage({ lockedCharId }) {
   const splitOpen = !!(state && state.habSplitOpen);
   const savedSplit = habSplit(savedAttrs.force, savedAttrs.hab, savedAttrs.magie, rawSplit);
 
+  // Répartition du Mental : 45 PV + 15 Mana garantis par point, plus 15 points dirigés
+  // (PV **ou** Mana). Même contrat que l'Habileté ; défaut = tout en PV.
+  const rawMent = (state && state.mentalSplit) || null;
+  const hasMent = !!rawMent;
+  const mentOpen = !!(state && state.mentalSplitOpen);
+  const savedMent = mentalSplit(savedAttrs.mental, rawMent);
+
   // Brouillon local : on édite sans écrire, puis « Confirmer ». Resync sur changement
   // de perso ou de valeurs sauvegardées (après confirmation ou édition externe).
   const [draft, setDraft] = useState(savedAttrs);
@@ -134,6 +155,9 @@ function ProgressionPage({ lockedCharId }) {
   const [draftSplit, setDraftSplit] = useState(savedSplit);
   useEffect(() => { setDraftSplit(savedSplit); },
     [charId, savedSplit.ad, savedSplit.ap, savedSplit.mana]);
+  const [draftMent, setDraftMent] = useState(savedMent);
+  useEffect(() => { setDraftMent(savedMent); },
+    [charId, savedMent.hp, savedMent.mana]);
 
   const view = canEdit ? draft : savedAttrs;          // valeurs affichées (brouillon si éditable)
   // Plancher par caracs : un joueur ne peut JAMAIS descendre sous ses valeurs déjà confirmées
@@ -147,18 +171,22 @@ function ProgressionPage({ lockedCharId }) {
   // staff garde la main totale. Sans répartition confirmée, aucun plancher — sinon un
   // défaut deviné deviendrait un choix imposé.
   const splitFloors = (staff || !hasSplit || splitOpen) ? null : savedSplit;
+  const mentFloors = (staff || !hasMent || mentOpen) ? null : savedMent;
   // Bornée sur l'Habileté du BROUILLON : baisser l'Habileté rogne la répartition,
   // la monter laisse les nouveaux points « à placer ».
   const split = clampSplitDraft(draftSplit, view.hab);
   const splitLeft = view.hab - (split.ad + split.ap + split.mana);
-  // Confirmer exige que la réserve d'Habileté soit vide, exactement comme les points
+  const ment = clampSplitDraft(draftMent, view.mental, ['mana', 'hp']);
+  const mentLeft = view.mental - (ment.hp + ment.mana);
+  // Confirmer exige que les DEUX réserves soient vides, exactement comme les points
   // de caractéristiques : un point non placé ne rapporterait rien.
-  const valid = attrsValid && splitLeft === 0;
+  const valid = attrsValid && splitLeft === 0 && mentLeft === 0;
   const dirty = view.force !== savedAttrs.force || view.hab !== savedAttrs.hab
     || view.mental !== savedAttrs.mental || view.magie !== savedAttrs.magie
     || split.ad !== savedSplit.ad || split.ap !== savedSplit.ap || split.mana !== savedSplit.mana
-    || !hasSplit;
-  const preview = computeStats(view.force, view.hab, view.mental, view.magie, effLevel, split);
+    || ment.hp !== savedMent.hp || ment.mana !== savedMent.mana
+    || !hasSplit || !hasMent;
+  const preview = computeStats(view.force, view.hab, view.mental, view.magie, effLevel, split, ment);
 
   const selStyle = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'6px 9px', fontSize:13 };
 
@@ -179,11 +207,17 @@ function ProgressionPage({ lockedCharId }) {
       ? `<b>${char.name}</b> — répartition d'Habileté refermée`
       : `<b>${char.name}</b> — répartition d'Habileté rouverte au joueur`, splitOpen ? 'gold' : 'buff');
   };
+  const reopenMent = () => {
+    setMentalSplitOpen(!mentOpen);
+    toast(mentOpen
+      ? `<b>${char.name}</b> — répartition du Mental refermée`
+      : `<b>${char.name}</b> — répartition du Mental rouverte au joueur`, mentOpen ? 'gold' : 'buff');
+  };
 
   const confirm = () => {
     if (!valid) return;
     if (!staff && !window.confirm('Confirmer cette répartition ? Les points placés deviennent définitifs : tu pourras en rajouter aux prochains niveaux, mais plus en retirer.')) return;
-    setAttrs(draft, staff ? locked : false, split);    // joueur => pas de verrou dur (le plancher protège) ; staff => garde l'état du verrou
+    setAttrs(draft, staff ? locked : false, split, ment);   // joueur => pas de verrou dur (le plancher protège) ; staff => garde l'état du verrou
     toast(`<b>${char.name}</b> — caractéristiques enregistrées`, 'buff');
   };
 
@@ -266,9 +300,20 @@ function ProgressionPage({ lockedCharId }) {
                       ))}
                     </div>
                     {attr.key === 'hab' && (
-                      <HabSplitRow val={val} total={sum} split={split} left={splitLeft} floors={splitFloors}
+                      <SplitRow label="Répartition de l'Habileté" meta={HAB_DEST_META}
+                        emptyLabel="Aucun point d'Habileté à répartir."
+                        defaultHint={"Répartition pas encore confirmée — le défaut suit ta carac de dégâts dominante. Tant que tu n'as pas confirmé, tu peux tout redistribuer librement."}
+                        val={val} total={sum} split={split} left={splitLeft} floors={splitFloors}
                         canEdit={canEdit} onChange={setDraftSplit} confirmed={hasSplit}
                         open={splitOpen} onReopen={staff ? reopenSplit : null} />
+                    )}
+                    {attr.key === 'mental' && (
+                      <SplitRow label="Répartition du Mental (part dirigée)" meta={MENTAL_DEST_META}
+                        emptyLabel="Aucun point de Mental à répartir."
+                        defaultHint={"Répartition pas encore confirmée — par défaut, tout part en PV (soit 60 PV + 15 Mana par point, comme avant). Tant que tu n'as pas confirmé, tu peux tout redistribuer librement."}
+                        val={val} total={sum} split={ment} left={mentLeft} floors={mentFloors}
+                        canEdit={canEdit} onChange={setDraftMent} confirmed={hasMent}
+                        open={mentOpen} onReopen={staff ? reopenMent : null} />
                     )}
                   </div>
                 );

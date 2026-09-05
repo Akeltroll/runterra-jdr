@@ -687,6 +687,57 @@ test('computeStats : l\u2019escalade est GARANTIE a chaque point (repartir ne co
   const mana = L.computeStats(0, 20, 0, 0, 18, { mana: 20 }).mana - nu.mana;
   assert.ok(Math.abs(mana - 2 * tout) <= 2);   // 10/pt contre 5/pt (a l'arrondi pres)
 });
+/* --- Répartition du Mental : PV / Mana (2026-09-05, décision D) --- */
+test('mentalSplit : defaut TOUT EN PV, sur- et sous-allocation normalisees', () => {
+  assert.deepEqual(L.mentalSplit(5, null), { hp: 5, mana: 0 });       // jamais confirmee
+  assert.deepEqual(L.mentalSplit(0, null), { hp: 0, mana: 0 });
+  assert.deepEqual(L.mentalSplit(4, { hp: 2, mana: 2 }), { hp: 2, mana: 2 });
+  // sur-allocation : servie dans l'ordre hp -> mana, coupee au budget
+  assert.deepEqual(L.mentalSplit(4, { hp: 9, mana: 9 }), { hp: 4, mana: 0 });
+  // sous-allocation : le reliquat part en PV, jamais perdu
+  assert.deepEqual(L.mentalSplit(4, { mana: 1 }), { hp: 3, mana: 1 });
+  assert.deepEqual(L.mentalSplit(4, { hp: -5, mana: 2 }), { hp: 2, mana: 2 });
+});
+test('computeStats : le defaut du Mental PRESERVE les PV a l’unite pres', () => {
+  // 45 PV de socle + 15 diriges = 60 PV/pt, l'ancien coefficient. C'est ce qui garantit
+  // que la matrice de TTK figee le 2026-09-05 reste valide sans migration.
+  for (const m of [1, 4, 13, 20]) {
+    const socle = L.computeStats(0, 0, 0, 0, 18).hp;
+    const gain = L.computeStats(0, 0, m, 0, 18).hp - socle;
+    const esc = L.escalationFactor(m) * L.globalEscalation(m);
+    assert.ok(Math.abs(gain - 60 * esc) <= 1, `M=${m} : ${gain} vs ${(60 * esc).toFixed(1)}`);
+  }
+});
+test('computeStats : un point de Mental vaut 45 PV + 15 Mana, +15 au choix', () => {
+  const nu = L.computeStats(0, 0, 0, 0, 1);
+  const d = (sp, k) => L.computeStats(0, 0, 1, 0, 1, null, sp)[k] - nu[k];
+  assert.equal(d({ hp: 1, mana: 0 }, 'hp'), 60);     // 45 socle + 15 diriges
+  assert.equal(d({ hp: 1, mana: 0 }, 'mana'), 15);   // socle seul
+  assert.equal(d({ hp: 0, mana: 1 }, 'hp'), 45);     // socle seul
+  assert.equal(d({ hp: 0, mana: 1 }, 'mana'), 30);   // 15 socle + 15 diriges
+});
+test('computeStats : repartir le Mental ne coute rien (escalade au prorata)', () => {
+  const nu = L.computeStats(0, 0, 0, 0, 18);
+  const tot = (sp) => (L.computeStats(0, 0, 20, 0, 18, null, sp).hp - nu.hp)
+                    + (L.computeStats(0, 0, 20, 0, 18, null, sp).mana - nu.mana);
+  const ref = tot({ hp: 20, mana: 0 });
+  assert.ok(Math.abs(tot({ hp: 10, mana: 10 }) - ref) <= 2);
+  assert.ok(Math.abs(tot({ hp: 3, mana: 17 }) - ref) <= 2);
+});
+test('computeStats : la repartition du Mental ne touche PAS la res. crit', () => {
+  const a = L.computeStats(0, 0, 8, 0, 4, null, { hp: 8 });
+  const b = L.computeStats(0, 0, 8, 0, 4, null, { mana: 8 });
+  assert.equal(a.rescrit, b.rescrit);
+  assert.equal(a.rescrit, 24);   // 3 %/pt sur les points bruts
+});
+test('charBaseStats : state.mentalSplit prime, defaut tout-PV sinon', () => {
+  const char = { attrs: { force: 0, hab: 0, mental: 6, magie: 0 }, level: 3 };
+  const parDefaut = L.charBaseStats(char, null);
+  assert.deepEqual(parDefaut, L.computeStats(0, 0, 6, 0, 3, null, { hp: 6, mana: 0 }));
+  const enMana = L.charBaseStats(char, { mentalSplit: { hp: 0, mana: 6 } });
+  assert.ok(enMana.mana > parDefaut.mana);
+  assert.ok(enMana.hp < parDefaut.hp);
+});
 test('computeStats : la repartition ne touche NI le crit NI les degats crit NI les PV', () => {
   const a = L.computeStats(0, 6, 0, 0, 1, { ad: 6 });
   const b = L.computeStats(0, 6, 0, 0, 1, { mana: 6 });

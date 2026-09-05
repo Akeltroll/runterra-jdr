@@ -52,7 +52,7 @@ function useCharState(charId) {
   // une valeur hors bornes — la fonction `habSplit` la normaliserait à la lecture, mais la
   // base mentirait. Absent → on n'écrit rien et le défaut par carac dominante s'applique.
   // `habAd: null` purge l'ancienne forme (AD seul) qui a vécu une journée.
-  const setAttrs = useCallback((attrs, locked, split) => {
+  const setAttrs = useCallback((attrs, locked, split, mentSplit) => {
     const a = attrs || {};
     const clean = {
       force: Math.max(0, a.force | 0), hab: Math.max(0, a.hab | 0),
@@ -64,6 +64,14 @@ function useCharState(charId) {
       patch.habAd = null;
       patch.habSplitOpen = null;   // confirmer referme la fenêtre de redistribution
     }
+    // Répartition du Mental (PV/Mana). Écrite dans la MÊME opération que `attrs`, pour
+    // la même raison que `habSplit` : une répartition seule, après une baisse de Mental,
+    // laisserait une somme hors bornes (mentalSplit la normaliserait à la lecture, mais
+    // la base mentirait).
+    if (mentSplit) {
+      patch.mentalSplit = mentalSplit(clean.mental, mentSplit);
+      patch.mentalSplitOpen = null;
+    }
     return window.RTDB.updatePath(charPath(charId), patch);
   }, [charId]);
   /* Rouvre (ou referme) la répartition d'Habileté pour le JOUEUR : tant que le drapeau
@@ -74,10 +82,14 @@ function useCharState(charId) {
      placement au moment même où on lui rend la main. */
   const setHabSplitOpen = useCallback((open) =>
     window.RTDB.updatePath(charPath(charId), { habSplitOpen: open ? true : null }), [charId]);
+  /* Même mécanisme pour la répartition du Mental (PV/Mana). Drapeau SÉPARÉ de
+     `habSplitOpen` : le MJ doit pouvoir rendre l'une sans rendre l'autre. */
+  const setMentalSplitOpen = useCallback((open) =>
+    window.RTDB.updatePath(charPath(charId), { mentalSplitOpen: open ? true : null }), [charId]);
   const setAttrsLocked = useCallback((locked) =>
     window.RTDB.updatePath(charPath(charId), { attrsLocked: locked ? true : null }), [charId]);
   return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment,
-    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked, setHabSplitOpen };
+    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked, setHabSplitOpen, setMentalSplitOpen };
 }
 
 /* Compteur de tour PARTAGÉ (combat). Écriture staff (règle RTDB combat/turn).

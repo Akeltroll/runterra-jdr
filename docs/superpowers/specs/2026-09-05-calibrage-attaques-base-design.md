@@ -108,6 +108,37 @@ objectif de build tardif au lieu d'un acquis automatique.
 mécanique les accepte. Si le MJ préfère des nombres ronds à la table, `5 + 5·⌊H/2⌋`
 donne la même courbe par paliers de deux points.
 
+## 4 bis. Décision D — Répartition du Mental (PV / Mana)
+
+Ajoutée après validation visuelle des décisions A-C. Chaque point de Mental donne :
+
+```
+socle garanti  : 45 PV + 15 Mana
+part dirigée   : 15 points au choix du joueur → +15 PV  OU  +15 Mana
+```
+
+Soit **60 PV + 15 Mana** en tout-PV, **45 PV + 30 Mana** en tout-Mana, et toutes les
+combinaisons intermédiaires (la répartition se fait point de Mental par point de Mental,
+comme `habSplit`). Persisté dans `state.mentalSplit = {hp, mana}`.
+
+⚠️ **Le total par point passe de 80 (60 PV + 20 Mana) à 75.** La flexibilité se paie de
+5 points de Mana. C'est voulu — ne pas « rattraper » le socle.
+
+⚠️ **`mentalSplit` absent = défaut TOUT EN PV**, et c'est ce qui rend le changement
+indolore : 45 + 15 = 60, l'ancien coefficient de PV. **Les PV de tous les personnages
+existants ne bougent pas d'un point, et la matrice du §5 reste valide sans migration.**
+Seul le Mana baisse de 25 % (Tank physique niveau 18 : 1105 → 829). Sans conséquence
+pratique — on a mesuré qu'il reste 90-100 % du mana en fin de combat (§10) — et ça va
+dans le sens du chantier suivant, où le mana doit redevenir limitant.
+⚠️ Ne pas changer ce défaut sans re-vérifier la matrice.
+
+⚠️ **Même ruling que l'Habileté** : l'escalade est distribuée au prorata du total
+(`mUnit = escalationFactor(M)·g / M`), donc un point vaut autant où qu'il aille et
+**répartir ne coûte rien**. Ne pas escalader chaque part séparément.
+
+La part dirigée ne touche **ni la résistance critique** (3 %/pt, sur les points bruts)
+**ni quoi que ce soit d'autre** : Mental reste la carac défensive.
+
 ## 5. Résultat vérifié
 
 Archétypes de référence : ADC (Force/Habileté), Assassin (Habileté/Force), Tank physique
@@ -199,6 +230,9 @@ démonstration — le blocage est arithmétique, pas un choix de valeurs.
 | `game-logic.js` | `escalationFactor` → escalade locale `p × (1 + 0,010(p−1))`, borne PNJ conservée |
 | `game-logic.js` | `computeStats` : appliquer `gGlob(F+H+M+C)` aux 3 facteurs escaladés et à `hUnit` |
 | `game-logic.js` | `computeStats` : `crit: 5 + 2.5*H`, `dcrit: 150 + 4*H` |
+| `game-logic.js` | `mentalSplit` / `defaultMentalSplit` / `MENTAL_DESTS` + 7e param `ment` de `computeStats` ; `charBaseStats` et `npcStatsFromAttrs` le propagent |
+| `data-state.jsx` | `setAttrs(attrs, locked, split, mentSplit)` écrit `mentalSplit` dans la MÊME opération que `attrs` ; nouveau `setMentalSplitOpen` |
+| `pages-progression.jsx` | `HabSplitRow` généralisé en `SplitRow` (paramétré par `meta`/`label`/textes) et utilisé deux fois ; `clampSplitDraft` prend ses clés en argument |
 | `pages-progression.jsx` | ligne 34 : `escalationFactor(val)/val` doit inclure le facteur global (aperçu du gain marginal) |
 | `test/game-logic.test.js` | table de référence `escalationFactor` (§4.3) + verrous PV des 5 profils + `dcrit` : **à réécrire** |
 | `index.html` | bump du jeton `?v=` (cache-busting) |
