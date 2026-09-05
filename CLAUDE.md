@@ -630,6 +630,20 @@ SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl ba
 il relit l'UTF-8 en ANSI et réécrit un BOM + des accents cassés (`é`→`Ã©`). Utiliser l'outil Edit,
 ou `perl -i -pe` pour un search-replace global (ex. le bump du token de cache).
 
+⚠️ **Script Python lancé par heredoc depuis Git Bash — deux pièges qui ont VIDÉ un fichier**
+(2026-09-05, `pages-progression.jsx` récupéré par `git checkout`) :
+1. **Un `\\` du heredoc arrive à Python comme `\`.** Un `"\\uD83D\\uDD13"` censé
+   produire l'échappement JS littéral devient donc `"\uD83D\uDD13"`, soit deux vrais
+   **surrogates seuls** → `UnicodeEncodeError: surrogates not allowed` à l'écriture (et un `\u`
+   isolé casse carrément le parsing du script). Ne pas écrire d'échappement `\u` dans le script :
+   insérer le **vrai caractère** (`chr(0x1F513)`, via un jeton de remplacement pour ne pas le taper
+   dans la source). Les `.jsx` du dépôt contiennent déjà des emoji littéraux et `index.html` déclare
+   `charset=utf-8` — un caractère brut y est parfaitement valide.
+2. **`io.open(p,'w')` TRONQUE le fichier avant d'encoder** : si l'encodage échoue pendant le
+   `write()`, il ne reste **rien**. Toujours encoder d'abord (`data = s.encode('utf-8')`) puis ouvrir
+   en `'wb'` — l'exception tombe alors **avant** que le fichier ne soit touché.
+Accessoire : `print()` d'un texte accentué échoue aussi (stdout en cp1252) — logger en ASCII.
+
 ## Branches (convention depuis 2026-08-16)
 Le dépôt est nettoyé : **3 branches seulement**, plus de branches `feat/*` ou `fix/*` résiduelles.
 - **`main`** — branche de référence, toujours déployable (c'est elle que sert GitHub Pages).
