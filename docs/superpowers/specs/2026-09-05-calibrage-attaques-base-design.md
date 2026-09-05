@@ -214,7 +214,19 @@ créés gardent leurs valeurs plates, qui restent la source de vérité. Rien à
 
 Les 5 PJ ont **12 points placés** au niveau 2 ; le nouveau budget est **10**.
 `respecValid` refusera leurs répartitions actuelles tant qu'ils n'auront pas retiré
-2 points. Outils déjà en place : `setAttrsLocked` et « ↺ Rouvrir au joueur ».
+2 points.
+
+⚠️ **C'est au MJ de faire la descente, pas aux joueurs — et ce n'est pas un oubli d'UI.**
+Dans `ProgressionPage`, `floorAttrs = staff ? {} : savedAttrs` : le plancher d'un joueur
+EST sa répartition déjà confirmée, il ne peut donc **jamais** descendre une caractéristique
+(le level-up ne fait que monter). Un joueur ouvrant sa page verra « 12 / 10 » avec un solde
+négatif, ne pourra ni descendre (plancher) ni confirmer (hors budget) : il est bloqué tant
+que le MJ n'est pas passé. Le staff, lui, a un plancher 0 et corrige librement depuis le
+sélecteur de perso de l'onglet Progression.
+⚠️ Ni `setAttrsLocked` ni « ↺ Rouvrir au joueur » ne débloquent ce cas : le premier gouverne
+`canEdit` (le verrou de respec unique), le second `habSplitOpen` (la répartition d'Habileté).
+**Le plancher des caractéristiques est inconditionnel pour un joueur.**
+👉 Donc : passer les 5 fiches en MJ **avant** d'annoncer le changement aux joueurs.
 
 Répartitions actuelles, et une proposition de descente à 10 points préservant chaque
 build (à valider avec chaque joueur, ce n'est pas au MJ de trancher seul) :

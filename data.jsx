@@ -14,31 +14,41 @@ const mn = Math.min, mx = Math.max;
 /* --- Table de progression (niveaux 1 → 18) --- */
 /* Point bonus de création (au-dessus du total de niveau). Budget de respec = LEVELS.total + CREATION_BONUS. */
 const CREATION_BONUS = 1;
+/* Paliers de progression — RECALIBRÉS le 2026-09-05 (décision A).
+   Règle : budget TOTAL (= `total` + CREATION_BONUS) ≈ 1,65 × `limit`. C'est ce rapport
+   qui garantit qu'on ne peut JAMAIS monter deux caractéristiques au plafond, à aucun
+   niveau — avant, 12 points et un cap de 6 forçaient 6/6, si bien qu'un ADC
+   (Force/Habileté) et un assassin (Habileté/Force) étaient le MÊME personnage, comme un
+   tank physique et un bruiser. 3 archétypes sur 5 étaient indiscernables au niveau 2.
+   ⚠️ Le `limit` monte plus lentement qu'avant (13 au niveau 10 contre 14) : c'est LUI qui
+   porte la contrainte. Baisser le budget sans baisser le cap ne suffirait pas.
+   Bornes voulues par le MJ : 10 points au niveau 2 (donc 6/4) et 20/14 au niveau 18.
+   Voir docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md §2. */
 const LEVELS = [
-  { lvl:1,  gain:'10 (départ)', total:10, limit:5  },
-  { lvl:2,  gain:1, total:11, limit:6  },
-  { lvl:3,  gain:1, total:12, limit:7  },
-  { lvl:4,  gain:2, total:14, limit:8  },
-  { lvl:5,  gain:1, total:15, limit:9  },
-  { lvl:6,  gain:2, total:17, limit:10 },
-  { lvl:7,  gain:1, total:18, limit:11 },
-  { lvl:8,  gain:1, total:19, limit:12 },
-  { lvl:9,  gain:2, total:21, limit:13 },
-  { lvl:10, gain:1, total:22, limit:14 },
-  { lvl:11, gain:1, total:23, limit:15 },
-  { lvl:12, gain:2, total:25, limit:16 },
-  { lvl:13, gain:1, total:26, limit:17 },
-  { lvl:14, gain:1, total:27, limit:18 },
-  { lvl:15, gain:2, total:29, limit:19 },
-  { lvl:16, gain:1, total:30, limit:20 },
-  { lvl:17, gain:1, total:31, limit:20 },
-  { lvl:18, gain:2, total:33, limit:20 },
+  { lvl:1,  gain:'7 (départ)', total:7,  limit:5  },  // budget 8  → 5/3
+  { lvl:2,  gain:2, total:9,  limit:6  },             // budget 10 → 6/4
+  { lvl:3,  gain:1, total:10, limit:7  },             // budget 11 → 7/4
+  { lvl:4,  gain:1, total:11, limit:7  },             // budget 12 → 7/5
+  { lvl:5,  gain:1, total:12, limit:8  },             // budget 13 → 8/5
+  { lvl:6,  gain:2, total:14, limit:9  },             // budget 15 → 9/6
+  { lvl:7,  gain:1, total:15, limit:10 },             // budget 16 → 10/6
+  { lvl:8,  gain:2, total:17, limit:11 },             // budget 18 → 11/7
+  { lvl:9,  gain:1, total:18, limit:12 },             // budget 19 → 12/7
+  { lvl:10, gain:2, total:20, limit:13 },             // budget 21 → 13/8
+  { lvl:11, gain:2, total:22, limit:14 },             // budget 23 → 14/9
+  { lvl:12, gain:2, total:24, limit:15 },             // budget 25 → 15/10
+  { lvl:13, gain:1, total:25, limit:16 },             // budget 26 → 16/10
+  { lvl:14, gain:2, total:27, limit:17 },             // budget 28 → 17/11
+  { lvl:15, gain:2, total:29, limit:18 },             // budget 30 → 18/12
+  { lvl:16, gain:2, total:31, limit:19 },             // budget 32 → 19/13
+  { lvl:17, gain:1, total:32, limit:20 },             // budget 33 → 20/13
+  { lvl:18, gain:1, total:33, limit:20 },             // budget 34 → 20/14
 ];
 
 /* --- Attributs principaux et sous-stats dérivées (page Progression) --- */
 const ATTRIBUTES = [
   { key:'force', name:'Force',          color:'var(--hp)',     sub:['+25 AD / pt', '+20 PV / pt', '+5 Mana / pt', '+2 Armure / pt'] },
-  { key:'hab',   name:'Habileté',       color:'var(--gold)',   sub:['Au choix / pt : +5 AD, +5 AP ou +10 Mana', '+10% Crit / pt', '+6 D.Crit / pt', 'Départ : +25/20/15/10/5 PV (max 5 pts)'] },
+  { key:'hab',   name:'Habileté',       color:'var(--gold)',   sub:['Au choix / pt : +5 AD, +5 AP ou +10 Mana', '+2,5% Crit / pt', '+4 D.Crit / pt', 'Départ : +25/20/15/10/5 PV (max 5 pts)'] },
   { key:'mental',name:'Mental',         color:'var(--buff)',   sub:['+60 PV / pt', '+20 Mana / pt', '+3% Rés. Crit / pt'] },
   { key:'magie', name:'Magie/Cosmique', color:'var(--silver)', sub:['+25 AP / pt', '+10 PV / pt', '+30 Mana / pt', '+2 Rés. Mag / pt'] },
 ];

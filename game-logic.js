@@ -1296,18 +1296,42 @@
     return out;
   }
 
-  /* --- Escalade anti-aplatissement (refonte) ---
-     Facteur cumulé par caractéristique. Table §4.3 (mult/pt : 1.00, 1.18, 1.39,
-     1.64, 1.94 par tranche de 4). Au-delà de 20 (zone PNJ §8) : mult du point
-     (20+k) = 1.94 + 0.5*k → croissance quadratique. */
-  var ESC_CUMUL = [0, 1.00, 2.00, 3.00, 4.00, 5.18, 6.36, 7.54, 8.72, 10.11,
-    11.50, 12.90, 14.29, 15.93, 17.58, 19.22, 20.86, 22.80, 24.74, 26.68, 28.62];
+  /* --- Escalade anti-aplatissement (recalibrée 2026-09-05, décision B) ---
+     Facteur cumulé par caractéristique. Escalade LOCALE : chaque point placé dans une
+     caractéristique en relève le rendement de +1 %, soit `p × (1 + 0,010·(p−1))`.
+     ⚠️ Elle est volontairement PLUS PLATE qu'avant (~+2,3 %/pt, table §4.3) : l'ancienne
+     donnait +15 % à un build 2 caracs contre un build 3 caracs, ce qui poussait
+     mécaniquement vers des répartitions pures et cassait le calibrage dès qu'un joueur
+     optimisait. Ce qu'elle perd est rendu par `globalEscalation` (ci-dessous), si bien
+     que le TOTAL au niveau 18 en 20/14 est resté identique (46.2) — ne pas remonter
+     l'une sans baisser l'autre.
+     Au-delà de 20 (zone PNJ §8) : le mult marginal repart de celui du 20e point (1.38)
+     et gagne 0,5 par point → croissance quadratique conservée pour les gros monstres.
+     Voir docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md §3. */
+  var ESC_PER_POINT = 0.010;   // escalade locale : +1 % de rendement par point placé
+  var ESC_CAP = 20;            // au-delà, zone PNJ
   function escalationFactor(points) {
     points = Math.max(0, points | 0);
-    if (points <= 20) return ESC_CUMUL[points];
-    var f = ESC_CUMUL[20];
-    for (var k = 1; k <= points - 20; k++) f += 1.94 + 0.5 * k;
+    if (points <= ESC_CAP) return points * (1 + ESC_PER_POINT * (points - 1));
+    var f = ESC_CAP * (1 + ESC_PER_POINT * (ESC_CAP - 1));
+    var marginal = f - (ESC_CAP - 1) * (1 + ESC_PER_POINT * (ESC_CAP - 2));
+    for (var k = 1; k <= points - ESC_CAP; k++) f += marginal + 0.5 * k;
     return f;
+  }
+
+  /* --- Escalade GLOBALE (2026-09-05, décision B) ---
+     Chaque point placé, quelle que soit sa caractéristique, relève très légèrement le
+     rendement de TOUS les points déjà placés (+0,49 %). C'est ce qui compense l'escalade
+     locale réduite sans réintroduire de prime à la concentration : la prime d'un build
+     2 caracs sur un build 3 caracs tombe de 15 % à 6 %.
+     ⚠️ `total` = somme des 4 caractéristiques. Comme un joueur place toujours TOUS ses
+     points, il vaut en pratique le budget de son niveau : cette fonction est donc
+     mathématiquement équivalente à un multiplicateur de niveau. Ne pas promettre aux
+     joueurs qu'un point de Force « boostera leur Magie » — ils verront simplement leurs
+     stats monter un peu à chaque niveau. */
+  var GLOBAL_ESC_PER_POINT = 0.0049;
+  function globalEscalation(total) {
+    return 1 + GLOBAL_ESC_PER_POINT * Math.max(0, total | 0);
   }
 
   /* Bonus de départ d'Habileté : PV dégressifs sur les 5 premiers points (25/20/15/10/5),
@@ -1370,11 +1394,18 @@
      Répartition (2026-09-04) — par point :
        Force     20 PV,  5 Mana, 25 AD, 2 Armure
        Habileté  bonus de départ (table ci-dessus), au choix par point +5 AD **OU**
-                 +5 AP **OU** +10 Mana (cf. habSplit), 10 %Crit, 6 %D.Crit
+                 +5 AP **OU** +10 Mana (cf. habSplit), 2,5 %Crit, 4 %D.Crit
        Mental    60 PV, 20 Mana, 3 %Rés.Crit
        Magie     10 PV, 30 Mana, 25 AP, 2 Rés. Magique
      La Force et la Magie ne donnent plus de dégâts crit ; le Mental ne donne plus ni
      crit, ni AD/AP.
+     ⚠️ Crit RECALIBRÉ le 2026-09-05 (décision C) : `5 + 2,5·H` / `150 + 4·H` au lieu de
+     `5 + 10·H` / `150 + 6·H`. Les deux se MULTIPLIANT, l'ancienne paire valait ×3,23 de
+     dégâts moyens à 20 d'Habileté contre ×1,02 sans Habileté — un multiplicateur de
+     puissance déguisé en aléa, qui faisait qu'Urskaar avait le meilleur AD du jeu au
+     niveau 18 en infligeant le moins de dégâts réels. La nouvelle paire plafonne à
+     ×1,71 (coup critique ×2,30). Conséquence assumée : le surcrit (§6.3, seuil 100 %)
+     n'est plus atteignable par les caracs seules — il passe par l'équipement et les runes.
      `hab` (6e param, optionnel) = répartition `{ad, ap, mana}` des points d'Habileté ;
      absent → défaut par carac dominante (voir `habSplit`). Crit, dégâts crit et bonus
      de PV de départ restent calculés sur le TOTAL d'Habileté : seule la valeur
@@ -1383,14 +1414,17 @@
     F = Math.max(0, F | 0); H = Math.max(0, H | 0);
     M = Math.max(0, M | 0); C = Math.max(0, C | 0);
     level = Math.max(1, level | 0);
+    // Escalade globale (2026-09-05) : facteur commun tiré du TOTAL de points placés.
+    // Il multiplie les 4 magnitudes escaladées — jamais les pourcentages (voir ci-dessus).
+    var g = globalEscalation(F + H + M + C);
     // eH n'existe plus : l'Habileté escalade PAR PART (AD / AP), pas en bloc.
-    var eF = escalationFactor(F), eM = escalationFactor(M), eC = escalationFactor(C);
+    var eF = escalationFactor(F) * g, eM = escalationFactor(M) * g, eC = escalationFactor(C) * g;
     var habPV = HAB_START_HP[Math.min(H, 5)];  // bonus de départ Habileté plafonné
     var fondu = Math.max(0, 20 - 4 * (F + C)); // frappe de base des profils sans dégâts
     var hs = habSplit(F, H, C, hab);           // points d'Habileté dirigés AD / AP / Mana
     // Escalade GARANTIE À CHAQUE POINT : facteur moyen du total, appliqué au prorata.
     // Un point vaut donc pareil où qu'il aille, et répartir ne coûte rien.
-    var hUnit = H > 0 ? escalationFactor(H) / H : 0;
+    var hUnit = H > 0 ? escalationFactor(H) * g / H : 0;
     return {
       hp:      Math.round(50 + 30 * level + 20 * eF + 10 * eC + 60 * eM + habPV),
       mana:    Math.round(50 + 15 * level + 5 * eF + 30 * eC + 20 * eM + 10 * hUnit * hs.mana),
@@ -1398,8 +1432,8 @@
       ap:      Math.round(25 * eC + 5 * hUnit * hs.ap + fondu),
       armure:  Math.round(level + 2 * eF),
       resmag:  Math.round(level + 2 * eC),
-      crit:    5 + 10 * H,
-      dcrit:   150 + 6 * H,
+      crit:    5 + 2.5 * H,
+      dcrit:   150 + 4 * H,
       rescrit: 3 * M,
     };
   }
@@ -1514,7 +1548,7 @@
     sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect, carouselTransforms, planReorder,
     runeRadialLayout,
     xpToNext, applyXp, applyXpLoss, MAX_LEVEL,
-    escalationFactor, computeStats, charBaseStats, attrSum, respecValid, npcStatsFromAttrs,
+    escalationFactor, globalEscalation, computeStats, charBaseStats, attrSum, respecValid, npcStatsFromAttrs,
     defaultHabSplit, habSplit, HAB_DESTS,
   };
 });

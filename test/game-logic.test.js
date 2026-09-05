@@ -551,17 +551,40 @@ test('applyXp : montée jusqu’au cap, surplus jeté', () => {
 
 /* --- Refonte : escalade --- */
 const approx = (a, b, tol = 2) => Math.abs(a - b) <= tol;
-test('escalationFactor : table de référence §4.3', () => {
+/* ⚠️ Table RECALIBRÉE le 2026-09-05 (décision A/B) : escalade locale ramenée à
+   +1 %/point, `p × (1 + 0,010·(p−1))`. Elle ne correspond plus au §4.3 de la spec
+   hypermétrique — ce qu'elle perd est rendu par `globalEscalation` (test suivant). */
+test('escalationFactor : escalade locale +1 %/point', () => {
   assert.equal(L.escalationFactor(0), 0);
-  assert.equal(L.escalationFactor(4), 4.00);
-  assert.equal(L.escalationFactor(8), 8.72);
-  assert.ok(approx(L.escalationFactor(13), 15.93, 0.001));
-  assert.equal(L.escalationFactor(16), 20.86);
-  assert.equal(L.escalationFactor(20), 28.62);
+  assert.ok(approx(L.escalationFactor(4), 4.12, 0.001));
+  assert.ok(approx(L.escalationFactor(8), 8.56, 0.001));
+  assert.ok(approx(L.escalationFactor(13), 14.56, 0.001));
+  assert.ok(approx(L.escalationFactor(16), 18.40, 0.001));
+  assert.ok(approx(L.escalationFactor(20), 23.80, 0.001));
 });
-test('escalationFactor : zone PNJ (>20) quadratique', () => {
-  // §8 : Force 25 → facteur 45.82
-  assert.ok(approx(L.escalationFactor(25), 45.82, 0.01));
+test('escalationFactor : zone PNJ (>20) reste quadratique', () => {
+  // Le mult marginal repart de celui du 20e point (1.38) et gagne 0,5 par point.
+  assert.ok(approx(L.escalationFactor(25), 38.20, 0.01));
+  // strictement croissant et accélérant : un gros monstre reste hors barème PJ
+  const d21 = L.escalationFactor(21) - L.escalationFactor(20);
+  const d25 = L.escalationFactor(25) - L.escalationFactor(24);
+  assert.ok(d25 > d21);
+});
+test('globalEscalation : +0,49 % par point placé, toutes caracs confondues', () => {
+  assert.equal(L.globalEscalation(0), 1);
+  assert.ok(approx(L.globalEscalation(10), 1.049, 0.0001));   // budget niveau 2
+  assert.ok(approx(L.globalEscalation(34), 1.1666, 0.0001));  // budget niveau 18
+});
+test('la spécialisation reste payante mais ne domine plus (décision B)', () => {
+  // Prime d'un build 2 caracs sur un build 3 caracs, au budget du niveau 18 (34 pts).
+  const g = L.globalEscalation(34);
+  const val = (...pts) => pts.reduce((s, p) => s + L.escalationFactor(p), 0) * g;
+  const deux = val(20, 14), trois = val(12, 11, 11);
+  const prime = deux / trois - 1;
+  // avant : +15 % (le système poussait mécaniquement vers des builds purs)
+  assert.ok(prime > 0.03 && prime < 0.09, `prime = ${(prime * 100).toFixed(1)} %`);
+  // 17/17 doit rester quasi équivalent à 20/14 : pas de piège à répartir
+  assert.ok(Math.abs(val(17, 17) / deux - 1) < 0.02);
 });
 
 /* --- Refonte 2026-09-04 : computeStats (nouvelle répartition des caracs) ---
@@ -571,17 +594,17 @@ test('escalationFactor : zone PNJ (>20) quadratique', () => {
    régression silencieuse, il ne prouve pas la conformité à l'ancienne spec. */
 test('computeStats : PV des 5 profils types, niveau 18 (±2)', () => {
   // (F,H,M,C) à 33 pts, niveau 18
-  assert.ok(approx(L.computeStats(13, 0, 20, 0, 18).hp, 2626)); // Tank
-  assert.ok(approx(L.computeStats(20, 0, 0, 13, 18).hp, 1322)); // Carry
-  assert.ok(approx(L.computeStats(0, 0, 13, 20, 18).hp, 1832)); // Mage
-  assert.ok(approx(L.computeStats(13, 20, 0, 0, 18).hp, 984));  // Assassin
-  assert.ok(approx(L.computeStats(20, 13, 0, 0, 18).hp, 1237)); // Bruiser
+  assert.ok(approx(L.computeStats(13, 0, 20, 0, 18).hp, 2587)); // Tank
+  assert.ok(approx(L.computeStats(20, 0, 0, 13, 18).hp, 1312)); // Carry
+  assert.ok(approx(L.computeStats(0, 0, 13, 20, 18).hp, 1881)); // Mage
+  assert.ok(approx(L.computeStats(13, 20, 0, 0, 18).hp, 1003)); // Assassin
+  assert.ok(approx(L.computeStats(20, 13, 0, 0, 18).hp, 1218)); // Bruiser
 });
 test('computeStats : les pourcentages sont LINÉAIRES (jamais escaladés)', () => {
-  // eH(20) = 28.62 : si le crit était escaladé on lirait 291 et non 205.
+  // esc(20) = 23.80 : si le crit était escaladé on lirait 65 % et non 55 %.
   const s = L.computeStats(0, 20, 0, 0, 18);
-  assert.equal(s.crit, 205);   // 5 + 10*20
-  assert.equal(s.dcrit, 270);  // 150 + 6*20
+  assert.equal(s.crit, 55);    // 5 + 2.5*20   (recalibré 2026-09-05)
+  assert.equal(s.dcrit, 230);  // 150 + 4*20
   // Rés. crit : 3 %/pt de Mental, sur les points bruts → 60 % à 20 points (pas 86 %).
   assert.equal(L.computeStats(0, 0, 20, 0, 18).rescrit, 60);
 });
@@ -645,10 +668,10 @@ test('habSplit : normalise une repartition sur- ou sous-allouee', () => {
 test('computeStats : un point d\u2019Habilete vaut +5 AD, +5 AP OU +10 Mana', () => {
   const nu = L.computeStats(0, 0, 0, 0, 1);
   const d = (sp, k) => L.computeStats(0, 6, 0, 0, 1, sp)[k] - nu[k];
-  // escalade(6) = 6.36 -> chaque point porte un facteur moyen de 1.06
-  assert.equal(d({ ad: 6, ap: 0, mana: 0 }, 'ad'), 32);     // 5 * 6.36
+  // esc(6) = 6.30, x globalEscalation(6) = 1.0294 -> facteur moyen 6.485 par point
+  assert.equal(d({ ad: 6, ap: 0, mana: 0 }, 'ad'), 32);     // 5 * 6.485
   assert.equal(d({ ad: 0, ap: 6, mana: 0 }, 'ap'), 32);
-  assert.equal(d({ ad: 0, ap: 0, mana: 6 }, 'mana'), 64);   // 10 * 6.36
+  assert.equal(d({ ad: 0, ap: 0, mana: 6 }, 'mana'), 65);   // 10 * 6.485
   // le Mana d'Habilete s'ajoute au socle sans toucher AD/AP
   assert.equal(d({ ad: 0, ap: 0, mana: 6 }, 'ad'), 0);
 });
@@ -662,7 +685,7 @@ test('computeStats : l\u2019escalade est GARANTIE a chaque point (repartir ne co
   assert.ok(Math.abs(att({ ad: 7, ap: 13, mana: 0 }) - tout) <= 2);
   // et un point vaut le meme facteur quelle que soit la destination
   const mana = L.computeStats(0, 20, 0, 0, 18, { mana: 20 }).mana - nu.mana;
-  assert.equal(mana, 2 * tout);   // 10/pt contre 5/pt
+  assert.ok(Math.abs(mana - 2 * tout) <= 2);   // 10/pt contre 5/pt (a l'arrondi pres)
 });
 test('computeStats : la repartition ne touche NI le crit NI les degats crit NI les PV', () => {
   const a = L.computeStats(0, 6, 0, 0, 1, { ad: 6 });

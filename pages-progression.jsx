@@ -29,9 +29,11 @@ const HAB_DEST_META = [
   { k:'ap',   label:'AP',   rate:5,  col:'var(--stat-mag)'  },
   { k:'mana', label:'Mana', rate:10, col:'var(--mana)'      },
 ];
-function HabSplitRow({ val, split, left, floors, canEdit, onChange, confirmed, open, onReopen }) {
+function HabSplitRow({ val, total, split, left, floors, canEdit, onChange, confirmed, open, onReopen }) {
   // Escalade moyenne d'un point à ce niveau d'Habileté (cf. habSplit dans game-logic).
-  const unit = val > 0 ? escalationFactor(val) / val : 0;
+  // ⚠️ Le facteur GLOBAL doit être inclus, sinon l'aperçu sous-estime le gain réel :
+  // `computeStats` multiplie hUnit par globalEscalation(total des 4 caracs).
+  const unit = val > 0 ? escalationFactor(val) * globalEscalation(total) / val : 0;
   const move = (k, d) => onChange(Object.assign({}, split, { [k]: split[k] + d }));
   return (
     <div className="col gap-2" style={{ marginTop:10, padding:'10px 12px', borderRadius:8,
@@ -264,7 +266,7 @@ function ProgressionPage({ lockedCharId }) {
                       ))}
                     </div>
                     {attr.key === 'hab' && (
-                      <HabSplitRow val={val} split={split} left={splitLeft} floors={splitFloors}
+                      <HabSplitRow val={val} total={sum} split={split} left={splitLeft} floors={splitFloors}
                         canEdit={canEdit} onChange={setDraftSplit} confirmed={hasSplit}
                         open={splitOpen} onReopen={staff ? reopenSplit : null} />
                     )}
