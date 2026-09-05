@@ -229,7 +229,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   ils **ignorent** l'état passé en paramètre (cf. bug de bourse écrasée, État actuel 2026-08-21). Constantes `CAMPAIGN = 'campaign/runeterra'`, `SHARED_INV`, `SHARED_COINS`, `COMBAT_TURN`,
   `ENEMIES`, `PENDING_HITS`, `COMBAT_LOG`.
 - `components.jsx` — UI partagée : `Avatar`, `ResourceBar`, **`XpBar`** (barre d'XP lecture seule :
-  `xp/xpToNext(level)` + label niveau), `BuffBadge`, toasts
+  `xp/xpToNext(level)` + label niveau), `BuffBadge`, **`ConsumablesRow`** (rangée de potions
+  utilisables, **partagée fiche + onglet Combat** : filtre `cat:'Consommables'` qty>0 à effet parsable,
+  applique le gain [`applyHealMods` pour les PV] et décrémente la pile ; `setHp`/`setMana` acceptent
+  une valeur **ou un updater**, c'est ce qui la rend branchable des deux côtés sans variante), toasts
   (`renderToastMsg` = rendu sûr, seul `<b>` autorisé), **`CombatLog`** (journal de combat
   partagé lecture seule, lit `useCombatLog` ; prop `canClear` = bouton « Vider » staff), `LoginScreen`,
   `PendingScreen`, `SignOutButton`, `NumberStepper`, `ExportImportPanel` (import **assaini**
@@ -275,7 +278,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   **Modificateurs** (`ModifiersPanel`). **Stats en breakdown** : `SecondaryStats` affiche la valeur effective +
   le **bonus total en couleur** (`+N` vert/rouge) + le détail des sources (`base · +X buff · +Y mod · +Z stuff`),
   alimenté par `statBreakdown` (game-logic, pur, testé ; `base+buff+mod+stuff = effectif`, deltas marginaux
-  honnêtes). **Consommables = vraies potions de l'inventaire** (`HealPanel` : items `cat:'Consommables'` qty>0
+  honnêtes). **Consommables = vraies potions de l'inventaire** (`HealPanel` → **`ConsumablesRow`**, composant
+  **partagé avec l'onglet Combat** (components.jsx) : items `cat:'Consommables'` qty>0
   + effet parsable via `parseConsumableEffect` ; clic consomme une unité [valeur réelle = `flat + pct% du max
   effectif`], décrémente/supprime à 0 ; **plus de potion → bouton masqué** ; fini les boutons potion infinis en dur).
   **Outils d'ajustement libres réservés au MJ** (`isStaff` : Soigner/Dégâts/Mana/Bouclier d'un montant + ↺ max ;
@@ -378,7 +382,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (staff only, `setField('runeBonus')`) pour tester/gérer la montée de niveau. Visible des 3 rôles,
   sélecteur de perso pour le staff. Logique pure dans `game-logic.js`.
 - `pages-competences.jsx` — onglet **Combat** (`CompetencesPage`, libellé de menu « Combat ») : cast au clic
-  (mana − coût, pose le cooldown). Carte **Attaque de base** (arme équipée → `eff.ad`/`eff.ap`, bouton
+  (mana − coût, pose le cooldown). Bandeau **`MyResources`** en tête (**collant au scroll**, `position:sticky`
+  dans le conteneur de scroll de `CompetencesPage`) : jauges **PV / Mana / Bouclier** du lanceur + badge KO
+  + `ConsumablesRow` (**potions buvables sans quitter l'onglet**). Maxima lus dans **`eff`**, la même chaîne
+  que la fiche (items + runes + passif + `skillBuffs`) — jamais `base`, sinon un buff de PV afficherait une
+  barre fausse. Carte **Attaque de base** (arme équipée → `eff.ad`/`eff.ap`, bouton
   « Attaquer » → attaque en attente MJ, **sans mana ni cooldown**) + carte **Passif** (stepper de
   compteur + effet de stat en vert) + cartes **Actives** (mana, **badge CD statique** dans le coin
   [`1×/tour` / `CD N tours` / `1×/combat` / `Sans CD`, visible sans lancer la comp] + badge d'état
@@ -655,6 +663,32 @@ supprime pas** `Woolost`/`JB` : on les resynchronise sur `main` (`git merge main
 d'une base propre. Les anciennes branches de fonctionnalité (auth-comptes-roles, inventaire,
 arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, catalogue-editable)
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
+
+## État actuel (2026-09-06)
+- **PV/Mana/Bouclier + potions dans l'onglet Combat** — cache `20260906-1`, **228 tests verts**,
+  **aucune règle RTDB**, **aucune migration**, aucune logique pure touchée.
+  Le joueur ne voyait **nulle part** ses ressources pendant un combat : il subissait déjà la contrainte
+  de mana (les cartes grisent « Lancer » quand `manaCur < coût`) sans jamais voir la jauge, et boire une
+  potion obligeait à quitter l'onglet.
+  ⚠️ **Zéro nouvelle lecture Firebase** : `CompetencesBody` appelait déjà `useCharState(char.id)` — les
+  ressources étaient dans `state` depuis toujours, simplement pas affichées. C'est **sa propre fiche**,
+  donc autorisée par les règles existantes ; rien à voir avec l'ouverture de `hpCur` du 2026-09-02, qui
+  concernait la lecture des PV **des AUTRES** PJ (initiative).
+  Livré : `MyResources` (pages-competences) + **`ConsumablesRow` extrait de `HealPanel` dans
+  components.jsx** et partagé par la fiche et le Combat — l'unique implémentation de la conso de potion.
+  ⚠️ **Les maxima viennent de `eff`, pas de `base`** : un buff de compétence (Urskaar C4 : +30 % PV)
+  déplace le plafond ; afficher le max de base donnerait une barre à 130 % sur un onglet et pas sur
+  l'autre. `ResourceBar` borne à 100 %, donc le cas « `hpCur` > max après expiration d'un buff »
+  s'affiche proprement, exactement comme sur la fiche.
+  ⚠️ **`activeBuffs` est passé à `ConsumablesRow`** (`Object.keys(state.buffs)`) alors que le `eff` de la
+  page **ignore les buffs** (`computeEffective(base, mods, [], …)`, cf. ci-dessous) : `applyHealMods` lit
+  Miraculé/Hémorragie (±50 % soins reçus), une potion doit rendre ici **exactement** ce qu'elle rendrait
+  sur la fiche. Ne pas « harmoniser » en passant `[]`.
+  🐞 **Défaut ANTÉRIEUR repéré, NON corrigé (à trancher)** : `CompetencesBody` construit son `eff` avec
+  une liste de buffs **vide** — les buffs de la fiche (Aiguisage = %Crit×2, etc.) ne s'appliquent donc
+  **pas** aux dégâts calculés ni aux attaques envoyées au MJ, alors que la fiche les affiche. Les deux
+  onglets peuvent annoncer des stats différentes pour le même perso. Corriger = passer `activeBuffs` au
+  `computeEffective` de la ligne, mais ça change des dégâts en jeu : décision MJ.
 
 ## État actuel (2026-09-05)
 - **Bouton MJ « ↺ Rouvrir la respec » (`state.attrsOpen`)** — `f4ff3ec`, déployé sur `main`.

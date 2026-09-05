@@ -271,25 +271,7 @@ function HealPanel({ char, eff, hp, setHp, mana, setMana, shield, setShield, act
   const [amt, setAmt] = useState(50);
   const clampV = (v, m) => Math.max(0, Math.min(m, Math.round(v)));
 
-  // Consommables = items de l'inventaire (cat Consommables, qty>0, effet parsable).
-  const consumables = Object.values(inventory || {})
-    .filter(it => it.cat === 'Consommables' && (it.qty || 0) > 0 && parseConsumableEffect(it));
-  const consume = (it) => {
-    const fx = parseConsumableEffect(it); if (!fx) return;
-    if (fx.kind === 'hp') {
-      const gain = applyHealMods(fx.flat + Math.round(maxHp * fx.pct / 100), activeBuffs);
-      setHp(h => clampV(h + gain, maxHp));
-      toast(`<b>${char.name}</b> utilise ${it.name} · +${gain} PV`, 'buff');
-    } else {
-      const gain = fx.flat + Math.round(maxMana * fx.pct / 100);
-      setMana(v => clampV(v + gain, maxMana));
-      toast(`<b>${char.name}</b> utilise ${it.name} · +${gain} mana`, 'gold');
-    }
-    const q = (it.qty || 1) - 1;
-    if (q <= 0) removeInvItem(it.id); else setInvItem(it.id, { ...it, qty: q });
-  };
-  const consumValue = (it) => { const fx = parseConsumableEffect(it); if (!fx) return 0; return fx.flat + Math.round((fx.kind === 'hp' ? maxHp : maxMana) * fx.pct / 100); };
-
+  // Consommables : composant partagé avec l'onglet Combat (components.jsx).
   const healHp    = () => { const g = applyHealMods(amt, activeBuffs); setHp(h => clampV(h + g, maxHp)); toast(`<b>${char.name}</b> reçoit ${g} soins`, 'buff'); };
   const dmgHp     = () => { setHp(h => clampV(h - amt, maxHp));     toast(`<b>${char.name}</b> subit ${amt} dégâts`, 'debuff'); };
   const addShield = () => { const g = applyHealMods(amt, activeBuffs); setShield(s => clampV(s + g, maxShield)); toast(`<b>${char.name}</b> gagne ${g} bouclier`, 'gold'); };
@@ -300,18 +282,9 @@ function HealPanel({ char, eff, hp, setHp, mana, setMana, shield, setShield, act
       <div className="panel-head"><h3>Consommables</h3><span className="overline">temps réel</span></div>
       <div className="col gap-4" style={{ padding:'16px' }}>
         <div>
-          {consumables.length === 0
-            ? <div className="faint" style={{ fontSize:12 }}>Aucun consommable dans l'inventaire.</div>
-            : <div className="row gap-2 wrap">
-                {consumables.map(it => {
-                  const fx = parseConsumableEffect(it);
-                  return (
-                    <button key={it.id} className={'btn btn-sm ' + (fx.kind === 'hp' ? 'btn-hp' : 'btn-mana')} onClick={() => consume(it)}>
-                      {fx.kind === 'hp' ? '🧪' : '🔵'} {it.name} · +{consumValue(it)} <span className="faint">×{it.qty}</span>
-                    </button>
-                  );
-                })}
-              </div>}
+          <ConsumablesRow char={char} maxHp={maxHp} maxMana={maxMana} activeBuffs={activeBuffs}
+            inventory={inventory} setHp={setHp} setMana={setMana}
+            setInvItem={setInvItem} removeInvItem={removeInvItem} />
         </div>
 
         {staff && (

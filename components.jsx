@@ -65,6 +65,46 @@ function XpBar({ level, xp }) {
   );
 }
 
+/* --- Consommables utilisables (partagé fiche + onglet Combat) ---
+   Potions RÉELLES de l'inventaire (cat Consommables, qty>0, effet parsable via
+   parseConsumableEffect) : un clic consomme une unité, applique l'effet en temps réel
+   et décrémente la pile (suppression à 0). setHp/setMana acceptent une valeur ou un
+   updater (v => …) — même contrat que sur la fiche. */
+function ConsumablesRow({ char, maxHp, maxMana, activeBuffs, inventory, setHp, setMana, setInvItem, removeInvItem, empty }) {
+  const toast = useToast();
+  const clampV = (v, m) => Math.max(0, Math.min(m, Math.round(v)));
+  const consumables = Object.values(inventory || {})
+    .filter(it => it.cat === 'Consommables' && (it.qty || 0) > 0 && parseConsumableEffect(it));
+  const consumValue = (it) => { const fx = parseConsumableEffect(it); if (!fx) return 0; return fx.flat + Math.round((fx.kind === 'hp' ? maxHp : maxMana) * fx.pct / 100); };
+  const consume = (it) => {
+    const fx = parseConsumableEffect(it); if (!fx) return;
+    if (fx.kind === 'hp') {
+      const gain = applyHealMods(fx.flat + Math.round(maxHp * fx.pct / 100), activeBuffs);
+      setHp(h => clampV(h + gain, maxHp));
+      toast(`<b>${char.name}</b> utilise ${it.name} · +${gain} PV`, 'buff');
+    } else {
+      const gain = fx.flat + Math.round(maxMana * fx.pct / 100);
+      setMana(v => clampV(v + gain, maxMana));
+      toast(`<b>${char.name}</b> utilise ${it.name} · +${gain} mana`, 'gold');
+    }
+    const q = (it.qty || 1) - 1;
+    if (q <= 0) removeInvItem(it.id); else setInvItem(it.id, { ...it, qty: q });
+  };
+  if (!consumables.length) return <div className="faint" style={{ fontSize:12 }}>{empty || "Aucun consommable dans l'inventaire."}</div>;
+  return (
+    <div className="row gap-2 wrap">
+      {consumables.map(it => {
+        const fx = parseConsumableEffect(it);
+        return (
+          <button key={it.id} className={'btn btn-sm ' + (fx.kind === 'hp' ? 'btn-hp' : 'btn-mana')} onClick={() => consume(it)}>
+            {fx.kind === 'hp' ? '🧪' : '🔵'} {it.name} · +{consumValue(it)} <span className="faint">×{it.qty}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* --- Stat chip --- */
 function StatChip({ k, value, suffix='', magic=false }) {
   return (
@@ -1073,5 +1113,5 @@ Object.assign(window, {
   ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL, STAT_LABEL_SHORT, STAT_FAMILY, statFamily,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,
   InventoryGrid, ItemTooltip, INV_CAT_STYLE, INV_CAT_FALLBACK, invCatStyle, INV_FILTERS, INV_COINS, invCoin, CoinIcon, invFmt, invWeightFmt, invWeightLabel, invThumbStyle,
-  AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar, MOD_STATS, CoinEditor,
+  AmountStepper, ItemActionMenu, ItemCatalogPicker, CombatLog, XpBar, MOD_STATS, CoinEditor, ConsumablesRow,
 });

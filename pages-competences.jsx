@@ -206,6 +206,33 @@ function CombatantChip({ c }) {
   );
 }
 
+/* Ressources du lanceur, en tête de l'onglet Combat (collant au scroll : on regarde
+   son mana au moment où on fait défiler les cartes de compétences).
+   Les maxima viennent de `eff` — donc de la MÊME chaîne que la fiche (items + runes +
+   passif + skillBuffs) : pas de chiffre divergent entre les deux onglets. */
+function MyResources({ char, eff, state, activeBuffs, setHp, setMana, setInvItem, removeInvItem }) {
+  const hp = state.hpCur || 0, mana = state.manaCur || 0, shield = state.shield || 0;
+  return (
+    <div className="panel" style={{ padding: '10px 14px', position: 'sticky', top: 0, zIndex: 5 }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+        <span className="overline">Mes ressources</span>
+        {hp <= 0 && <span className="badge" style={{ background: 'var(--bg-inset)', color: 'var(--hp)' }}>KO</span>}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+        <ResourceBar kind="hp" cur={hp} max={eff.hp} />
+        <ResourceBar kind="mana" cur={mana} max={eff.mana} />
+        <ResourceBar kind="shield" cur={shield} max={Math.max(char.shieldMax || 0, shield)} />
+      </div>
+      <div style={{ marginTop: 9 }}>
+        <ConsumablesRow char={char} maxHp={eff.hp} maxMana={eff.mana} activeBuffs={activeBuffs}
+          inventory={state.inventory} setHp={setHp} setMana={setMana}
+          setInvItem={setInvItem} removeInvItem={removeInvItem}
+          empty="Aucune potion dans l'inventaire." />
+      </div>
+    </div>
+  );
+}
+
 /* Petit stepper de compteur (max arbitraire, contrairement à NumberStepper borné 5). */
 function CounterStepper({ label, value, max, color, onChange }) {
   const v = value || 0;
@@ -332,7 +359,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
 
 function CompetencesBody({ char, staff }) {
   const toast = useToast();
-  const { state, setField, setCounter, setCooldown, setSkillBuff } = useCharState(char.id);
+  const { state, setField, setCounter, setCooldown, setSkillBuff, setInvItem, removeInvItem } = useCharState(char.id);
   const { turn } = useSharedTurn();
   const { enemies } = useMJEnemies();
   const { enemies: foes, allies } = splitCombatants(enemies);
@@ -372,6 +399,13 @@ function CompetencesBody({ char, staff }) {
   const eff = computeEffective(base, state.modifiers, [], mergeMods(mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods), skillBuffMods));
   const wType = weaponTypeOf(state, char);
   const baseCtx = { counters, level, wType, hpMax: base.hp };
+  // Setters de ressources : même contrat que la fiche (valeur ou updater), pour que
+  // ConsumablesRow soit branchable des deux côtés sans variante.
+  const setHp   = (v) => setField('hpCur',   typeof v === 'function' ? v(state.hpCur || 0) : v);
+  const setMana = (v) => setField('manaCur', typeof v === 'function' ? v(state.manaCur || 0) : v);
+  // Buffs réels du perso : applyHealMods lit Miraculé/Hémorragie (±50 % soins reçus).
+  // Une potion doit donc rendre ici EXACTEMENT ce qu'elle rendrait sur la fiche.
+  const activeBuffs = Object.keys(state.buffs || {});
   const kitWithId = Object.assign({ _id: char.id }, kit);
 
   function cast(sk, ctx, dmgArg, nbHits) {
@@ -497,6 +531,8 @@ function CompetencesBody({ char, staff }) {
           <span className="badge" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>⏱ Tour {turn}</span>
         </span>
       </div>
+      <MyResources char={char} eff={eff} state={state} activeBuffs={activeBuffs}
+        setHp={setHp} setMana={setMana} setInvItem={setInvItem} removeInvItem={removeInvItem} />
       {enemies.length > 0 && (
         <div className="panel" style={{ padding: '10px 14px' }}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
