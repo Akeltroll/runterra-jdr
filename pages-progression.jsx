@@ -43,18 +43,28 @@ const MENTAL_DEST_META = [
    doit être vide pour confirmer, plancher opposé seulement une fois la répartition
    confirmée, et réouverture par le MJ. */
 function SplitRow({ label, meta, emptyLabel, defaultHint, val, total, split, left, floors,
-                    canEdit, onChange, confirmed, open, onReopen }) {
+                    canEdit, onChange, confirmed, open, onReopen, onFill }) {
   // Escalade moyenne d'un point à ce niveau de carac (cf. habSplit/mentalSplit).
   // ⚠️ Le facteur GLOBAL doit être inclus, sinon l'aperçu sous-estime le gain réel :
   // `computeStats` multiplie hUnit/mUnit par globalEscalation(total des 4 caracs).
   const unit = val > 0 ? escalationFactor(val) * globalEscalation(total) / val : 0;
   const move = (k, d) => onChange(Object.assign({}, split, { [k]: split[k] + d }));
   return (
+    /* ⚠️ Cadre en OR dès qu'il reste des points à placer : c'est la SEULE cause de blocage
+       du bouton « Confirmer » qui ne se voit pas dans le compteur d'en-tête — celui-ci
+       affiche « 0 restant » en vert alors que la réserve, elle, est pleine. Sans cette
+       alerte, le bouton gris est incompréhensible (cf. bug de respec du 2026-09-06). */
     <div className="col gap-2" style={{ marginTop:10, padding:'10px 12px', borderRadius:8,
-      background:'var(--bg-inset)', border:'1px dashed var(--line-strong)' }}>
+      background:'var(--bg-inset)',
+      border: left > 0 ? '1px solid var(--gold-bright)' : '1px dashed var(--line-strong)' }}>
       <div className="row" style={{ justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
         <span className="overline" style={{ fontSize:9.5 }}>{label}</span>
         <span className="row gap-2" style={{ alignItems:'center' }}>
+          {canEdit && onFill && left > 0 && (
+            <button className="btn btn-sm btn-ghost" onClick={onFill}
+              title="Placer les points restants sur la destination par défaut (tu peux les déplacer ensuite)"
+              style={{ padding:'2px 8px', fontSize:10.5, color:'var(--gold-bright)' }}>Tout placer</button>
+          )}
           {onReopen && val > 0 && (
             <button className="btn btn-sm btn-ghost" onClick={onReopen}
               title={open ? 'Refermer : le joueur ne pourra plus déplacer ses points déjà placés'
@@ -245,6 +255,14 @@ function ProgressionPage({ lockedCharId }) {
     setDraftSplit({ ad:0, ap:0, mana:0 });
     setDraftMent({ hp:0, mana:0 });
   };
+  /* « Tout placer » : verse la réserve sur la destination par défaut. On réutilise
+     `habSplit`/`mentalSplit` (game-logic), dont c'est exactement la sémantique — le
+     reliquat part sur la carac de dégâts dominante / sur les PV. Le joueur peut ensuite
+     déplacer ces points ligne par ligne : c'est une amorce, pas un choix imposé.
+     ⚠️ Sans ce raccourci, une réserve ouverte est un blocage MUET : le compteur d'en-tête
+     dit « 0 restant » et « Confirmer » reste gris sans raison visible. */
+  const fillSplit = () => setDraftSplit(habSplit(view.force, view.hab, view.magie, split));
+  const fillMent  = () => setDraftMent(mentalSplit(view.mental, ment));
   // Rouvre la répartition d'Habileté du joueur (staff). Utile quand un joueur s'est
   // trompé, ou quand une refonte de règles rend son placement caduc.
   const reopenSplit = () => {
@@ -377,7 +395,7 @@ function ProgressionPage({ lockedCharId }) {
                         defaultHint={"Répartition pas encore confirmée — le défaut suit ta carac de dégâts dominante. Tant que tu n'as pas confirmé, tu peux tout redistribuer librement."}
                         val={val} total={sum} split={split} left={splitLeft} floors={splitFloors}
                         canEdit={canEdit} onChange={setDraftSplit} confirmed={hasSplit}
-                        open={splitOpen} onReopen={staff ? reopenSplit : null} />
+                        open={splitOpen} onReopen={staff ? reopenSplit : null} onFill={fillSplit} />
                     )}
                     {attr.key === 'mental' && (
                       <SplitRow label="Répartition du Mental (part dirigée)" meta={MENTAL_DEST_META}
@@ -385,7 +403,7 @@ function ProgressionPage({ lockedCharId }) {
                         defaultHint={"Répartition pas encore confirmée — par défaut, tout part en PV (soit 60 PV + 15 Mana par point, comme avant). Tant que tu n'as pas confirmé, tu peux tout redistribuer librement."}
                         val={val} total={sum} split={ment} left={mentLeft} floors={mentFloors}
                         canEdit={canEdit} onChange={setDraftMent} confirmed={hasMent}
-                        open={mentOpen} onReopen={staff ? reopenMent : null} />
+                        open={mentOpen} onReopen={staff ? reopenMent : null} onFill={fillMent} />
                     )}
                   </div>
                 );
@@ -395,6 +413,13 @@ function ProgressionPage({ lockedCharId }) {
             {canEdit && (
               <div className="row" style={{ justifyContent:'flex-end', gap:10, padding:'0 18px 16px', alignItems:'center' }}>
                 <button className="btn btn-sm btn-ghost" onClick={() => { setDraft(savedAttrs); setDraftSplit(savedSplit); setDraftMent(savedMent); }} disabled={!dirty}>Réinitialiser</button>
+                {/* ⚠️ Le motif du blocage est AFFICHÉ, pas seulement en `title` : une
+                    infobulle n'existe pas au doigt (tablette) et le compteur d'en-tête
+                    dit « 0 restant » même quand une réserve de répartition bloque tout. */}
+                {(!valid || !dirty) && confirmHint && (
+                  <span className="mono" style={{ fontSize:11.5, fontWeight:700, textAlign:'right',
+                    color: valid ? 'var(--ink-faint)' : 'var(--gold-bright)' }}>{confirmHint}</span>
+                )}
                 <button className="btn btn-gold" onClick={confirm} disabled={!valid || !dirty}
                   title={confirmHint}>Confirmer</button>
               </div>
