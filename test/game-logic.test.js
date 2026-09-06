@@ -618,10 +618,56 @@ test('computeStats : seules Force et Habileté portent AD, Magie et Habileté po
   // La Force et la Magie ne donnent plus de dégâts crit.
   assert.equal(L.computeStats(20, 0, 0, 13, 18).dcrit, 150);
 });
-test('computeStats : Force/Magie donnent 2 AR/RM par point (escaladés) + 1 par niveau', () => {
-  assert.equal(L.computeStats(4, 0, 0, 0, 2).armure, 10);  // 2 (niveau) + 2*4
-  assert.equal(L.computeStats(0, 0, 0, 4, 2).resmag, 10);
+test('computeStats : Force/Magie donnent 1 AR/RM de socle + 2 par point dirige', () => {
+  // Defaut (tout en degats) : 1 AR par point de Force, escalade, + 1 par niveau.
+  assert.equal(L.computeStats(4, 0, 0, 0, 2).armure, 6);   // 2 (niveau) + 1*4.20
+  assert.equal(L.computeStats(0, 0, 0, 4, 2).resmag, 6);
+  // Tout en defense : socle 1 + 2 par point dirige = 3 par point.
+  assert.equal(L.computeStats(4, 0, 0, 0, 2, null, null, { ad: 0, armure: 4 }).armure, 15);
+  assert.equal(L.computeStats(0, 0, 0, 4, 2, null, null, null, { ap: 0, resmag: 4 }).resmag, 15);
   assert.equal(L.computeStats(0, 0, 0, 0, 18).armure, 18); // socle de niveau seul
+});
+/* --- Repartition Force / Magie : degats / defense (2026-09-06) --- */
+test('forceSplit / magieSplit : defaut TOUT EN DEGATS, sur- et sous-allocation', () => {
+  assert.deepEqual(L.forceSplit(5, null), { ad: 5, armure: 0 });      // jamais confirmee
+  assert.deepEqual(L.magieSplit(5, null), { ap: 5, resmag: 0 });
+  assert.deepEqual(L.forceSplit(0, null), { ad: 0, armure: 0 });
+  assert.deepEqual(L.forceSplit(4, { ad: 2, armure: 2 }), { ad: 2, armure: 2 });
+  // sur-allocation : servie dans l'ordre ad -> armure, coupee au budget
+  assert.deepEqual(L.forceSplit(4, { ad: 9, armure: 9 }), { ad: 4, armure: 0 });
+  assert.deepEqual(L.magieSplit(4, { ap: 9, resmag: 9 }), { ap: 4, resmag: 0 });
+  // sous-allocation : le reliquat part en degats, jamais perdu
+  assert.deepEqual(L.forceSplit(4, { armure: 1 }), { ad: 3, armure: 1 });
+  assert.deepEqual(L.magieSplit(4, { resmag: 1 }), { ap: 3, resmag: 1 });
+  assert.deepEqual(L.forceSplit(4, { ad: -5, armure: 2 }), { ad: 2, armure: 2 });
+});
+test('computeStats : un point de Force vaut +10 AD OU +2 Armure (socle 15 AD + 1 AR)', () => {
+  // Force 6, niveau 1 : esc(6) = 6.30 x globalEscalation(6) = 1.0294 -> eF = 6.485.
+  const s = (sp) => L.computeStats(6, 0, 0, 0, 1, null, null, sp);
+  const off = s({ ad: 6, armure: 0 }), def = s({ ad: 0, armure: 6 });
+  assert.equal(off.ad, 162);      // 15*6.485 (socle) + 10*6.485 (dirige) + 0 de fondu
+  assert.equal(off.armure, 7);    // 1 (niveau) + 1*6.485 (socle), rien de dirige
+  assert.equal(def.ad, 97);       // socle seul : 15*6.485
+  assert.equal(def.armure, 20);   // 1 + 6.485 + 2*6.485
+  // ⚠️ Le defaut (absent) reproduit EXACTEMENT l'ancien AD de 25/pt : c'est ce qui garde
+  // valide la matrice de TTK du 2026-09-05, batie sur l'AD. Seule l'armure baisse.
+  assert.equal(L.computeStats(6, 0, 0, 0, 1).ad, off.ad);
+  assert.equal(L.computeStats(6, 0, 0, 0, 1).armure, off.armure);
+});
+test('computeStats : repartir la Force ne coute rien (escalade au prorata)', () => {
+  const nu = L.computeStats(0, 0, 0, 0, 18);
+  // Valeur totale d'un point = son AD + son armure convertie au taux du socle (10 AD <-> 2 AR).
+  const val = (sp) => { const s = L.computeStats(20, 0, 0, 0, 18, null, null, sp);
+    return (s.ad - nu.ad) + (s.armure - nu.armure) * 5; };
+  const tout = val({ ad: 20, armure: 0 });
+  assert.ok(Math.abs(val({ ad: 10, armure: 10 }) - tout) <= 3);
+  assert.ok(Math.abs(val({ ad: 0, armure: 20 }) - tout) <= 3);
+});
+test('computeStats : la Magie est le MIROIR exact de la Force', () => {
+  const f = L.computeStats(7, 0, 0, 0, 5, null, null, { ad: 3, armure: 4 });
+  const c = L.computeStats(0, 0, 0, 7, 5, null, null, null, { ap: 3, resmag: 4 });
+  assert.equal(f.ad, c.ap);
+  assert.equal(f.armure, c.resmag);
 });
 test('computeStats : socle de niveau au niveau 1, caracs nulles', () => {
   const s = L.computeStats(0, 0, 0, 0, 1);

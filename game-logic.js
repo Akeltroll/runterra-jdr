@@ -1656,6 +1656,62 @@
     return out;
   }
 
+  /* --- Répartition de la Force et de la Magie : dégâts / défense (2026-09-06) ---
+     Les deux caracs sont en MIROIR, décision MJ :
+       Force : socle garanti 15 AD + 1 Armure (+ 20 PV, 5 Mana), puis chaque point
+               dirige **+10 AD** OU **+2 Armure**.
+       Magie : socle garanti 15 AP + 1 Rés.Mag (+ 10 PV, 30 Mana), puis chaque point
+               dirige **+10 AP** OU **+2 Rés.Mag**.
+     Tout en dégâts → 25 AD/AP et 1 AR/RM ; tout en défense → 15 AD/AP et 3 AR/RM.
+     ⚠️ Les deux destinations n'ont PAS le même taux (10 contre 2) : c'est voulu, une
+     unité d'armure vaut bien plus qu'une unité d'AD (réduction en AR/(AR+120)).
+     ⚠️ Même ruling que l'Habileté et le Mental : l'escalade est distribuée AU PRORATA
+     du total, donc un point vaut autant où qu'il aille et répartir ne coûte rien.
+     ⚠️ **CONTRAIRE au Mental (décision D), AUCUNE répartition ne reproduit l'ancien
+     coefficient** : avant, un point de Force donnait 25 AD **et** 2 Armure. Le défaut
+     tout-dégâts garde les 25 AD (donc la matrice de TTK du 2026-09-05, bâtie sur l'AD,
+     reste valide) mais **fait tomber l'armure de 2 à 1 par point**. C'est le prix du
+     choix : la défense doit désormais être payée. Un profil qui veut son armure d'avant
+     place la moitié de ses points en défense (2 AR/pt, mais 20 AD au lieu de 25).
+     ⚠️ Absent = jamais confirmé → défaut **tout en dégâts** (AD pour la Force, AP pour
+     la Magie) : c'est le seul défaut qui préserve la puissance offensive des 5 PJ sans
+     migration. Ne pas le changer sans re-vérifier la matrice de TTK. */
+  var FORCE_DESTS = ['ad', 'armure'];
+  var FORCE_BASE_AD = 15, FORCE_BASE_AR = 1;
+  var FORCE_DIRECTED = { ad: 10, armure: 2 };
+  var MAGIE_DESTS = ['ap', 'resmag'];
+  var MAGIE_BASE_AP = 15, MAGIE_BASE_RM = 1;
+  var MAGIE_DIRECTED = { ap: 10, resmag: 2 };
+  function defaultForceSplit(F) { return { ad: Math.max(0, F | 0), armure: 0 }; }
+  function defaultMagieSplit(C) { return { ap: Math.max(0, C | 0), resmag: 0 }; }
+  /* Normalisent une répartition stockée, même contrat que habSplit/mentalSplit :
+     sur-allocation servie dans l'ordre des DESTS puis coupée au budget ; sous-allocation
+     reversée sur le défaut (dégâts), jamais perdue. */
+  function forceSplit(F, split) {
+    F = Math.max(0, F | 0);
+    if (split == null) return defaultForceSplit(F);
+    var out = { ad: 0, armure: 0 }, left = F;
+    for (var i = 0; i < FORCE_DESTS.length; i++) {
+      var k = FORCE_DESTS[i];
+      var n = Math.max(0, Math.min(left, split[k] | 0));
+      out[k] = n; left -= n;
+    }
+    if (left > 0) out.ad += left;
+    return out;
+  }
+  function magieSplit(C, split) {
+    C = Math.max(0, C | 0);
+    if (split == null) return defaultMagieSplit(C);
+    var out = { ap: 0, resmag: 0 }, left = C;
+    for (var i = 0; i < MAGIE_DESTS.length; i++) {
+      var k = MAGIE_DESTS[i];
+      var n = Math.max(0, Math.min(left, split[k] | 0));
+      out[k] = n; left -= n;
+    }
+    if (left > 0) out.ap += left;
+    return out;
+  }
+
   /* --- Moteur de stats refondu (info-mj/SPECIFICATION, révisé 2026-09-04) ---
      9 stats dérivées de 4 caracs + niveau. Magnitude escaladée, POURCENTAGES LINÉAIRES.
      ⚠️ Cette asymétrie est volontaire : `escalationFactor` ne s'applique qu'aux grandeurs
@@ -1686,7 +1742,7 @@
      absent → défaut par carac dominante (voir `habSplit`). Crit, dégâts crit et bonus
      de PV de départ restent calculés sur le TOTAL d'Habileté : seule la valeur
      « dirigeable » (attaque / mana) est répartie. */
-  function computeStats(F, H, M, C, level, hab, ment) {
+  function computeStats(F, H, M, C, level, hab, ment, force, magie) {
     F = Math.max(0, F | 0); H = Math.max(0, H | 0);
     M = Math.max(0, M | 0); C = Math.max(0, C | 0);
     level = Math.max(1, level | 0);
@@ -1703,16 +1759,22 @@
     var hUnit = H > 0 ? escalationFactor(H) * g / H : 0;
     var ms = mentalSplit(M, ment);             // points de Mental dirigés PV / Mana
     var mUnit = M > 0 ? escalationFactor(M) * g / M : 0;
+    var fs = forceSplit(F, force);             // points de Force dirigés AD / Armure
+    var fUnit = F > 0 ? escalationFactor(F) * g / F : 0;
+    var cs = magieSplit(C, magie);             // points de Magie dirigés AP / Rés.Mag
+    var cUnit = C > 0 ? escalationFactor(C) * g / C : 0;
     return {
       hp:      Math.round(50 + 30 * level + 20 * eF + 10 * eC
                  + MENTAL_BASE_HP * eM + MENTAL_DIRECTED * mUnit * ms.hp + habPV),
       mana:    Math.round(50 + 15 * level + 5 * eF + 30 * eC
                  + MENTAL_BASE_MANA * eM + MENTAL_DIRECTED * mUnit * ms.mana
                  + 10 * hUnit * hs.mana),
-      ad:      Math.round(25 * eF + 5 * hUnit * hs.ad + fondu),
-      ap:      Math.round(25 * eC + 5 * hUnit * hs.ap + fondu),
-      armure:  Math.round(level + 2 * eF),
-      resmag:  Math.round(level + 2 * eC),
+      ad:      Math.round(FORCE_BASE_AD * eF + FORCE_DIRECTED.ad * fUnit * fs.ad
+                 + 5 * hUnit * hs.ad + fondu),
+      ap:      Math.round(MAGIE_BASE_AP * eC + MAGIE_DIRECTED.ap * cUnit * cs.ap
+                 + 5 * hUnit * hs.ap + fondu),
+      armure:  Math.round(level + FORCE_BASE_AR * eF + FORCE_DIRECTED.armure * fUnit * fs.armure),
+      resmag:  Math.round(level + MAGIE_BASE_RM * eC + MAGIE_DIRECTED.resmag * cUnit * cs.resmag),
       crit:    5 + 2.5 * H,
       dcrit:   150 + 4 * H,
       rescrit: 3 * M,
@@ -1731,7 +1793,8 @@
      L'ennemi n'a qu'un champ `atk` : on y met la plus élevée de AD/AP. */
   function npcStatsFromAttrs(attrs, level) {
     attrs = attrs || {};
-    var s = computeStats(attrs.force, attrs.hab, attrs.mental, attrs.magie, level, attrs.habSplit, attrs.mentalSplit);
+    var s = computeStats(attrs.force, attrs.hab, attrs.mental, attrs.magie, level,
+      attrs.habSplit, attrs.mentalSplit, attrs.forceSplit, attrs.magieSplit);
     return {
       hpMax: s.hp, hpCur: s.hp,
       manaMax: s.mana, manaCur: s.mana,
@@ -1772,7 +1835,11 @@
     if (!hs && state && state.habAd != null) hs = { ad: state.habAd };
     // Répartition du Mental (PV/Mana) : même contrat. Absente → défaut tout en PV.
     var ms = (state && state.mentalSplit) || (char && char.mentalSplit) || null;
-    return computeStats(a.force, a.hab, a.mental, a.magie, level, hs, ms);
+    // Répartitions Force (AD/Armure) et Magie (AP/Rés.Mag) : même contrat.
+    // Absentes → défaut tout en dégâts (forceSplit/magieSplit).
+    var fsp = (state && state.forceSplit) || (char && char.forceSplit) || null;
+    var csp = (state && state.magieSplit) || (char && char.magieSplit) || null;
+    return computeStats(a.force, a.hab, a.mental, a.magie, level, hs, ms, fsp, csp);
   }
 
   /* XP & niveau : courbe officielle du MJ (info-mj/tableau_XP.png).
@@ -1837,5 +1904,7 @@
     escalationFactor, globalEscalation, computeStats, charBaseStats, attrSum, respecValid, npcStatsFromAttrs,
     defaultHabSplit, habSplit, HAB_DESTS,
     defaultMentalSplit, mentalSplit, MENTAL_DESTS,
+    defaultForceSplit, forceSplit, FORCE_DESTS, FORCE_DIRECTED,
+    defaultMagieSplit, magieSplit, MAGIE_DESTS, MAGIE_DIRECTED,
   };
 });

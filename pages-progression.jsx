@@ -38,6 +38,19 @@ const MENTAL_DEST_META = [
   { k:'hp',   label:'PV',   rate:15, col:'var(--hp)'   },
   { k:'mana', label:'Mana', rate:15, col:'var(--mana)' },
 ];
+/* Force et Magie (2026-09-06) : socle garanti 15 AD + 1 Armure (resp. 15 AP + 1 Rés.Mag),
+   puis chaque point dirige +10 AD **ou** +2 Armure (resp. +10 AP ou +2 Rés.Mag).
+   ⚠️ Les deux destinations n'ont PAS le même taux : 1 point d'armure vaut bien plus
+   qu'1 point d'AD (réduction en AR/(AR+120)). Ce n'est donc pas un arbitrage à somme
+   nulle, contrairement au Mental (15/15) — c'est voulu. */
+const FORCE_DEST_META = [
+  { k:'ad',     label:'AD',     rate:10, col:'var(--stat-phys)' },
+  { k:'armure', label:'Armure', rate:2,  col:'var(--stat-phys)' },
+];
+const MAGIE_DEST_META = [
+  { k:'ap',     label:'AP',      rate:10, col:'var(--stat-mag)' },
+  { k:'resmag', label:'Rés.Mag', rate:2,  col:'var(--stat-mag)' },
+];
 /* Bloc de répartition partagé (Habileté : AD/AP/Mana — Mental : PV/Mana). Les deux
    suivent le même contrat : escalade garantie à chaque point, réserve « à placer » qui
    doit être vide pour confirmer, plancher opposé seulement une fois la répartition
@@ -127,7 +140,8 @@ function ProgressionPage({ lockedCharId }) {
   const staff = !lockedCharId;
   const [charId, setCharId] = useState(lockedCharId || 'rathael');
   const char = CHARACTERS.find(c => c.id === charId);
-  const { state, setAttrs, setAttrsLocked, setAttrsOpen, setHabSplitOpen, setMentalSplitOpen } = useCharState(charId);
+  const { state, setAttrs, setAttrsLocked, setAttrsOpen, setHabSplitOpen, setMentalSplitOpen,
+          setForceSplitOpen, setMagieSplitOpen } = useCharState(charId);
 
   const effLevel = (state && state.level != null ? state.level : char.level) || 1;
   const lvlRow = LEVELS.find(l => l.lvl === effLevel) || LEVELS[LEVELS.length - 1];
@@ -162,6 +176,17 @@ function ProgressionPage({ lockedCharId }) {
   const mentOpen = !!(state && state.mentalSplitOpen);
   const savedMent = mentalSplit(savedAttrs.mental, rawMent);
 
+  // Répartitions Force (AD/Armure) et Magie (AP/Rés.Mag) — même contrat que les deux
+  // précédentes. Défaut (absent) = tout en dégâts.
+  const rawForce = (state && state.forceSplit) || null;
+  const hasForce = !!rawForce;
+  const forceOpen = !!(state && state.forceSplitOpen);
+  const savedForce = forceSplit(savedAttrs.force, rawForce);
+  const rawMagie = (state && state.magieSplit) || null;
+  const hasMagie = !!rawMagie;
+  const magieOpen = !!(state && state.magieSplitOpen);
+  const savedMagie = magieSplit(savedAttrs.magie, rawMagie);
+
   // Brouillon local : on édite sans écrire, puis « Confirmer ». Resync sur changement
   // de perso ou de valeurs sauvegardées (après confirmation ou édition externe).
   const [draft, setDraft] = useState(savedAttrs);
@@ -173,6 +198,12 @@ function ProgressionPage({ lockedCharId }) {
   const [draftMent, setDraftMent] = useState(savedMent);
   useEffect(() => { setDraftMent(savedMent); },
     [charId, savedMent.hp, savedMent.mana]);
+  const [draftForce, setDraftForce] = useState(savedForce);
+  useEffect(() => { setDraftForce(savedForce); },
+    [charId, savedForce.ad, savedForce.armure]);
+  const [draftMagie, setDraftMagie] = useState(savedMagie);
+  useEffect(() => { setDraftMagie(savedMagie); },
+    [charId, savedMagie.ap, savedMagie.resmag]);
 
   const view = canEdit ? draft : savedAttrs;          // valeurs affichées (brouillon si éditable)
   // Plancher par caracs : un joueur ne peut JAMAIS descendre sous ses valeurs déjà confirmées
@@ -193,21 +224,31 @@ function ProgressionPage({ lockedCharId }) {
   // étroit : rendre une répartition sans rendre la respec.
   const splitFloors = (staff || !hasSplit || splitOpen || attrsOpen) ? null : savedSplit;
   const mentFloors = (staff || !hasMent || mentOpen || attrsOpen) ? null : savedMent;
+  const forceFloors = (staff || !hasForce || forceOpen || attrsOpen) ? null : savedForce;
+  const magieFloors = (staff || !hasMagie || magieOpen || attrsOpen) ? null : savedMagie;
   // Bornée sur l'Habileté du BROUILLON : baisser l'Habileté rogne la répartition,
   // la monter laisse les nouveaux points « à placer ».
   const split = clampSplitDraft(draftSplit, view.hab);
   const splitLeft = view.hab - (split.ad + split.ap + split.mana);
   const ment = clampSplitDraft(draftMent, view.mental, ['mana', 'hp']);
   const mentLeft = view.mental - (ment.hp + ment.mana);
+  const forc = clampSplitDraft(draftForce, view.force, ['armure', 'ad']);
+  const forcLeft = view.force - (forc.ad + forc.armure);
+  const magi = clampSplitDraft(draftMagie, view.magie, ['resmag', 'ap']);
+  const magiLeft = view.magie - (magi.ap + magi.resmag);
   // Confirmer exige que les DEUX réserves soient vides, exactement comme les points
   // de caractéristiques : un point non placé ne rapporterait rien.
-  const valid = attrsValid && splitLeft === 0 && mentLeft === 0;
+  const valid = attrsValid && splitLeft === 0 && mentLeft === 0
+    && forcLeft === 0 && magiLeft === 0;
   const dirty = view.force !== savedAttrs.force || view.hab !== savedAttrs.hab
     || view.mental !== savedAttrs.mental || view.magie !== savedAttrs.magie
     || split.ad !== savedSplit.ad || split.ap !== savedSplit.ap || split.mana !== savedSplit.mana
     || ment.hp !== savedMent.hp || ment.mana !== savedMent.mana
-    || !hasSplit || !hasMent;
-  const preview = computeStats(view.force, view.hab, view.mental, view.magie, effLevel, split, ment);
+    || forc.ad !== savedForce.ad || forc.armure !== savedForce.armure
+    || magi.ap !== savedMagie.ap || magi.resmag !== savedMagie.resmag
+    || !hasSplit || !hasMent || !hasForce || !hasMagie;
+  const preview = computeStats(view.force, view.hab, view.mental, view.magie, effLevel,
+    split, ment, forc, magi);
   /* Pourquoi « Confirmer » est gris. ⚠️ Le cas `valid && !dirty` DOIT être couvert : c'est
      celui qu'on atteint juste après une confirmation (et donc après une réouverture de
      respec, qui ne rend rien « à confirmer »), et sans message le bouton gris sans
@@ -216,6 +257,8 @@ function ProgressionPage({ lockedCharId }) {
   const confirmHint = !attrsValid ? `Répartis exactement ${budget} points (limite ${cap} par carac)`
     : splitLeft > 0 ? `Place tes ${splitLeft} point(s) d'Habileté`
     : mentLeft > 0 ? `Place tes ${mentLeft} point(s) de Mental`
+    : forcLeft > 0 ? `Place tes ${forcLeft} point(s) de Force`
+    : magiLeft > 0 ? `Place tes ${magiLeft} point(s) de Magie`
     : !dirty ? (attrsOpen ? 'Rien n’a changé — « Garder la répartition » referme la fenêtre'
                           : 'Aucun changement à confirmer — déplace un point d’abord')
     : '';
@@ -255,6 +298,8 @@ function ProgressionPage({ lockedCharId }) {
     setDraft({ force:0, hab:0, mental:0, magie:0 });
     setDraftSplit({ ad:0, ap:0, mana:0 });
     setDraftMent({ hp:0, mana:0 });
+    setDraftForce({ ad:0, armure:0 });
+    setDraftMagie({ ap:0, resmag:0 });
   };
   /* « Tout placer » : verse la réserve sur la destination par défaut. On réutilise
      `habSplit`/`mentalSplit` (game-logic), dont c'est exactement la sémantique — le
@@ -264,6 +309,8 @@ function ProgressionPage({ lockedCharId }) {
      dit « 0 restant » et « Confirmer » reste gris sans raison visible. */
   const fillSplit = () => setDraftSplit(habSplit(view.force, view.hab, view.magie, split));
   const fillMent  = () => setDraftMent(mentalSplit(view.mental, ment));
+  const fillForce = () => setDraftForce(forceSplit(view.force, forc));
+  const fillMagie = () => setDraftMagie(magieSplit(view.magie, magi));
   // Rouvre la répartition d'Habileté du joueur (staff). Utile quand un joueur s'est
   // trompé, ou quand une refonte de règles rend son placement caduc.
   const reopenSplit = () => {
@@ -278,12 +325,24 @@ function ProgressionPage({ lockedCharId }) {
       ? `<b>${char.name}</b> — répartition du Mental refermée`
       : `<b>${char.name}</b> — répartition du Mental rouverte au joueur`, mentOpen ? 'gold' : 'buff');
   };
+  const reopenForce = () => {
+    setForceSplitOpen(!forceOpen);
+    toast(forceOpen
+      ? `<b>${char.name}</b> — répartition de la Force refermée`
+      : `<b>${char.name}</b> — répartition de la Force rouverte au joueur`, forceOpen ? 'gold' : 'buff');
+  };
+  const reopenMagie = () => {
+    setMagieSplitOpen(!magieOpen);
+    toast(magieOpen
+      ? `<b>${char.name}</b> — répartition de la Magie refermée`
+      : `<b>${char.name}</b> — répartition de la Magie rouverte au joueur`, magieOpen ? 'gold' : 'buff');
+  };
 
   // Écriture partagée par « Confirmer » et « Garder la répartition » : mêmes valeurs,
   // même patch. joueur => pas de verrou dur (le plancher protège) ; staff => garde
   // l'état du verrou.
   const writeAttrs = () => {
-    setAttrs(draft, staff ? locked : false, split, ment);
+    setAttrs(draft, staff ? locked : false, split, ment, forc, magi);
     toast(`<b>${char.name}</b> — caractéristiques enregistrées`, 'buff');
   };
   const confirm = () => {
@@ -415,6 +474,22 @@ function ProgressionPage({ lockedCharId }) {
                         val={val} total={sum} split={split} left={splitLeft} floors={splitFloors}
                         canEdit={canEdit} onChange={setDraftSplit} confirmed={hasSplit}
                         open={splitOpen} onReopen={staff ? reopenSplit : null} onFill={fillSplit} />
+                    )}
+                    {attr.key === 'force' && (
+                      <SplitRow label="Répartition de la Force (part dirigée)" meta={FORCE_DEST_META}
+                        emptyLabel="Aucun point de Force à répartir."
+                        defaultHint={"Répartition pas encore confirmée — par défaut, tout part en AD (soit 25 AD + 1 armure par point, comme avant sur les dégâts). Tant que tu n'as pas confirmé, tu peux tout redistribuer librement."}
+                        val={val} total={sum} split={forc} left={forcLeft} floors={forceFloors}
+                        canEdit={canEdit} onChange={setDraftForce} confirmed={hasForce}
+                        open={forceOpen} onReopen={staff ? reopenForce : null} onFill={fillForce} />
+                    )}
+                    {attr.key === 'magie' && (
+                      <SplitRow label="Répartition de la Magie (part dirigée)" meta={MAGIE_DEST_META}
+                        emptyLabel="Aucun point de Magie à répartir."
+                        defaultHint={"Répartition pas encore confirmée — par défaut, tout part en AP (soit 25 AP + 1 rés. magique par point, comme avant sur les dégâts). Tant que tu n'as pas confirmé, tu peux tout redistribuer librement."}
+                        val={val} total={sum} split={magi} left={magiLeft} floors={magieFloors}
+                        canEdit={canEdit} onChange={setDraftMagie} confirmed={hasMagie}
+                        open={magieOpen} onReopen={staff ? reopenMagie : null} onFill={fillMagie} />
                     )}
                     {attr.key === 'mental' && (
                       <SplitRow label="Répartition du Mental (part dirigée)" meta={MENTAL_DEST_META}

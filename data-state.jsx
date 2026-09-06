@@ -52,7 +52,7 @@ function useCharState(charId) {
   // une valeur hors bornes — la fonction `habSplit` la normaliserait à la lecture, mais la
   // base mentirait. Absent → on n'écrit rien et le défaut par carac dominante s'applique.
   // `habAd: null` purge l'ancienne forme (AD seul) qui a vécu une journée.
-  const setAttrs = useCallback((attrs, locked, split, mentSplit) => {
+  const setAttrs = useCallback((attrs, locked, split, mentSplit, forceSp, magieSp) => {
     const a = attrs || {};
     const clean = {
       force: Math.max(0, a.force | 0), hab: Math.max(0, a.hab | 0),
@@ -72,6 +72,17 @@ function useCharState(charId) {
       patch.mentalSplit = mentalSplit(clean.mental, mentSplit);
       patch.mentalSplitOpen = null;
     }
+    // Répartitions Force (AD/Armure) et Magie (AP/Rés.Mag) — 2026-09-06. Mêmes raisons :
+    // écrites dans la MÊME opération que `attrs`, sinon une baisse de carac laisserait
+    // une somme hors bornes en base.
+    if (forceSp) {
+      patch.forceSplit = forceSplit(clean.force, forceSp);
+      patch.forceSplitOpen = null;
+    }
+    if (magieSp) {
+      patch.magieSplit = magieSplit(clean.magie, magieSp);
+      patch.magieSplitOpen = null;
+    }
     return window.RTDB.updatePath(charPath(charId), patch);
   }, [charId]);
   /* Rouvre (ou referme) la répartition d'Habileté pour le JOUEUR : tant que le drapeau
@@ -86,6 +97,12 @@ function useCharState(charId) {
      `habSplitOpen` : le MJ doit pouvoir rendre l'une sans rendre l'autre. */
   const setMentalSplitOpen = useCallback((open) =>
     window.RTDB.updatePath(charPath(charId), { mentalSplitOpen: open ? true : null }), [charId]);
+  /* Idem pour les répartitions Force (AD/Armure) et Magie (AP/Rés.Mag). Drapeaux SÉPARÉS
+     des deux autres, pour la même raison : rendre l'une ne doit pas rendre les autres. */
+  const setForceSplitOpen = useCallback((open) =>
+    window.RTDB.updatePath(charPath(charId), { forceSplitOpen: open ? true : null }), [charId]);
+  const setMagieSplitOpen = useCallback((open) =>
+    window.RTDB.updatePath(charPath(charId), { magieSplitOpen: open ? true : null }), [charId]);
   /* Rouvre (ou referme) la RESPEC des caractéristiques elles-mêmes. Même mécanisme et
      même drapeau-esprit que `habSplitOpen`/`mentalSplitOpen`, mais drapeau SÉPARÉ : le
      plancher des caracs et celui des répartitions ne se lèvent pas pour les mêmes raisons.
@@ -100,7 +117,8 @@ function useCharState(charId) {
   const setAttrsLocked = useCallback((locked) =>
     window.RTDB.updatePath(charPath(charId), { attrsLocked: locked ? true : null }), [charId]);
   return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment,
-    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked, setAttrsOpen, setHabSplitOpen, setMentalSplitOpen };
+    setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked, setAttrsOpen, setHabSplitOpen, setMentalSplitOpen,
+    setForceSplitOpen, setMagieSplitOpen };
 }
 
 /* Compteur de tour PARTAGÉ (combat). Écriture staff (règle RTDB combat/turn).
