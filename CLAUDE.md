@@ -60,10 +60,30 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `state.attrs ?? char.attrs`, niveau `state.level ?? char.level`).
   ⚠️ **Asymétrie volontaire : la magnitude est escaladée, les POURCENTAGES sont LINÉAIRES**
   (`crit`, `dcrit`, `rescrit` se calculent sur les points BRUTS — les escalader donnerait 86 % de
-  rés. crit à 20 Mental au lieu de 60 %). Par point : Force 20 PV/5 Mana/25 AD/**2 Armure** ;
+  rés. crit à 20 Mental au lieu de 60 %). Par point :
+  Force **15 AD + 1 Armure garantis, puis 15 points AU CHOIX (+10 AD ou +2 Armure, cf. `forceSplit`)**
+  /20 PV/5 Mana ;
   Habileté bonus de départ/**au choix par point : +5 AD, +5 AP ou +10 Mana**/**2,5 %Crit**/**4 %D.Crit** ;
   Mental **45 PV + 15 Mana garantis, puis 15 points AU CHOIX (+15 PV ou +15 Mana, cf. `mentalSplit`)**/**3 %Rés.Crit** ;
-  Magie 10 PV/30 Mana/25 AP/**2 Rés.Mag**. Socle : `50+30·niv` PV, `50+15·niv` Mana, `+1` AR et RM/niveau.
+  Magie **15 AP + 1 Rés.Mag garantis, puis 15 points AU CHOIX (+10 AP ou +2 Rés.Mag, cf. `magieSplit`)**
+  /10 PV/30 Mana. Socle : `50+30·niv` PV, `50+15·niv` Mana, `+1` AR et RM/niveau.
+  ⚠️ **QUATRE répartitions dirigées, une par carac** (Force et Magie ajoutées le 2026-09-06, en MIROIR
+  l'une de l'autre) : `habSplit` / `mentalSplit` / **`forceSplit(F, split)`** → `{ad, armure}` /
+  **`magieSplit(C, split)`** → `{ap, resmag}` (+ `defaultForceSplit`/`defaultMagieSplit`,
+  `FORCE_DESTS`/`MAGIE_DESTS`, `FORCE_DIRECTED`/`MAGIE_DIRECTED`). Toutes suivent le MÊME contrat :
+  escalade distribuée au prorata (répartir ne coûte rien), sur-allocation coupée au budget,
+  sous-allocation reversée sur le défaut, absent = jamais confirmé.
+  ⚠️ **Les deux destinations de Force/Magie n'ont PAS le même taux (10 contre 2)** — 1 point d'armure
+  vaut bien plus qu'1 d'AD (réduction en `AR/(AR+120)`). Ce n'est pas un arbitrage à somme nulle,
+  contrairement au Mental (15/15). C'est voulu.
+  ⚠️ **Contrairement au Mental (décision D), AUCUNE répartition ne reproduit l'ancien coefficient** :
+  avant, un point de Force donnait 25 AD **ET** 2 Armure. Le défaut tout-dégâts garde les **25 AD**
+  (donc la matrice de TTK du 2026-09-05, bâtie sur l'AD, reste valide et il n'y a **aucune migration**)
+  mais fait tomber l'armure **de 2 à 1 par point** : sur les 5 PJ au niveau 2, Urskaar et Elias passent
+  de 15 à 9 d'armure, Rathael de 11 à 6, Jett de 13 à 7 (AR et RM). **La défense se paie désormais** —
+  un profil qui veut plus que son armure d'avant place ses points en défense : tout en défense, Urskaar
+  monte à **22** d'armure pour 104 AD au lieu de 170. À surveiller en jeu : c'est le 3e tour de vis sur
+  l'armure après celui du 2026-09-04, et les armures d'équipement n'existent toujours pas.
   ⚠️ **CALIBRAGE DU 2026-09-05 (spec `docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md`,
   qui FAIT FOI)** : (A) `LEVELS` recalibré, budget total ≈ **1,65 × cap** — on ne peut plus monter deux
   caracs au plafond (avant, 12 pts et cap 6 forçaient 6/6, si bien qu'un ADC et un assassin étaient le
@@ -490,7 +510,8 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   son propre « Vider » (celui de la monnaie **demande confirmation** : c'est la seule trace des transferts depuis
   le coffre commun). Horodatage, lecture seule, alimenté par `pushLog` / `pushEconomyLog`.
 - `pages-progression.jsx` — onglet **Progression** (`ProgressionPage`) : XP + **respec** (répartition des 4
-  caracs) + table des paliers 1→18. Visible des **joueurs** (`prog` ajouté à `PAGE_ACCESS.joueur`, en barre
+  caracs) + **les 4 répartitions dirigées** (une `SplitRow` sous chaque carac : Force AD/Armure,
+  Habileté AD/AP/Mana, Mental PV/Mana, Magie AP/Rés.Mag) + table des paliers 1→18. Visible des **joueurs** (`prog` ajouté à `PAGE_ACCESS.joueur`, en barre
   principale via `groupByRole:{joueur:'main'}` ; `lockedCharId` = perso du joueur ; staff = sélecteur libre +
   case « Verrouillé »). Steppers par caracs (brouillon local → « Confirmer »), budget = `LEVELS.total +
   CREATION_BONUS`, cap = `LEVELS.limit`, plancher 0 ; **aperçu live** des stats résultantes (`computeStats`).
@@ -617,6 +638,10 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     mentalSplit: { hp, mana }   ← répartition de la part DIRIGÉE du Mental (2026-09-05) : chaque point donne 45 PV + 15 Mana garantis, PLUS 15 points au choix (+15 PV ou +15 Mana) ; onglet Progression, écrit par setAttrs EN MÊME TEMPS que attrs
                      ABSENT = jamais confirmé → défaut TOUT EN PV (= 60 PV/pt, l'ancien coefficient) : les PV des persos existants ne bougent pas, aucune migration
     mentalSplitOpen: true   ← même mécanisme que habSplitOpen, drapeau SÉPARÉ (setMentalSplitOpen) : le MJ doit pouvoir rendre une répartition sans rendre l'autre
+    forceSplit:  { ad, armure }   ← répartition de la part DIRIGÉE de la Force (2026-09-06) : chaque point donne 15 AD + 1 Armure garantis, PLUS 15 points au choix (+10 AD ou +2 Armure) ; écrit par setAttrs EN MÊME TEMPS que attrs
+                     ABSENT = jamais confirmé → défaut TOUT EN AD (= 25 AD/pt, l'ancien coefficient offensif) : l'AD des persos existants ne bouge pas, aucune migration — seule l'armure tombe de 2 à 1 par point
+    magieSplit:  { ap, resmag }   ← MIROIR exact de forceSplit sur la Magie (+10 AP ou +2 Rés.Mag) ; défaut TOUT EN AP
+    forceSplitOpen / magieSplitOpen: true   ← mêmes drapeaux MJ que habSplitOpen/mentalSplitOpen, SÉPARÉS (setForceSplitOpen / setMagieSplitOpen) : rendre une répartition ne doit jamais rendre les trois autres
     habAd:       4   ← LEGACY (forme AD-seul, a vécu une journée) : encore relue par charBaseStats, purgée au prochain « Confirmer »
     attrsLocked: true   ← verrou après respec joueur unique ; le staff peut éditer/déverrouiller (setAttrsLocked)
     attrsOpen:   true   ← drapeau MJ : suspend le PLANCHER de respec du joueur (ses caracs déjà confirmées) et, avec lui, ceux
@@ -739,7 +764,7 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
 
 ## Comment tester (dev)
 ```bash
-node --test test/game-logic.test.js          # logique pure (251 tests au 2026-09-06)
+node --test test/game-logic.test.js          # logique pure (255 tests au 2026-09-06)
 node --test test/auth.test.js                 # helpers d'auth (11 tests)
 python -m http.server 5050 --bind 127.0.0.1  # servir le site (autre terminal)
 SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées + compte attribué)
@@ -795,6 +820,37 @@ arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, 
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
 ## État actuel (2026-09-06)
+- **Spécialisation de la Force et de la Magie (dégâts / défense)** — cache `20260906-8`,
+  **266 tests verts** (game-logic 255 + auth 11), **aucune règle RTDB** (rien ne valide sous
+  `characters/$charId/state`), **aucune migration**.
+  Décision MJ, les deux caracs en **MIROIR** : la Force donne **15 AD + 1 Armure garantis** par point,
+  plus **15 points dirigés** (+10 AD **ou** +2 Armure) ; la Magie fait exactement pareil en
+  **15 AP + 1 Rés.Mag** / (+10 AP ou +2 Rés.Mag). PV et Mana ne bougent pas.
+  Tout en dégâts → 25 AD/AP et 1 AR/RM ; tout en défense → 15 AD/AP et 3 AR/RM.
+  ⚠️ **Le défaut (absent) est TOUT EN DÉGÂTS et reproduit EXACTEMENT l'ancien AD/AP de 25/pt** :
+  c'est ce qui laisse valide la matrice de TTK du 2026-09-05 (bâtie sur l'AD) et évite toute
+  migration. Mais **contrairement au Mental (décision D), aucune répartition ne reproduit l'ancien
+  coefficient complet** — l'armure passe de 2 à 1 par point pour un profil offensif. Chiffres au
+  niveau 2 : Urskaar et Elias 15 → **9**, Rathael 11 → **6**, Smith 8 → **5**, Jett 13 → **7**
+  (AR et RM). En contrepartie, un profil qui investit en défense dépasse son armure d'avant :
+  Urskaar tout en défense monte à **22** d'armure, pour 104 AD au lieu de 170.
+  ⚠️ **À SURVEILLER EN JEU** : c'est le 3e tour de vis sur l'armure (après le passage de 4 à 2 le
+  2026-09-04), et les **armures d'équipement n'existent toujours pas** dans `ITEM_CATALOG` — les PJ
+  offensifs encaissent donc encore plus à nu qu'avant. Si ça pique, le levier est le socle
+  `FORCE_BASE_AR` (une constante), pas la part dirigée.
+  ⚠️ **Les deux destinations n'ont PAS le même taux (10 contre 2)**, contrairement au Mental (15/15) :
+  1 point d'armure vaut bien plus qu'1 d'AD via `AR/(AR+120)`. L'arbitrage n'est donc pas à somme
+  nulle, et c'est voulu.
+  ⚠️ **PV/Mana courants sont stockés en ABSOLU** : ils ne changent pas ici (aucun coefficient de PV
+  ni de Mana n'a bougé), donc **pas besoin de « ⟲ Combat »** — à la différence du 2026-09-04.
+  Livré : `forceSplit`/`defaultForceSplit`/`FORCE_DESTS`/`FORCE_DIRECTED` +
+  `magieSplit`/`defaultMagieSplit`/`MAGIE_DESTS`/`MAGIE_DIRECTED` (game-logic, purs, testés) ;
+  `computeStats(..., force, magie)` (2 params ajoutés **en fin de signature**, les appels existants
+  restent valides et retombent sur le défaut) ; `charBaseStats` et `npcStatsFromAttrs` relaient ;
+  `setAttrs(attrs, locked, split, mentSplit, forceSp, magieSp)` écrit les **quatre** répartitions
+  dans la MÊME opération ; `setForceSplitOpen`/`setMagieSplitOpen` ; deux `SplitRow` de plus dans
+  l'onglet Progression (le composant était déjà générique, il n'a pas bougé) ; libellés `ATTRIBUTES`
+  de Force et Magie remis à jour — ils annonçaient encore 25 AD / 2 Armure.
 - **🐞 CORRIGÉ — « Confirmer » inerte après une réouverture de respec** (défaut **antérieur**, présent
   depuis la livraison de la répartition du Mental le 2026-09-05). Cache `20260906-7`, **262 tests verts**,
   **aucune règle RTDB**, **aucune migration**, aucune logique pure touchée. Mergé sur `main` (`3dab481`).
