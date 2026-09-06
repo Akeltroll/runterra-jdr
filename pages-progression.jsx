@@ -198,6 +198,16 @@ function ProgressionPage({ lockedCharId }) {
     || ment.hp !== savedMent.hp || ment.mana !== savedMent.mana
     || !hasSplit || !hasMent;
   const preview = computeStats(view.force, view.hab, view.mental, view.magie, effLevel, split, ment);
+  /* Pourquoi « Confirmer » est gris. ⚠️ Le cas `valid && !dirty` DOIT être couvert : c'est
+     celui qu'on atteint juste après une confirmation (et donc après une réouverture de
+     respec, qui ne rend rien « à confirmer »), et sans message le bouton gris sans
+     infobulle se lit comme une page verrouillée. Les réserves d'Habileté et de Mental
+     sont distinguées : un seul message « Habileté » mentait quand il manquait du Mental. */
+  const confirmHint = !attrsValid ? `Répartis exactement ${budget} points (limite ${cap} par carac)`
+    : splitLeft > 0 ? `Place tes ${splitLeft} point(s) d'Habileté`
+    : mentLeft > 0 ? `Place tes ${mentLeft} point(s) de Mental`
+    : !dirty ? 'Aucun changement à confirmer — déplace un point d’abord'
+    : '';
 
   const selStyle = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'6px 9px', fontSize:13 };
 
@@ -218,6 +228,22 @@ function ProgressionPage({ lockedCharId }) {
     toast(attrsOpen
       ? `<b>${char.name}</b> — respec refermée`
       : `<b>${char.name}</b> — respec rouverte au joueur`, attrsOpen ? 'gold' : 'buff');
+  };
+  /* Vide le brouillon (caracs à 0, réserves pleines). ⚠️ C'est le SEUL point d'entrée
+     d'une redistribution à budget plein : `canInc` exige `remaining > 0`, donc à 10/10
+     tous les « + » sont morts et le seul geste possible est un « − ». Sans ce bouton, la
+     page se lit comme verrouillée alors qu'elle ne l'est pas.
+     ⚠️ Affiché UNIQUEMENT quand le plancher est levé (staff, ou respec rouverte) : chez
+     un joueur au plancher, remettre à 0 serait un contournement du verrou, et les
+     répartitions vidées se heurteraient à leurs propres planchers (« − » désactivé sous
+     le plancher) — un état dont le joueur ne pourrait plus sortir.
+     Les deux répartitions sont vidées avec les caracs : `clampSplitDraft` les ramènerait
+     à 0 de toute façon, mais les garder en brouillon replacerait les points tout seuls
+     dès la remontée de la carac — l'inverse de « tout à 0 ». */
+  const clearDraft = () => {
+    setDraft({ force:0, hab:0, mental:0, magie:0 });
+    setDraftSplit({ ad:0, ap:0, mana:0 });
+    setDraftMent({ hp:0, mana:0 });
   };
   // Rouvre la répartition d'Habileté du joueur (staff). Utile quand un joueur s'est
   // trompé, ou quand une refonte de règles rend son placement caduc.
@@ -279,6 +305,11 @@ function ProgressionPage({ lockedCharId }) {
                     {attrsOpen ? '🔓 Rouverte' : '↺ Rouvrir la respec'}
                   </button>
                 )}
+                {canEdit && (staff || attrsOpen) && sum > 0 && (
+                  <button className="btn btn-sm btn-ghost" onClick={clearDraft}
+                    title="Vider le brouillon : toutes les caractéristiques à 0, tous les points à replacer (rien n'est écrit tant que tu n'as pas confirmé)"
+                    style={{ padding:'2px 8px', fontSize:10.5 }}>Tout à 0</button>
+                )}
                 <span className="mono faint" style={{ fontSize:11 }}>
                   {sum} / {budget} pts
                   <span style={{ color: remaining === 0 ? 'var(--buff)' : (remaining < 0 ? 'var(--debuff-bright)' : 'var(--gold-bright)'), fontWeight:700 }}> · {remaining} restant{Math.abs(remaining) > 1 ? 's' : ''}</span>
@@ -297,6 +328,15 @@ function ProgressionPage({ lockedCharId }) {
                 {attrsOpen
                   ? "🔓 Le MJ a rouvert ta respec : tu peux redistribuer tous tes points (répartitions comprises) jusqu'à ta prochaine confirmation."
                   : 'Tu peux ajouter des points, mais pas descendre sous tes valeurs déjà confirmées.'}
+              </div>
+            )}
+            {/* Miroir MJ du bandeau joueur : « ↺ Rouvrir la respec » ne change RIEN à
+                l'écran du staff (son plancher est déjà à 0), donc sans ce rappel le
+                bouton semble sans effet et on ne sait plus si la fenêtre est ouverte. */}
+            {canEdit && staff && attrsOpen && (
+              <div style={{ fontSize:12, padding:'10px 18px 0', lineHeight:1.5, color:'var(--buff)' }}>
+                🔓 Respec rouverte pour le joueur — il peut redistribuer tous ses points (répartitions comprises)
+                jusqu'à sa prochaine confirmation, qui refermera la fenêtre.
               </div>
             )}
 
@@ -356,8 +396,7 @@ function ProgressionPage({ lockedCharId }) {
               <div className="row" style={{ justifyContent:'flex-end', gap:10, padding:'0 18px 16px', alignItems:'center' }}>
                 <button className="btn btn-sm btn-ghost" onClick={() => { setDraft(savedAttrs); setDraftSplit(savedSplit); setDraftMent(savedMent); }} disabled={!dirty}>Réinitialiser</button>
                 <button className="btn btn-gold" onClick={confirm} disabled={!valid || !dirty}
-                  title={!valid ? (attrsValid ? `Place tes ${splitLeft} point(s) d'Habileté`
-                    : `Répartis exactement ${budget} points`) : ''}>Confirmer</button>
+                  title={confirmHint}>Confirmer</button>
               </div>
             )}
           </div>
