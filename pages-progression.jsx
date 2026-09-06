@@ -217,7 +217,7 @@ function ProgressionPage({ lockedCharId }) {
   // ne peut pas RE-router des points déjà confirmés, il ne place que les nouveaux ; le
   // staff garde la main totale. Sans répartition confirmée, aucun plancher — sinon un
   // défaut deviné deviendrait un choix imposé.
-  // ⚠ Rouvrir la respec lève AUSSI les planchers des deux répartitions : baisser une
+  // ⚠ Rouvrir la respec lève AUSSI les planchers des QUATRE répartitions : baisser une
   // carac rogne mécaniquement la répartition dérivée (`clampSplitDraft` coupe dans un
   // ordre fixe), et un plancher maintenu figerait le joueur sur une coupe qu'il n'a pas
   // choisie et ne pourrait plus corriger. Les deux boutons dédiés restent là pour le cas
@@ -236,7 +236,7 @@ function ProgressionPage({ lockedCharId }) {
   const forcLeft = view.force - (forc.ad + forc.armure);
   const magi = clampSplitDraft(draftMagie, view.magie, ['resmag', 'ap']);
   const magiLeft = view.magie - (magi.ap + magi.resmag);
-  // Confirmer exige que les DEUX réserves soient vides, exactement comme les points
+  // Confirmer exige que les QUATRE réserves soient vides, exactement comme les points
   // de caractéristiques : un point non placé ne rapporterait rien.
   const valid = attrsValid && splitLeft === 0 && mentLeft === 0
     && forcLeft === 0 && magiLeft === 0;
@@ -291,7 +291,7 @@ function ProgressionPage({ lockedCharId }) {
      un joueur au plancher, remettre à 0 serait un contournement du verrou, et les
      répartitions vidées se heurteraient à leurs propres planchers (« − » désactivé sous
      le plancher) — un état dont le joueur ne pourrait plus sortir.
-     Les deux répartitions sont vidées avec les caracs : `clampSplitDraft` les ramènerait
+     Les quatre répartitions sont vidées avec les caracs : `clampSplitDraft` les ramènerait
      à 0 de toute façon, mais les garder en brouillon replacerait les points tout seuls
      dès la remontée de la carac — l'inverse de « tout à 0 ». */
   const clearDraft = () => {

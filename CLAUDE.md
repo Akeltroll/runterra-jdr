@@ -645,7 +645,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
     habAd:       4   ← LEGACY (forme AD-seul, a vécu une journée) : encore relue par charBaseStats, purgée au prochain « Confirmer »
     attrsLocked: true   ← verrou après respec joueur unique ; le staff peut éditer/déverrouiller (setAttrsLocked)
     attrsOpen:   true   ← drapeau MJ : suspend le PLANCHER de respec du joueur (ses caracs déjà confirmées) et, avec lui, ceux
-                     des deux répartitions ; posé/retiré par setAttrsOpen (bouton « ↺ Rouvrir la respec », staff), effacé
+                     des QUATRE répartitions ; posé/retiré par setAttrsOpen (bouton « ↺ Rouvrir la respec », staff), effacé
                      automatiquement à la confirmation suivante. ⚠️ NE PAS confondre avec attrsLocked, qui est l'inverse et
                      plus dur : attrsLocked gèle TOUTE la page, attrsOpen ne lève que le plancher — décocher « Verrouillé »
                      ne rend donc PAS la respec
@@ -851,6 +851,10 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   dans la MÊME opération ; `setForceSplitOpen`/`setMagieSplitOpen` ; deux `SplitRow` de plus dans
   l'onglet Progression (le composant était déjà générique, il n'a pas bougé) ; libellés `ATTRIBUTES`
   de Force et Magie remis à jour — ils annonçaient encore 25 AD / 2 Armure.
+  👉 **RESTE À FAIRE EN JEU** : prévenir les joueurs. Ils ont maintenant **quatre** répartitions et
+  non deux, et leur armure / rés. magique a baissé **sans qu'ils aient rien fait** (le défaut est
+  tout-dégâts). Aucun « ⟲ Combat » n'est nécessaire, mais tant que chacun n'a pas choisi, tout le
+  monde joue en profil offensif par défaut.
 - **🐞 CORRIGÉ — « Confirmer » inerte après une réouverture de respec** (défaut **antérieur**, présent
   depuis la livraison de la répartition du Mental le 2026-09-05). Cache `20260906-7`, **262 tests verts**,
   **aucune règle RTDB**, **aucune migration**, aucune logique pure touchée. Mergé sur `main` (`3dab481`).
@@ -1075,7 +1079,8 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   Livré : `setAttrsOpen` (data-state) + `attrsOpen: null` dans le patch de `setAttrs` (la fenêtre se
   referme à la confirmation suivante) + bouton staff dans l'en-tête du panneau Caractéristiques —
   calqué sur `habSplitOpen`/`mentalSplitOpen`, drapeau **séparé** pour les mêmes raisons qu'eux.
-  ⚠️ **Rouvrir la respec lève AUSSI les planchers des deux répartitions**, sans quoi le joueur
+  ⚠️ **Rouvrir la respec lève AUSSI les planchers des répartitions** (deux à l'époque, **quatre**
+  depuis le 2026-09-06), sans quoi le joueur
   tombe dans une impasse : baisser une carac rogne la répartition dérivée via `clampSplitDraft`,
   qui coupe dans un **ordre fixe** (mana → ap → ad), et avec le plancher maintenu tous les « − »
   sont désactivés — il resterait figé sur une coupe qu'il n'a pas choisie.
@@ -1117,7 +1122,8 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   saines** — et donc d'en faire l'**unité de mesure** du calibrage des compétences.
   ✅ **BASCULE À LA TABLE FAITE le 2026-09-05** : les 5 PJ ont été respec de 12 → 10 points par le
   MJ, « ⟲ Combat » passé (recalage des PV/Mana sur les nouveaux caps), et les joueurs sont prévenus
-  qu'ils ont désormais **deux répartitions** (Habileté AD/AP/Mana et Mental PV/Mana). **Le chantier
+  qu'ils ont désormais **deux répartitions** (Habileté AD/AP/Mana et Mental PV/Mana ; elles sont
+  **quatre** depuis le 2026-09-06, Force et Magie s'y étant ajoutées). **Le chantier
   de calibrage est clos** — plus rien à faire dessus, ni en code ni en jeu.
   ⚠️ **Leçon à garder pour tout futur abaissement de budget** : dans `ProgressionPage`,
   `floorAttrs = staff ? {} : savedAttrs` — **le plancher d'un joueur EST sa propre répartition
@@ -1203,6 +1209,10 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   cache `20260904-3`, **220 tests verts** (game-logic 209 + auth 11), **aucune règle RTDB à republier**
   (ni `state/modifiers`, ni `combat/enemies`, ni `pendingHits` ne valident les clés de stats),
   **aucune migration de données**.
+  ⚠️ **Les coefficients de FORCE et de MAGIE ci-dessous sont PÉRIMÉS** depuis la spécialisation
+  dégâts/défense du 2026-09-06 (voir l'entrée de ce jour) : leur AD/AP de 25 par point survit comme
+  **défaut**, mais leur armure / rés. magique est passée de 2 à **1 par point de socle + 2 par point
+  dirigé**. Le reste de l'entrée (Habileté, Mental, rés. critique) fait toujours foi.
   Décisions du MJ, par point de carac : **Force** 20 PV / 5 Mana / 25 AD / **2 Armure** ;
   **Habileté** : **au choix du joueur, par point : +5 AD, +5 AP ou +10 Mana** (au lieu de 8 AD
   ET 8 AP), **plus aucun bonus d'AR/RM de départ**, bonus de PV **dégressif 25/20/15/10/5**
@@ -1218,9 +1228,16 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   niveau 18 de 41 % à **29 %**. Le pari est que les **armures d'équipement** (backlog « équipement en
   stats finales », §7 de la spec hypermétrique) prennent le relais ; **tant qu'elles n'existent pas
   dans `ITEM_CATALOG`, les PJ encaissent quasiment à nu**.
+  ⚠️ **AGGRAVÉ le 2026-09-06** : le socle est retombé de 2 à 1 par point, Urskaar de 15 à **9**
+  d'armure au défaut. La contrepartie est qu'un profil peut désormais *choisir* la défense et
+  dépasser son armure d'avant (Urskaar à 22). L'alerte reste entière pour les profils offensifs.
   ⚠️ **Le passif de Rathael est à rebaser** : « +5 %/charge d'Armure+RM **de base** » sur une base
   divisée par ~2 ne vaut presque plus rien (5 charges ≈ +3 d'armure sur ses 10). Pas touché ici — c'est une
   décision de game design, pas un effet de bord à corriger en douce.
+  ⚠️ **ENCORE PLUS VRAI depuis le 2026-09-06** : sa base d'armure au défaut tombe de 11 à **6**, donc
+  ses 5 charges ne valent plus que **~+2 d'armure**. Un passif qui scale sur une stat que le joueur
+  peut désormais choisir de ne pas prendre est un problème de conception, pas d'arithmétique : à
+  trancher dans le chantier de rééquilibrage des compétences.
   ⚠️ **PV et Mana COURANTS sont stockés en absolu** : le Mana de Rathael passant de 287 à 210, un
   **« ⟲ Combat »** est nécessaire après déploiement pour recaler tout le monde sur les nouveaux caps.
   **Rouvrir la répartition d'un joueur** (`setHabSplitOpen`, data-state ; bouton
