@@ -216,7 +216,8 @@ function ProgressionPage({ lockedCharId }) {
   const confirmHint = !attrsValid ? `Répartis exactement ${budget} points (limite ${cap} par carac)`
     : splitLeft > 0 ? `Place tes ${splitLeft} point(s) d'Habileté`
     : mentLeft > 0 ? `Place tes ${mentLeft} point(s) de Mental`
-    : !dirty ? 'Aucun changement à confirmer — déplace un point d’abord'
+    : !dirty ? (attrsOpen ? 'Rien n’a changé — « Garder la répartition » referme la fenêtre'
+                          : 'Aucun changement à confirmer — déplace un point d’abord')
     : '';
 
   const selStyle = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'6px 9px', fontSize:13 };
@@ -278,11 +279,29 @@ function ProgressionPage({ lockedCharId }) {
       : `<b>${char.name}</b> — répartition du Mental rouverte au joueur`, mentOpen ? 'gold' : 'buff');
   };
 
+  // Écriture partagée par « Confirmer » et « Garder la répartition » : mêmes valeurs,
+  // même patch. joueur => pas de verrou dur (le plancher protège) ; staff => garde
+  // l'état du verrou.
+  const writeAttrs = () => {
+    setAttrs(draft, staff ? locked : false, split, ment);
+    toast(`<b>${char.name}</b> — caractéristiques enregistrées`, 'buff');
+  };
   const confirm = () => {
     if (!valid) return;
     if (!staff && !window.confirm('Confirmer cette répartition ? Les points placés deviennent définitifs : tu pourras en rajouter aux prochains niveaux, mais plus en retirer.')) return;
-    setAttrs(draft, staff ? locked : false, split, ment);   // joueur => pas de verrou dur (le plancher protège) ; staff => garde l'état du verrou
-    toast(`<b>${char.name}</b> — caractéristiques enregistrées`, 'buff');
+    writeAttrs();
+  };
+  /* « Garder la répartition » — la respec a été rouverte mais on ne veut rien changer.
+     ⚠️ Sans ce bouton il n'y a AUCUNE écriture possible : « Confirmer » est gardé par
+     `dirty`, qui exige un changement, donc la fenêtre `attrsOpen` reste ouverte jusqu'à
+     ce que le MJ la referme lui-même. L'écriture est identique à une confirmation
+     (mêmes valeurs), et c'est `setAttrs` qui remet `attrsOpen` à null : c'est elle qui
+     referme la fenêtre. Bouton SÉPARÉ plutôt qu'un assouplissement de `dirty` : sinon
+     un clic malencontreux refermerait la respec à la seconde où le MJ vient de l'ouvrir. */
+  const keepAttrs = () => {
+    if (!valid) return;
+    if (!staff && !window.confirm('Garder ta répartition actuelle, sans rien changer ? Tes points redeviendront définitifs.')) return;
+    writeAttrs();
   };
 
   return (
@@ -419,6 +438,11 @@ function ProgressionPage({ lockedCharId }) {
                 {(!valid || !dirty) && confirmHint && (
                   <span className="mono" style={{ fontSize:11.5, fontWeight:700, textAlign:'right',
                     color: valid ? 'var(--ink-faint)' : 'var(--gold-bright)' }}>{confirmHint}</span>
+                )}
+                {canEdit && attrsOpen && valid && !dirty && (
+                  <button className="btn btn-sm btn-ghost" onClick={keepAttrs}
+                    title="Enregistrer la répartition actuelle telle quelle et refermer la fenêtre de respec"
+                    style={{ color:'var(--buff)' }}>Garder la répartition</button>
                 )}
                 <button className="btn btn-gold" onClick={confirm} disabled={!valid || !dirty}
                   title={confirmHint}>Confirmer</button>
