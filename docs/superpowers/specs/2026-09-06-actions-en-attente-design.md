@@ -336,8 +336,8 @@ les deux modèles ne peuvent pas coexister sans doubler la file.
 | **B** | `cast()` n'écrit plus aucun effet ; `TargetRow` + bloc « Cibles » par effet sur chaque carte (compétences **et** attaque de base) ; `PendingActionCard` + `DamageInstanceRow` / `HealInstanceRow` / `StatusInstanceRow` côté MJ. `pendingHits` retiré du code et des règles | ✅ |
 | **C** | `⊘ Échec`, `manaPer`, purge de la file dans `resetCombat`, journal par cast et par résolution | ✅ |
 
-**Recette à faire** : deux sessions simultanées (MJ + joueur en navigation privée),
-comme pour l'initiative le 2026-09-03. Les cas qui comptent :
+**Recette ✅ FAITE le 2026-09-06** (deux sessions simultanées, MJ + joueur en navigation
+privée, comme pour l'initiative le 2026-09-03) — les 7 cas validés par le MJ :
 
 1. Salve du Corsaire sur 3 gnolls → **une** carte, 3 instances, 60 mana débité une fois.
 2. En appliquer 2, rejeter la 3ᵉ → **aucun** remboursement.
@@ -348,8 +348,20 @@ comme pour l'initiative le 2026-09-03. Les cas qui comptent :
 6. Alignement de séquence : 2 gnolls en dégâts + 1 allié en soin, dans **le même cast**.
 7. Mur de Givre : le buff n'apparaît sur la fiche du joueur **qu'après** le clic du MJ.
 
-### Garde-fou de déploiement
+### Déploiement — fait le 2026-09-06
 
-⚠️ **Publier les règles AVANT de pousser le code** (`firebase deploy --only database`).
-Le nœud `pendingActions` n'existe pas encore côté serveur : sans la règle, le premier
-cast prend `PERMISSION_DENIED` et le joueur perd son mana sans que rien n'arrive au MJ.
+Règles publiées (`firebase deploy --only database`) puis code mergé sur `main` et poussé
+(`7a9d4f4`). Relecture en ligne avant **et** après : aucune dérive console préalable, et le
+diff post-publication se limite à `pendingActions` remplaçant `pendingHits`.
+
+⚠️ **Leçon à garder** : remplacer un nœud par un autre ouvre une **fenêtre de casse dans
+les DEUX ordres** — règles d'abord, l'ancien code écrit sur un nœud sans règle ; code
+d'abord, le nouveau code écrit sur un nœud pas encore déclaré. Et dans les deux cas le
+mana est **déjà débité côté client** quand l'écriture est refusée : le joueur paie pour
+rien. Ici la fenêtre a été assumée (déploiement hors séance, ~2 min). Le jour où il faut
+zéro coupure : publier des règles portant **les deux nœuds**, pousser le code, puis
+republier sans l'ancien — deux publications au lieu d'une.
+
+⚠️ **Reste à éprouver à une vraie table.** Le point à surveiller est le **rythme** : les
+joueurs attendent désormais le clic du MJ pour voir leur buff s'appliquer. Si ça alourdit,
+la §12 documente l'alternative écartée (appliquer au cast puis défaire) et pourquoi.

@@ -535,8 +535,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   console ?) et **après** (le déploiement fait-il ce qu'on croit ?) chaque publication.
   Attention en PowerShell : `Out-File -Encoding utf8` ajoute un **BOM** qui fait diverger le `diff`
   sur la 1re ligne — le retirer avant de comparer (`sed 's/^\xef\xbb\xbf//'`).
-- `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles) :
-  joueur = sa fiche seule, staff = tout ; **`campaign/runeterra` a un `.write` `mj`+`admin`**
+- `database.rules.json` — règles RTDB strictes basées sur `/users/{uid}` (rôles).
+  ✅ **En ligne == dépôt, vérifié par relecture le 2026-09-06** (`firebase database:get`,
+  diff vide après normalisation) : aucune publication en attente, aucune dérive console.
+  Les mentions « RÈGLES RTDB À REPUBLIER » des entrées d'état antérieures sont **historiques**
+  — elles ont toutes été publiées depuis.
+  Contenu : joueur = sa fiche seule, staff = tout ; **`campaign/runeterra` a un `.write` `mj`+`admin`**
   (ouvert au MJ le 2026-08-21 pour l'import de sauvegarde — `setPath(CAMPAIGN,…)` écrit sur le nœud
   racine ; les `.validate` des descendants continuent de s'appliquer, et `/users` n'est pas
   concerné : un MJ ne peut toujours pas se promouvoir admin) ; **`combat/log` et `economyLog` ont un `.write` STAFF au
@@ -686,11 +690,18 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
   ⚠️ **À ne pas confondre avec les `BASIC_MODES` ajoutés le 2026-09-06** (gifle, botter le cul…),
   qui sont des **gestes nommés choisis coup par coup** sur la carte d'attaque de base. Le défaut
   reste `normal` = **dégâts pleins** ; un mode réduit ne roule pas le dé de crit (ruling MJ).
-- **Ciblage d'un PJ par un PJ** (2026-09-06) : autorisé dans l'onglet Combat, en **dégâts seulement**.
-  Le joueur n'écrit jamais les PV de sa cible — il dépose une attaque en attente que **le MJ résout**.
-  ⚠️ **Soins ciblés sur allié et AOE = hors périmètre, renvoyés à la refonte des compétences**
-  (décision MJ) : la file d'attaques ne transporte que des dégâts, `sk.heal` (Jett C2) est affiché
-  mais **appliqué nulle part**, et une comp à N cibles envoie N coups sur la **MÊME** cible.
+- **Le joueur PROPOSE, le MJ RÉSOUT** (refonte du 2026-09-06) : un cast dépose UNE action de
+  N instances (`damage`/`heal`/`status`) dans `combat/pendingActions` et **n'écrit aucun effet**.
+  Le joueur n'écrit jamais un EFFET de compétence — ni les PV d'autrui, ni un buff, pas même
+  sur lui. Les deux seules écritures qui lui restent sont son **coût** au cast (mana +
+  cooldown, sinon la comp serait relançable pendant que le MJ arbitre) et ses **potions**.
+  Un PJ peut viser un PJ ; un effet peut soigner ; une comp peut cibler N combattants et mélanger
+  dégâts et soins dans le même cast (Jett C2). Le coût appartient à l'ACTION, pas à l'instance.
+  ⚠️ Cette décision **remplace** l'ancienne « soins ciblés et AOE hors périmètre » : `sk.heal`
+  (Jett C2), affiché mais appliqué nulle part depuis toujours, fonctionne désormais.
+  ⚠️ **Reste hors périmètre** : les zones d'effet géométriques (rayon, cône, cases) — le MJ
+  désigne les cibles touchées, l'app ne modélise pas de plateau ; et les débuffs sur cible
+  (stun, saignement, marque), que le modèle accueille mais qu'aucun kit ne chiffre.
 - **Inventaire** : perso (par fiche) + commun (coffre partagé). Items `{id,cat,name,sub,qty,ic,img,type,mods}`,
   images dans `ATH/`. Bonus `mods` non encore branchés. **`type`** = emplacement explicite (saisi à
   l'édition si `cat==='Équipement'`), sinon `equipTypeForItem` infère. **Édition réservée au staff**
@@ -712,8 +723,8 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
 
 ## Comment tester (dev)
 ```bash
-node --test test/game-logic.test.js          # logique pure (20 tests)
-node --test test/auth.test.js                 # helpers d'auth (6 tests)
+node --test test/game-logic.test.js          # logique pure (251 tests au 2026-09-06)
+node --test test/auth.test.js                 # helpers d'auth (11 tests)
 python -m http.server 5050 --bind 127.0.0.1  # servir le site (autre terminal)
 SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées + compte attribué)
 ```
@@ -757,8 +768,10 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
 
 ## État actuel (2026-09-06)
 - **Actions en attente — refonte du contrat « un joueur lance quelque chose »** — cache
-  `20260906-4`, **262 tests verts** (game-logic 251 + auth 11), ⚠️ **RÈGLES RTDB À
-  REPUBLIER** (nœud `pendingActions`, `pendingHits` retiré), **aucune migration**.
+  `20260906-4`, **262 tests verts** (game-logic 251 + auth 11), ✅ **RÈGLES RTDB PUBLIÉES ET
+  VÉRIFIÉES le 2026-09-06** (`firebase deploy --only database` ; relecture en ligne avant/après :
+  aucune dérive console préalable, et le diff post-publication se limite à `pendingActions`
+  remplaçant `pendingHits`), **aucune migration**. Mergé sur `main` et **déployé** (`7a9d4f4`).
   📄 Spec et source de vérité : `docs/superpowers/specs/2026-09-06-actions-en-attente-design.md`.
   **Le défaut de modèle** : `combat/pendingHits` disait « un joueur propose UN coup de
   dégâts sur UNE cible ». Tout le reste **contournait le MJ** — `sk.heal` (Jett C2) était
@@ -828,10 +841,17 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   (le piège « `.write` sur l'enfant joker n'autorise pas le parent » est évité par
   construction). Le `.validate` `hasChildren` se réévalue sur la donnée **fusionnée**, et
   Firebase n'évalue pas les `.validate` d'une suppression.
-  👉 **RESTE À FAIRE** : (1) **publier les règles AVANT de pousser le code** — sans le nœud
-  `pendingActions`, le premier cast prend `PERMISSION_DENIED` et le joueur perd son mana
-  sans que rien n'arrive au MJ ; (2) la recette à deux sessions simultanées (§14 de la
-  spec, 7 cas).
+  👉 **LEÇON DE DÉPLOIEMENT** : remplacer un nœud par un autre ouvre une **fenêtre de casse
+  dans les DEUX ordres** — règles d'abord, l'ancien code écrit sur un nœud sans règle ; code
+  d'abord, le nouveau code écrit sur un nœud pas encore déclaré. Et dans les deux cas le mana
+  est **déjà débité côté client** quand l'écriture est refusée : le joueur paie pour rien.
+  Ici la fenêtre a été assumée (déploiement hors séance, ~2 min). Le jour où il faut zéro
+  coupure : publier des règles portant **les deux nœuds**, pousser le code, puis republier sans
+  l'ancien — deux publications au lieu d'une.
+  ✅ **Recette à deux sessions FAITE le 2026-09-06** (§14 de la spec, 7 cas), validée par le MJ.
+  Reste à l'éprouver à une vraie table — le point à surveiller est le **rythme** : les joueurs
+  attendent désormais le clic du MJ pour voir leur buff s'appliquer. Si ça alourdit, la §12 de
+  la spec documente l'alternative écartée (appliquer au cast puis défaire) et pourquoi.
   👉 **Hors périmètre** : zones d'effet géométriques (le MJ désigne les cibles, l'app ne
   modélise pas de plateau) ; les actions des PNJ (`EnemyAttackModal`) restent hors file,
   le MJ étant déjà des deux côtés du clic ; les débuffs sur cible (stun, saignement,
@@ -1230,7 +1250,7 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   lisible par les autres joueurs (§7.1 de la spec, repli documenté).
 - **🐞 CORRIGÉ — un MJ ne pouvait PAS vider un journal** (bug **antérieur**, depuis la livraison du
   journal de combat en juin ; trouvé au test §9-12 du 2026-08-21). Cache `20260821-2`,
-  ⚠️ **RÈGLES RTDB À REPUBLIER** (2 lignes).
+  ⚠️ **RÈGLES RTDB À REPUBLIER** (2 lignes) — ✅ fait depuis, cf. la publication du 2026-08-22.
   **Cause** — purger un journal, c'est écrire `null` **SUR LE NŒUD** (`setPath(COMBAT_LOG, null)`).
   Or `combat/log` n'avait de `.write` que sur **`$logId`** (les entrées individuelles) : rien au niveau
   du nœud. Le seul ancêtre qui en donne un est `campaign/runeterra`, réservé à **`admin`**. Donc
@@ -1263,7 +1283,8 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   était le seul endroit où ce `null` alimentait **un calcul d'écriture** — d'où la corruption. Avant de
   réutiliser ce hook dans une page visible des joueurs, se demander ce que vaut le repli.
 - **Journal des mouvements de pièces (chantier B du durcissement monnaie)** — cache `20260821-1`,
-  **162 tests verts**, ⚠️ **RÈGLES RTDB À REPUBLIER** (nœud `economyLog` + `.validate` sur les bourses).
+  **162 tests verts**, ⚠️ **RÈGLES RTDB À REPUBLIER** (nœud `economyLog` + `.validate` sur les
+  bourses) — ✅ fait depuis, cf. la publication du 2026-08-22.
   Avant ce lot, **aucun mouvement d'argent n'était tracé nulle part** : un joueur pouvait vider le coffre
   commun sans laisser d'historique. C'était le risque réel identifié par
   `docs/superpowers/specs/2026-08-20-durcissement-monnaie-rtdb-design.md`.
@@ -1566,6 +1587,18 @@ relire AVANT de recommencer une analyse.
 
 **Le socle est prêt** : les attaques de base sont saines et servent d'**unité de mesure**
 (invariante au niveau), et le crit ne fausse plus les comparaisons entre personnages.
+
+⚠️ **La PLOMBERIE a changé depuis ce diagnostic** (refonte « actions en attente » du 2026-09-06,
+à lire avant de toucher un kit) : une compétence peut désormais **cibler N combattants**, **soigner**
+et **mélanger dégâts et soins** dans le même cast, et ses effets sur soi sont **snapshotés** par
+`buildSelfEffect` puis appliqués par le MJ. Trois conséquences pour le rééquilibrage :
+- **`sk.heal` fonctionne enfin** — le diagnostic du 2026-09-05 chiffrait Jett sans son soin (C2),
+  qui était affiché mais appliqué nulle part. Son ratio comp/AA est donc **sous-évalué** au §10.
+- **Le multi-cible est réel** : la rotation optimale d'une comp de zone (Salve, Éclat de l'âme,
+  Chaînes, Écrasement) doit se rechiffrer **par nombre de cibles**, pas par coup.
+- **`manaPer`** (mana facturé à la cible) existe déjà dans le modèle et vaut 0 partout — c'est le
+  levier tout traçé pour l'arbitrage MJ « le mana doit être un minimum limitant » sur les comps
+  de zone, sans toucher au coût des comps mono-cible.
 
 **Le constat mesuré** (rotation optimale sur 4 tours, cooldowns et mana inclus, niveau 18) :
 **3 PJ sur 5 n'ont aucune raison de lancer une compétence**, et il leur reste **90-100 % de leur
