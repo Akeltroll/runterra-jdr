@@ -374,6 +374,9 @@ function CompetencesBody({ char, staff }) {
   enemies.forEach(e => { iniMeta[e.id] = { name: e.name, side: combatantSide(e) }; });
   const { addHit } = usePendingHits();
   const [targetId, setTargetId] = useState('');
+  // Mode d'attaque de base (geste à ratio fixe). État LOCAL, non persisté : c'est un
+  // choix par coup, pas une posture qu'on garde — il se remet à « Attaque » au rechargement.
+  const [atkMode, setAtkMode] = useState('normal');
   if (!state) return <div className="panel" style={{ margin: 20, padding: 20 }}>Chargement…</div>;
 
   const kit = SKILLS[char.id];
@@ -485,9 +488,10 @@ function CompetencesBody({ char, staff }) {
           crit: eff.crit || 0, dcrit: eff.dcrit || 0,
           omni: eff.omni || 0, vol: eff.vol || 0, sapience: eff.sapience || 0, hpMax: eff.hp || 0, targetId });
       }
-      const tgt = enemies.find(en => en.id === targetId);
+      // `targetName` et pas `enemies.find` : une compétence peut désormais viser un PJ,
+      // qui ne vit pas dans `combat/enemies` et se serait journalisé « un ennemi ».
       const suffix = nbHits > 1 ? ` ×${nbHits}` : '';
-      pushLog(`<b>${char.name}</b> vise <b>${tgt ? tgt.name : 'un ennemi'}</b> avec <b>${sk.name}</b>${suffix} (${dmg}/coup${anyCrit ? ' — CRIT !' : ''}) — en attente MJ`, anyCrit ? 'buff' : 'gold');
+      pushLog(`<b>${char.name}</b> vise <b>${targetName(targetId)}</b> avec <b>${sk.name}</b>${suffix} (${dmg}/coup${anyCrit ? ' — CRIT !' : ''}) — en attente MJ`, anyCrit ? 'buff' : 'gold');
       toast(`<b>${char.name}</b> — ${sk.name} : ${nbHits} coup(s) envoyé(s) au MJ`, 'buff');
     } else {
       pushLog(`<b>${char.name}</b> lance <b>${sk.name}</b>${logParts.length ? ' — ' + logParts.join(', ') : ''}`, logParts.length ? 'buff' : 'gold');
@@ -501,20 +505,35 @@ function CompetencesBody({ char, staff }) {
     const it = (eqId && state.inventory) ? state.inventory[eqId] : null;
     return (it && it.name) || (WEAPONS.find(w => w.id === char.weaponId) || {}).name || 'Arme';
   })();
-  const basicDmg = (wType === 'Magique' ? (eff.ap || 0) : (eff.ad || 0));
+  // Puissance PLEINE de l'attaque de base ; le mode n'en prend qu'une fraction.
+  const basicPower = (wType === 'Magique' ? (eff.ap || 0) : (eff.ad || 0));
+  const mode = basicMode(atkMode);
+  const basicDmg = basicModeDamage(basicPower, atkMode);
+  /* Nom de la cible, PNJ ou PJ (les deux camps passent par la même file d'attaques). */
+  function targetName(id) {
+    const en = enemies.find(e => e.id === id);
+    if (en) return en.name;
+    const c = CHARACTERS.find(x => x.id === id);
+    return c ? c.name : 'sa cible';
+  }
   function basicAttack() {
     if (!targetId) { toast(`<b>${char.name}</b> — choisis une cible d'abord`, 'gold'); return; }
-    const cr = rollCrit(eff.crit || 0, eff.dcrit || 0);
+    // ⚠️ Un mode réduit ne roule PAS le dé de crit (ruling MJ, cf. BASIC_MODES) : on ne
+    // neutralise pas le résultat après coup, on ne lance pas. Le %Crit envoyé au MJ vaut
+    // alors 0 — sa carte doit dire la vérité de CE coup, pas la fiche de l'attaquant.
+    const cr = mode.crit ? rollCrit(eff.crit || 0, eff.dcrit || 0) : { didCrit: false, multiplier: 1 };
     const critDmg = Math.round(basicDmg * cr.multiplier);
-    addHit({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: 'Attaque de base',
+    addHit({ attackerId: char.id, attackerName: char.name, skillId: 'basic',
+      skillName: mode.id === 'normal' ? 'Attaque de base' : `${mode.label} (${Math.round(mode.mult * 100)} %)`,
+      modeId: mode.id,
       type: (wType === 'Magique' ? 'magique' : 'physique'), computedDmg: basicDmg, critDmg,
       didCrit: cr.didCrit, critMult: cr.multiplier, letha: eff.letha || 0, lethaMag: eff.lethaMag || 0,
-      crit: eff.crit || 0, dcrit: eff.dcrit || 0,
+      crit: mode.crit ? (eff.crit || 0) : 0, dcrit: eff.dcrit || 0,
       omni: eff.omni || 0, vol: eff.vol || 0, sapience: eff.sapience || 0, hpMax: eff.hp || 0, targetId });
-    const tgt = enemies.find(en => en.id === targetId);
+    const verb = mode.id === 'normal' ? 'attaque' : `${mode.label.toLowerCase()} →`;
     const shown = cr.didCrit ? `${critDmg} — CRITIQUE !` : `${basicDmg}`;
-    pushLog(`<b>${char.name}</b> attaque <b>${tgt ? tgt.name : 'un ennemi'}</b> (${shown}) — en attente MJ`, cr.didCrit ? 'buff' : 'gold');
-    toast(`<b>${char.name}</b> attaque (${shown}) — envoyé au MJ`, 'buff');
+    pushLog(`<b>${char.name}</b> ${verb} <b>${targetName(targetId)}</b> (${shown}) — en attente MJ`, cr.didCrit ? 'buff' : 'gold');
+    toast(`<b>${char.name}</b> — ${mode.label} (${shown}) envoyé au MJ`, 'buff');
   }
 
   return (
@@ -535,52 +554,77 @@ function CompetencesBody({ char, staff }) {
       </div>
       <MyResources char={char} eff={eff} state={state} activeBuffs={activeBuffs}
         setHp={setHp} setMana={setMana} setInvItem={setInvItem} removeInvItem={removeInvItem} />
-      {enemies.length > 0 && (
-        <div className="panel" style={{ padding: '10px 14px' }}>
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-            <div>
-              <div className="row gap-4 wrap" style={{ alignItems: 'flex-start' }}>
-                <div>
-                  <div className="overline" style={{ marginBottom: 6 }}>Ennemis en jeu</div>
-                  <div className="row gap-3 wrap">
-                    {foes.length === 0
-                      ? <span className="faint" style={{ fontSize: 12 }}>aucun</span>
-                      : foes.map(e => <CombatantChip key={e.id} c={e} />)}
-                  </div>
-                </div>
-                {allies.length > 0 && (
+      {/* Ciblage. Rendu MÊME sans PNJ sur le plateau : depuis que les PJ sont ciblables,
+          un duel entre joueurs est un combat valide, et l'ancienne garde `enemies.length > 0`
+          faisait disparaître le sélecteur tout entier dans ce cas. */}
+      <div className="panel" style={{ padding: '10px 14px' }}>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div className="row gap-4 wrap" style={{ alignItems: 'flex-start' }}>
+              {enemies.length === 0 ? (
+                <span className="faint" style={{ fontSize: 12 }}>Aucun PNJ sur le plateau — tu peux quand même viser un joueur.</span>
+              ) : (
+                <React.Fragment>
                   <div>
-                    <div className="overline" style={{ marginBottom: 6, color: 'var(--buff-bright)' }}>Alliés</div>
+                    <div className="overline" style={{ marginBottom: 6 }}>Ennemis en jeu</div>
                     <div className="row gap-3 wrap">
-                      {allies.map(e => <CombatantChip key={e.id} c={e} />)}
+                      {foes.length === 0
+                        ? <span className="faint" style={{ fontSize: 12 }}>aucun</span>
+                        : foes.map(e => <CombatantChip key={e.id} c={e} />)}
                     </div>
                   </div>
-                )}
-              </div>
+                  {allies.length > 0 && (
+                    <div>
+                      <div className="overline" style={{ marginBottom: 6, color: 'var(--buff-bright)' }}>Alliés</div>
+                      <div className="row gap-3 wrap">
+                        {allies.map(e => <CombatantChip key={e.id} c={e} />)}
+                      </div>
+                    </div>
+                  )}
+                </React.Fragment>
+              )}
             </div>
-            <label className="row gap-2" style={{ alignItems: 'center', fontSize: 12.5 }}>Cible
-              <select value={targetId} onChange={e => setTargetId(e.target.value)}
-                style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '6px 9px', fontSize: 13 }}>
-                <option value="">— aucune —</option>
-                {/* Les alliés restent ciblables (soin, tir fratricide) mais dans un groupe
-                    séparé : on ne tape pas un PNJ allié par glissement de souris. */}
-                {foes.filter(en => en.hpCur > 0).map(en => {
-                  const v = enemyPublicView(en);
-                  return <option key={en.id} value={en.id}>{en.name}{v.mode === 'exact' ? ` (${en.hpCur} PV)` : ''}</option>;
-                })}
-                {allies.filter(en => en.hpCur > 0).length > 0 && (
-                  <optgroup label="Alliés">
-                    {allies.filter(en => en.hpCur > 0).map(en => {
-                      const v = enemyPublicView(en);
-                      return <option key={en.id} value={en.id}>{en.name}{v.mode === 'exact' ? ` (${en.hpCur} PV)` : ''}</option>;
-                    })}
-                  </optgroup>
-                )}
-              </select>
-            </label>
           </div>
+          <label className="row gap-2" style={{ alignItems: 'center', fontSize: 12.5 }}>Cible
+            <select value={targetId} onChange={e => setTargetId(e.target.value)}
+              style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '6px 9px', fontSize: 13 }}>
+              <option value="">— aucune —</option>
+              {/* Les alliés restent ciblables (soin, tir fratricide) mais dans un groupe
+                  séparé : on ne tape pas un PNJ allié par glissement de souris. */}
+              {foes.filter(en => en.hpCur > 0).map(en => {
+                const v = enemyPublicView(en);
+                return <option key={en.id} value={en.id}>{en.name}{v.mode === 'exact' ? ` (${en.hpCur} PV)` : ''}</option>;
+              })}
+              {allies.filter(en => en.hpCur > 0).length > 0 && (
+                <optgroup label="Alliés">
+                  {allies.filter(en => en.hpCur > 0).map(en => {
+                    const v = enemyPublicView(en);
+                    return <option key={en.id} value={en.id}>{en.name}{v.mode === 'exact' ? ` (${en.hpCur} PV)` : ''}</option>;
+                  })}
+                </optgroup>
+              )}
+              {/* Joueurs. En DERNIER groupe : viser un camarade est l'exception (tir
+                  fratricide, PJ charmé, duel, gifle), pas le geste courant.
+                  ⚠️ Pas de PV chiffrés ici, contrairement aux PNJ : seule la feuille
+                  `hpCur` des autres PJ est lisible par un joueur (ouverte le 2026-09-02
+                  pour l'initiative) — leur PV MAX dépend de modificateurs et d'équipement
+                  qui restent cloisonnés, donc un « 240 PV » sans total serait trompeur.
+                  Un PJ à terre reste listable : le MJ arbitre les coups de grâce. */}
+              <optgroup label="Joueurs">
+                {CHARACTERS.map(c => {
+                  const hp = allHp[c.id];
+                  const down = hp != null && hp <= 0;
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.id === char.id ? ' (toi)' : ''}{down ? ' — à terre' : ''}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            </select>
+          </label>
         </div>
-      )}
+      </div>
       {(() => {
         const sb = sumSkillBuffs(state.skillBuffs || {}, turn);
         const keys = Object.keys(sb);
@@ -599,11 +643,35 @@ function CompetencesBody({ char, staff }) {
           <h3>⚔ Attaque de base</h3>
           <span className="overline">{eqWeaponName} · {wType === 'Magique' ? 'AP' : 'AD'}</span>
         </div>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px' }}>
-          <span className="mono" style={{ fontSize: 22, color: 'var(--hp)', fontWeight: 700 }}>
-            {basicDmg}<span style={{ fontSize: 12, color: 'var(--faint)' }}> dégâts</span>
-          </span>
-          <button className="btn btn-gold" onClick={basicAttack}>Attaquer</button>
+        <div style={{ padding: '10px 14px' }}>
+          {/* Modes : un geste par bouton, ratio fixe sur la puissance d'attaque. Choix par
+              COUP (état local) — ce n'est pas une posture qu'on garde pour le tour. */}
+          <div className="row gap-2 wrap" style={{ marginBottom: 10 }}>
+            {BASIC_MODES.map(m => (
+              <button key={m.id}
+                className={'btn btn-sm ' + (atkMode === m.id ? 'btn-gold' : 'btn-ghost')}
+                onClick={() => setAtkMode(m.id)}
+                title={`${Math.round(m.mult * 100)} % de ta puissance d’attaque${m.note ? ' · ' + m.note : ''}${m.crit ? '' : ' · pas de coup critique'}`}>
+                {m.ic} {m.label}{m.mult !== 1 ? ` ${Math.round(m.mult * 100)} %` : ''}
+              </button>
+            ))}
+          </div>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div className="col" style={{ gap: 2 }}>
+              <span className="mono" style={{ fontSize: 22, color: 'var(--hp)', fontWeight: 700 }}>
+                {basicDmg}<span style={{ fontSize: 12, color: 'var(--faint)' }}> dégâts</span>
+                {mode.mult !== 1 && (
+                  <span className="faint" style={{ fontSize: 12 }}> · {Math.round(mode.mult * 100)} % de {basicPower}</span>
+                )}
+              </span>
+              {!mode.crit && (
+                <span className="faint" style={{ fontSize: 11.5 }}>Coup retenu : pas de jet de critique.</span>
+              )}
+            </div>
+            <button className="btn btn-gold" onClick={basicAttack}>
+              {mode.id === 'normal' ? 'Attaquer' : mode.label}
+            </button>
+          </div>
         </div>
       </div>
       <PassiveCard kit={kitWithId} eff={eff} base={base} counters={counters} level={level} color={color} setCounter={setCounter} />

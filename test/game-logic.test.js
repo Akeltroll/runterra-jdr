@@ -1800,3 +1800,45 @@ test('npcStatsFromAttrs : arguments absents = pas de plantage', () => {
   assert.ok(Number.isFinite(p.hpMax) && p.hpMax > 0);
   assert.ok(Number.isFinite(p.atk));
 });
+
+/* ============================================================
+   MODES D'ATTAQUE DE BASE (2026-09-06)
+   ============================================================ */
+test("BASIC_MODES : table de ratios verrouillee (decision MJ du 2026-09-06)", () => {
+  const r = {};
+  L.BASIC_MODES.forEach((m) => { r[m.id] = m.mult; });
+  assert.deepEqual(r, {
+    normal: 1, retenu: 0.5, poing: 0.25, botte: 0.15, bousculade: 0.1, gifle: 0.05,
+  });
+  // Le premier mode est le defaut de l'UI : il DOIT etre l'attaque pleine.
+  assert.equal(L.BASIC_MODES[0].id, 'normal');
+  assert.equal(L.BASIC_MODES[0].mult, 1);
+});
+test("BASIC_MODES : seule l'attaque pleine peut faire un coup critique", () => {
+  // Ruling MJ : un geste de mepris ne doit pas pouvoir sortir un gros chiffre.
+  L.BASIC_MODES.forEach((m) => {
+    assert.equal(m.crit === true, m.id === 'normal', `crit incoherent pour ${m.id}`);
+  });
+});
+test('basicModeDamage : ratio applique et arrondi', () => {
+  assert.equal(L.basicModeDamage(504, 'normal'), 504);
+  assert.equal(L.basicModeDamage(504, 'gifle'), 25);    // 25.2 -> 25
+  assert.equal(L.basicModeDamage(504, 'botte'), 76);    // 75.6 -> 76
+  assert.equal(L.basicModeDamage(101, 'retenu'), 51);   // 50.5 -> 51
+});
+test('basicModeDamage : pas de plancher artificiel a 1', () => {
+  // Une gifle sur une puissance derisoire rend 0, et c'est une information juste :
+  // le MJ ajuste le champ a la resolution comme pour n'importe quelle attaque.
+  assert.equal(L.basicModeDamage(9, 'gifle'), 0);
+  assert.equal(L.basicModeDamage(0, 'normal'), 0);
+});
+test('basicMode : id inconnu ou absent = attaque pleine', () => {
+  // Un mode retire du code ne doit pas transformer une attaque en coup a 0.
+  assert.equal(L.basicMode('mode_disparu').id, 'normal');
+  assert.equal(L.basicMode(undefined).id, 'normal');
+  assert.equal(L.basicModeDamage(200, 'mode_disparu'), 200);
+});
+test('basicModeDamage : puissance invalide = 0, jamais NaN', () => {
+  assert.equal(L.basicModeDamage(null, 'gifle'), 0);
+  assert.equal(L.basicModeDamage(-50, 'normal'), 0);
+});

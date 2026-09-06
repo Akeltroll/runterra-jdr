@@ -710,24 +710,17 @@ function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
     if (!c) { onClose(); return; }
     const st = stOf(c.id);
     const L = mjLive(c, st, turn);
-    const degats = mitigateDamage(raw, type, { armure: L.eff.armure, resmag: L.eff.resmag }, lethaNum);
-    const res = applyDamageToPools({ hpCur: L.hp, shield: L.shield }, degats);
-    window.RTDB.updatePath(charPath(c.id), { hpCur: res.hpCur, shield: res.shield });
-    if (stampKo) stampKo(c.id, L.hp, res.hpCur);   // KO differe (spec §4.2)
-    // Passif Rathael — Chair gelée : +1 charge de Glaciation par coup subi (tout stackable en 1 tour, max 5 ;
-    // +2/coup pendant Souverain Glacial). La perte -3/tour sans dégât est gérée en fin de tour (glaciationDecay).
-    if (c.id === 'rathael' && degats > 0) {
-      const gp = glaciationOnHit(st && st.counters, turn);
-      if (gp) {
-        window.RTDB.updatePath(`${charPath(c.id)}/counters`, gp);
-        if (gp.glaciation != null) pushLog(`<b>${c.name}</b> gagne une charge de Glaciation (${gp.glaciation}/5)`, 'buff');
-      }
-    }
+    // Mitigation + pools + écriture + passif Glaciation : tout est dans l'orchestrateur
+    // partagé avec la résolution des attaques joueur→joueur (data-state.jsx).
+    const r = applyHitToCharacter(c.id, { armure: L.eff.armure, resmag: L.eff.resmag, hpCur: L.hp, shield: L.shield },
+      raw, type, lethaNum, turn, st && st.counters);
+    if (stampKo) stampKo(c.id, L.hp, r.hpCur);   // KO differe (spec §4.2)
+    if (r.glaciation != null) pushLog(`<b>${c.name}</b> gagne une charge de Glaciation (${r.glaciation}/5)`, 'buff');
     const critTag = cr.didCrit ? (' 🎲 CRIT' + (tgtRescrit > 0 ? ` −${tgtRescrit}% R.Crit` : '')) : '';
     const lethaTag = lethaNum > 0 ? `, léth. ${type === 'magique' ? 'mag.' : 'phys.'} ${lethaNum}` : '';
-    toast(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}${critTag}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`,
-      res.ko ? 'debuff' : 'gold');
-    pushLog(`<b>${enemy.name}</b> inflige <b>${degats}</b> (${type}${critTag}${lethaTag}) à <b>${c.name}</b>${res.ko ? ' — KO !' : ''}`, res.ko ? 'debuff' : 'gold');
+    toast(`<b>${enemy.name}</b> inflige <b>${r.applied}</b> (${type}${critTag}) à <b>${c.name}</b>${r.ko ? ' — KO !' : ''}`,
+      r.ko ? 'debuff' : 'gold');
+    pushLog(`<b>${enemy.name}</b> inflige <b>${r.applied}</b> (${type}${critTag}${lethaTag}) à <b>${c.name}</b>${r.ko ? ' — KO !' : ''}`, r.ko ? 'debuff' : 'gold');
     onClose();
   };
 
@@ -803,12 +796,17 @@ function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
 
 /* Une attaque en attente : crit roulé par l'app, dégâts pré-remplis éditables (le MJ ajuste à son d20
    de toucher) + type + léthalité + appliquer/rejeter. */
-function PendingHitRow({ hit, enemies, onApply, onReject }) {
-  const enemy = enemies.find(e => e.id === hit.targetId);
+function PendingHitRow({ hit, target, onApply, onReject }) {
   // Résistance critique de la CIBLE, appliquée ici et pas au cast : le crit est roulé
-  // côté joueur, mais seul le MJ voit la fiche de l'ennemi visé (§ refonte 2026-09-04).
+  // côté joueur, mais seul le MJ voit la fiche de la cible visée (§ refonte 2026-09-04).
   // Elle ne rogne que la part de dégâts au-dessus du coup normal.
-  const rescrit = (enemy && enemy.rescrit) || 0;
+  // ⚠️ La cible peut être un PNJ (`combat/enemies`) OU un PJ : c'est `resolveTarget`
+  // (PendingHitsPanel) qui tranche et fournit un objet uniforme. Cette ligne lisait
+  // `enemies.find(...)` et affichait « cible disparue » pour tout PJ visé.
+  const rescrit = (target && target.rescrit) || 0;
+  // Une cible PJ dont la fiche n'est pas encore arrivée de Firebase n'est pas résolvable :
+  // ses pools seraient devinés (cf. `loaded` dans resolveTarget).
+  const ready = !!target && (target.kind !== 'pj' || target.loaded);
   const critMult = hit.critMult || 1;
   const redMult = critMultAfterResist(critMult, rescrit);
   const critShown = hit.didCrit ? Math.round((hit.computedDmg || 0) * redMult) : null;
@@ -828,7 +826,13 @@ function PendingHitRow({ hit, enemies, onApply, onReject }) {
   return (
     <div className="panel" style={{ padding:'10px 14px', display:'flex', flexDirection:'column', gap:8 }}>
       <div className="row" style={{ justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
-        <span style={{ fontSize:13 }}><b className="gold">{hit.attackerName}</b> · {hit.skillName} → <b>{enemy ? enemy.name : '— cible disparue —'}</b></span>
+        <span style={{ fontSize:13 }}>
+          <b className="gold">{hit.attackerName}</b> · {hit.skillName} →{' '}
+          <b style={{ color: target && target.kind === 'pj' ? 'var(--gold-pale)' : undefined }}>
+            {target ? target.name : '— cible disparue —'}
+          </b>
+          {target && target.kind === 'pj' && <span className="faint" style={{ fontSize:11 }}> (joueur)</span>}
+        </span>
         {hit.didCrit
           ? <span className="mono" style={{ fontSize:11, color:'var(--skillbuff)' }}>
               🎲 CRIT ×{critMult.toFixed(2)}
@@ -858,25 +862,55 @@ function PendingHitRow({ hit, enemies, onApply, onReject }) {
             <button key={t} className={'btn btn-sm ' + (type===t ? 'btn-gold' : 'btn-ghost')} onClick={() => setType(t)} style={{ textTransform:'capitalize' }}>{t}</button>
           ))}
         </div>
-        <button className="btn btn-sm btn-gold" disabled={!enemy} onClick={() => onApply(hit, enemy, Math.max(0, parseInt(dmg,10)||0), type, lethaNum)} style={{ marginLeft:'auto' }}>Appliquer</button>
+        <button className="btn btn-sm btn-gold" disabled={!ready}
+          title={target && !ready ? 'Fiche du joueur pas encore chargée' : ''}
+          onClick={() => onApply(hit, target, Math.max(0, parseInt(dmg,10)||0), type, lethaNum)} style={{ marginLeft:'auto' }}>Appliquer</button>
         <button className="btn btn-sm btn-ghost" onClick={() => onReject(hit.id)}>Rejeter</button>
       </div>
     </div>
   );
 }
-function PendingHitsPanel({ enemies, stampKo }) {
+function PendingHitsPanel({ enemies, stampKo, stOf, turn }) {
   const toast = useToast();
   const { hits, removeHit } = usePendingHits();
   if (!hits.length) return null;
-  const apply = async (hit, enemy, finalDmg, type, letha) => {
-    const r = applyHitToEnemy(enemy, finalDmg, type, letha || 0);
+  /* Une attaque en attente vise soit un PNJ (`combat/enemies`), soit un PJ. On rend un
+     objet UNIFORME pour que la carte n'ait pas à connaître les deux mondes.
+     ⚠️ Un PJ coûte un `mjLive` (ses stats effectives, invisibles des autres joueurs) :
+     c'est pour ça que la résolution joueur→joueur ne peut se faire QUE chez le MJ, et
+     c'est aussi pourquoi ce lot n'a demandé aucune nouvelle règle RTDB. */
+  const resolveTarget = (id) => {
+    const e = enemies.find(x => x.id === id);
+    if (e) return { kind:'enemy', id, name:e.name, rescrit:e.rescrit || 0, enemy:e };
+    const c = CHARACTERS.find(x => x.id === id);
+    if (!c) return null;
+    const st = stOf ? stOf(c.id) : null;
+    const L = mjLive(c, st, turn);
+    // ⚠️ `loaded` garde une écriture, pas un affichage : sans état Firebase, `mjLive`
+    // retombe sur les PV DE RÉFÉRENCE (c.hpCur est un RATIO, pas une valeur absolue).
+    // Appliquer un coup à cet instant écraserait les vrais PV du joueur par un nombre
+    // inventé. La fenêtre est courte (l'abonnement staff arrive vite) mais elle existe.
+    return { kind:'pj', id, name:c.name, rescrit:(L.eff && L.eff.rescrit) || 0, char:c, st, live:L, loaded: !!st };
+  };
+  const apply = async (hit, target, finalDmg, type, letha) => {
+    let r, hpBefore;
+    if (target.kind === 'enemy') {
+      hpBefore = target.enemy.hpCur;
+      r = applyHitToEnemy(target.enemy, finalDmg, type, letha || 0);
+    } else {
+      const L = target.live;
+      hpBefore = L.hp;
+      r = applyHitToCharacter(target.id, { armure:L.eff.armure, resmag:L.eff.resmag, hpCur:L.hp, shield:L.shield },
+        finalDmg, type, letha || 0, turn, (target.st || {}).counters);
+      if (r.glaciation != null) pushLog(`<b>${target.name}</b> gagne une charge de Glaciation (${r.glaciation}/5)`, 'buff');
+    }
     // KO differe (spec §4.2) : on horodate la transition vivant -> a terre pour que le
-    // moteur sache si l'ennemi est tombe PENDANT son propre creneau (il agit quand meme)
-    // ou avant (il est saute).
-    if (stampKo) stampKo(enemy.id, enemy.hpCur, r.hpCur);
+    // moteur sache si la cible est tombee PENDANT son propre creneau (elle agit quand meme)
+    // ou avant (elle est sautee).
+    if (stampKo) stampKo(target.id, hpBefore, r.hpCur);
     const lethaTag = letha > 0 ? `, léth. ${type === 'magique' ? 'mag.' : 'phys.'} ${letha}` : '';
-    toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
-    pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}${lethaTag}) à <b>${enemy.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
+    toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${target.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
+    pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}${lethaTag}) à <b>${target.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
     // Vol de vie / Sapience / Omnivamp : soin de l'attaquant sur les dégâts infligés.
     // Séparation par source : attaque de base → vol/sapience ; compétence → omnivamp.
     const heal = lifestealHeal(r.applied, type, { omni: hit.omni || 0, vol: hit.vol || 0, sapience: hit.sapience || 0 }, hit.skillId === 'basic');
@@ -893,7 +927,7 @@ function PendingHitsPanel({ enemies, stampKo }) {
     <div style={{ marginBottom:24 }}>
       <h3 style={{ fontSize:16, marginBottom:12 }}>Attaques en attente <span className="mono faint" style={{ fontSize:12 }}>· {hits.length}</span></h3>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:12 }}>
-        {hits.map(h => <PendingHitRow key={h.id} hit={h} enemies={enemies} onApply={apply} onReject={removeHit} />)}
+        {hits.map(h => <PendingHitRow key={h.id} hit={h} target={resolveTarget(h.targetId)} onApply={apply} onReject={removeHit} />)}
       </div>
     </div>
   );
@@ -1060,7 +1094,7 @@ function MJPage({ go }) {
             {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} turn={turn} onFull={() => setFull(c)} />)}
           </div>
           <div style={{ marginTop:28 }}>
-            <PendingHitsPanel enemies={enemies} stampKo={stampKo} />
+            <PendingHitsPanel enemies={enemies} stampKo={stampKo} stOf={stOf} turn={turn} />
           </div>
           <div style={{ marginTop:28 }}>
             {(() => {

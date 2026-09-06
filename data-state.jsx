@@ -318,6 +318,35 @@ function applyHitToEnemy(enemy, finalDmg, type, lethalite = 0) {
   window.RTDB.updatePath(`${ENEMIES}/${enemy.id}`, { hpCur: res.hpCur });
   return { applied: dmg, hpCur: res.hpCur };
 }
+/* Applique des dégâts (déjà ajustés par le MJ) à un PJ : mitigation par SES stats
+   effectives, bouclier d'abord puis PV. Miroir de `applyHitToEnemy` pour l'autre camp.
+   L'appelant fournit `target` = { armure, resmag, hpCur, shield } : seul le MJ voit la
+   fiche complète d'un PJ, c'est donc lui qui calcule le `eff` (via mjLive) et le passe.
+
+   ⚠️ Le passif de Rathael (Chair gelée, +1 charge de Glaciation par coup subi) est
+   traité ICI et non au site d'appel : c'est le seul endroit du code où « un PJ subit
+   des dégâts » est vrai, et les deux appelants — une attaque de PNJ (EnemyAttackModal)
+   et désormais une attaque d'un autre PJ (PendingHitsPanel) — doivent le déclencher à
+   l'identique. Il vivait dans EnemyAttackModal ; l'y laisser aurait fait qu'une gifle
+   entre joueurs ne chargerait pas Rathael, sans que rien ne le signale.
+   Renvoie `glaciation` (nouvelle valeur) pour que l'appelant journalise. */
+function applyHitToCharacter(charId, target, finalDmg, type, lethalite, turn, counters) {
+  const t = target || {};
+  const dmg = mitigateDamage(Math.max(0, finalDmg | 0), type,
+    { armure: t.armure || 0, resmag: t.resmag || 0 }, Math.max(0, lethalite | 0));
+  const res = applyDamageToPools({ hpCur: t.hpCur || 0, shield: t.shield || 0 }, dmg);
+  window.RTDB.updatePath(charPath(charId), { hpCur: res.hpCur, shield: res.shield });
+  let glaciation = null;
+  if (charId === 'rathael' && dmg > 0) {
+    const gp = glaciationOnHit(counters, turn);
+    if (gp) {
+      window.RTDB.updatePath(`${charPath(charId)}/counters`, gp);
+      if (gp.glaciation != null) glaciation = gp.glaciation;
+    }
+  }
+  return { applied: dmg, hpCur: res.hpCur, shield: res.shield, ko: res.ko, glaciation };
+}
+
 /* Soin de l'attaquant (vol de vie / sapience / omnivamp) : ajoute `amount` à ses PV,
    plafonné à maxHp (snapshot au cast). Orchestrateur staff (lit l'état, écrit hpCur). */
 async function healCharacter(charId, amount, maxHp) {
@@ -662,7 +691,7 @@ Object.assign(window, {
   useSharedTurn, COMBAT_TURN,
   useInitiative, INITIATIVE, useAllHp,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
-  usePendingHits, applyHitToEnemy, healCharacter, PENDING_HITS,
+  usePendingHits, applyHitToEnemy, applyHitToCharacter, healCharacter, PENDING_HITS,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
   pushEconomyLog, useEconomyLog, ECONOMY_LOG, purseName,
   COIN_KEYS, setCharCoins, setSharedCoins,

@@ -650,6 +650,10 @@ ou `perl -i -pe` pour un search-replace global (ex. le bump du token de cache).
 2. **`io.open(p,'w')` TRONQUE le fichier avant d'encoder** : si l'encodage échoue pendant le
    `write()`, il ne reste **rien**. Toujours encoder d'abord (`data = s.encode('utf-8')`) puis ouvrir
    en `'wb'` — l'exception tombe alors **avant** que le fichier ne soit touché.
+   ⚠️ **La forme chaînée `io.open(p,'wb').write(s.encode('utf-8'))` DÉFAIT cette garde** (vécu
+   le 2026-09-06, `CLAUDE.md` vidé puis récupéré par `git checkout`) : Python évalue l'appelé
+   `io.open(p,'wb')` **avant** l'argument, donc le fichier est tronqué **puis** l'encodage lève.
+   Les octets doivent être liés à une variable sur une **ligne séparée** avant tout `open`.
 Accessoire : `print()` d'un texte accentué échoue aussi (stdout en cp1252) — logger en ASCII.
 
 ## Branches (convention depuis 2026-08-16)
@@ -665,6 +669,54 @@ arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, 
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
 ## État actuel (2026-09-06)
+- **Modes d'attaque de base + ciblage des PJ dans l'onglet Combat** — cache `20260906-2`,
+  **234 tests verts** (game-logic 223 + auth 11), **aucune règle RTDB à republier**, **aucune migration**.
+  **Modes** : `BASIC_MODES` (game-logic, pur, testé) = 6 gestes à ratio FIXE sur la puissance
+  d'attaque — Attaque 100 % / Coup retenu 50 % / Coup de poing 25 % / Botter le cul 15 % /
+  Bousculade 10 % / Gifle 5 % — + `basicMode(id)` (id inconnu → attaque pleine) et
+  `basicModeDamage(power, id)`. Rangée de boutons sur la carte « ⚔ Attaque de base », **état
+  local, non persisté** : c'est un choix par COUP.
+  ⚠️ **À NE PAS CONFONDRE avec l'ancien `ATTACK_MODES`** (offensif/équilibré/défensif, retiré
+  en juin, `f509f42`, définitivement abandonné) : c'était une **posture** choisie pour le tour et
+  multipliant toute l'attaque. Ici chaque entrée est un **geste nommé**, et `normal` reste le défaut.
+  ⚠️ **Ruling MJ (2026-09-06) : un mode réduit ne roule PAS le dé de crit** (`crit:false`). On ne
+  neutralise pas le résultat après coup, **on ne lance pas** — et l'attaque envoyée au MJ porte
+  `crit: 0`, parce que sa carte doit dire la vérité de CE coup, pas la fiche de l'attaquant. Motif :
+  à 20 d'Habileté le multiplicateur vaut ×2,30 — une gifle critique ferait un demi coup de poing.
+  ⚠️ **Pas de plancher à 1 dégât** : une gifle qui rend 0 sur une puissance dérisoire est une
+  information juste, et le MJ ajuste le champ à la résolution comme pour toute attaque.
+  Le ratio s'applique à `eff.ad` **ou** `eff.ap` selon l'arme — une gifle de mage vaut 5 % d'AP.
+  **Ciblage PJ** : `<optgroup>` « Joueurs » dans le sélecteur de cible (soi compris, marqué
+  « (toi) »), en **dernier** groupe (viser un camarade est l'exception). Côté MJ, `PendingHitRow`
+  lisait `enemies.find(...)` et affichait **« cible disparue »** avec *Appliquer* désactivé pour
+  tout PJ visé : `PendingHitsPanel` résout désormais la cible (`resolveTarget` → objet uniforme
+  `{kind:'enemy'|'pj', name, rescrit, …}`) et reçoit `stOf`/`turn`.
+  ⚠️ **AUCUNE règle RTDB nouvelle, et c'est structurel** : `pendingHits/$hitId` est en écriture
+  pour tout inscrit et ne valide que `attackerId/targetId/computedDmg` — un `targetId` de PJ passe
+  tel quel. Le joueur n'écrit **jamais** les PV de sa cible : c'est le MJ qui résout, et lui seul
+  voit les stats effectives d'un PJ (`mjLive`). Le cloisonnement tient sans y toucher.
+  **Dette absorbée — `applyHitToCharacter`** (data-state, miroir d'`applyHitToEnemy`) : la branche
+  « la cible est un PJ » (mitigation → pools → `updatePath` → passif Glaciation) existait déjà,
+  entièrement écrite, dans `EnemyAttackModal.submit`. Elle est extraite, et les deux appelants
+  (attaque de PNJ, attaque d'un autre PJ) la partagent.
+  ⚠️ **Le passif de Rathael est dans l'orchestrateur, pas au site d'appel** : c'est le seul
+  endroit où « un PJ subit des dégâts » est vrai. L'avoir laissé dans `EnemyAttackModal` aurait
+  fait qu'une gifle entre joueurs ne charge pas Glaciation, sans que rien ne le signale.
+  ⚠️ **Le sélecteur de cible est rendu MÊME sans PNJ** : l'ancienne garde `enemies.length > 0`
+  faisait disparaître le panneau entier, donc un duel PJ vs PJ n'avait aucune cible sélectionnable.
+  ⚠️ **Pas de PV chiffrés pour les PJ dans le sélecteur**, contrairement aux PNJ : seule la
+  feuille `hpCur` des autres PJ est lisible par un joueur (ouverte le 2026-09-02 pour l'initiative) —
+  leur PV **max** dépend de modificateurs et d'équipement restés cloisonnés, donc un « 240 PV »
+  sans total serait trompeur. Seul « — à terre » est affiché.
+  ⚠️ **Garde-fou d'écriture `target.loaded`** : sans état Firebase, `mjLive` retombe sur les PV
+  **de référence** (`c.hpCur` est un RATIO, pas une valeur absolue) — appliquer un coup à cet
+  instant écraserait les vrais PV du joueur par un nombre inventé. *Appliquer* est désactivé tant
+  que la fiche n'est pas arrivée.
+  👉 **Hors périmètre, décidé par le MJ** : **soins ciblés sur allié et AOE** partent au chantier
+  de refonte des compétences. La file d'attaques ne transporte que des **dégâts** ; `sk.heal`
+  (Jett C2) est affiché sur la carte mais **n'est appliqué nulle part**, et rien ne modélise une
+  zone d'effet (une comp à N cibles envoie N attaques sur la MÊME cible).
+
 - **PV/Mana/Bouclier + potions dans l'onglet Combat** — cache `20260906-1`, **228 tests verts**,
   **aucune règle RTDB**, **aucune migration**, aucune logique pure touchée.
   Le joueur ne voyait **nulle part** ses ressources pendant un combat : il subissait déjà la contrainte

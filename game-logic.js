@@ -989,6 +989,43 @@
     return ad; // Physique par défaut
   }
 
+  /* ------------------------------------------------------------
+     MODES D'ATTAQUE DE BASE (2026-09-06)
+     Gestes nommés à ratio FIXE appliqués à la puissance d'attaque (AD ou AP selon
+     l'arme, cf. skillBaseDamage). Le mode ne change ni la cible, ni le type de dégâts,
+     ni la léthalité : il ne fait que rogner le nombre.
+
+     ⚠️ À NE PAS CONFONDRE avec l'ancien `ATTACK_MODES` (offensif/équilibré/défensif),
+     retiré en juin (f509f42) et définitivement abandonné : c'était une POSTURE, choisie
+     pour le tour et multipliant TOUTE l'attaque. Ici chaque entrée est un geste choisi
+     coup par coup, et `normal` (100 %) reste le défaut.
+
+     ⚠️ `crit:false` = ce mode ne peut PAS faire de coup critique (ruling MJ du
+     2026-09-06). Un geste de mépris ne doit pas pouvoir sortir un gros chiffre : à
+     20 d'Habileté le multiplicateur de crit vaut ×2,30, ce qui ferait d'une gifle
+     critique un demi coup de poing. Seule l'attaque pleine roule le dé.
+     ------------------------------------------------------------ */
+  var BASIC_MODES = [
+    { id: 'normal',     label: 'Attaque',       ic: '⚔',  mult: 1.00, crit: true  },
+    { id: 'retenu',     label: 'Coup retenu',   ic: '🗡', mult: 0.50, crit: false, note: 'Plat de lame' },
+    { id: 'poing',      label: 'Coup de poing', ic: '🤛',   mult: 0.25, crit: false },
+    { id: 'botte',      label: 'Botter le cul', ic: '🦶',    mult: 0.15, crit: false },
+    { id: 'bousculade', label: 'Bousculade',    ic: '🫱',   mult: 0.10, crit: false },
+    { id: 'gifle',      label: 'Gifle',         ic: '👋',   mult: 0.05, crit: false },
+  ];
+  /* Mode par id ; un id inconnu (ou absent) retombe sur l'attaque pleine — un mode
+     disparu du code ne doit pas transformer une attaque en coup à 0. */
+  function basicMode(id) {
+    for (var i = 0; i < BASIC_MODES.length; i++) if (BASIC_MODES[i].id === id) return BASIC_MODES[i];
+    return BASIC_MODES[0];
+  }
+  /* Dégâts affichés/envoyés pour un mode. Pas de plancher artificiel à 1 : une gifle
+     qui rend 0 sur une puissance dérisoire est une information juste, et le MJ ajuste
+     le champ à la résolution comme pour n'importe quelle attaque. */
+  function basicModeDamage(power, id) {
+    return Math.max(0, Math.round(Math.max(0, power || 0) * basicMode(id).mult));
+  }
+
   /* Cooldown stocké comme « n° de tour de disponibilité » (readyAt). */
   function cooldownReady(readyAt, currentTurn) {
     if (readyAt == null) return true;
@@ -1581,6 +1618,7 @@
     INIT_DIE, rollInitiative, initiativeTotal, initiativeStatus, initiativeReady,
     combatantJoinRound, initiativeJoinOnValidate, initiativeSlots, slotParticipants, initiativeState,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
+    BASIC_MODES, basicMode, basicModeDamage,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
