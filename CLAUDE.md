@@ -503,6 +503,22 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   modèle exact de `habSplitOpen`/`mentalSplitOpen`. ⚠️ Rouvrir la respec lève **aussi** les planchers des deux
   répartitions : baisser une carac rogne la répartition dérivée via `clampSplitDraft`, qui coupe dans un ordre
   fixe — un plancher maintenu figerait le joueur sur une coupe qu'il n'a pas choisie et ne pourrait plus corriger.
+  ⚠️ **TROIS gardes distinctes bloquent « Confirmer » (`disabled={!valid || !dirty}`), et la 2e est celle qui
+  se voit le moins** : (1) `attrsValid` — somme ≠ budget ou carac > cap, **visible** dans le compteur d'en-tête ;
+  (2) `splitLeft`/`mentLeft` — points en **réserve de répartition** non placés, **invisibles dans l'en-tête**,
+  qui affiche « 0 restant » en vert car il ne compte que les caracs ; (3) `dirty` — rien n'a changé.
+  Monter l'Habileté ou le Mental ouvre TOUJOURS une réserve (2), d'où le bug du 2026-09-06.
+  D'où trois affordances, à ne pas retirer : **`confirmHint` AFFICHÉ** à côté du bouton (pas seulement en
+  `title` — une infobulle n'existe pas au doigt sur tablette), **cadre de la répartition en OR** tant que
+  `left > 0`, et bouton **« Tout placer »** (`fillSplit`/`fillMent` → `habSplit`/`mentalSplit`, qui versent le
+  reliquat sur la destination par défaut ; amorce déplaçable ensuite).
+  Deux autres boutons complètent le cycle de respec : **« Tout à 0 »** (`clearDraft`, en-tête, visible si
+  `staff || attrsOpen`) — **seul point d'entrée d'une redistribution à budget plein**, puisque `canInc` exige
+  `remaining > 0` et qu'à 10/10 tous les « + » sont morts ; et **« Garder la répartition »** (`keepAttrs`,
+  visible si `attrsOpen && valid && !dirty`) — sans lui, un joueur qui ne veut RIEN changer après une
+  réouverture n'a aucune écriture possible (garde `dirty`) et la fenêtre `attrsOpen` reste ouverte jusqu'à ce
+  que le MJ la referme à la main. ⚠️ Bouton séparé plutôt qu'un assouplissement en `dirty || attrsOpen` : un
+  clic malencontreux refermerait la respec à la seconde où le MJ vient de l'ouvrir.
 - `pages-lobby.jsx` — **Hub d'accueil** (`HubPage`, onglet « Accueil », **page d'atterrissage de tous les
   rôles** via `defaultRoute → 'lobby'`). Pièce maîtresse : **`CharCarousel`** = carrousel horizontal plat
   (slider) des 5 persos, positionné par `carouselTransforms(count, activeIndex)` (game-logic, pur : carte active
@@ -732,6 +748,18 @@ Vérif syntaxe d'un .jsx : `npx esbuild fichier.jsx >/dev/null` (⚠️ **pas** 
 ce flag ne vaut que pour stdin, esbuild déduit le loader de l'extension).
 SRI des scripts CDN : `curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
 
+**Banc d'essai d'une PAGE, sans Firebase ni authentification** (technique qui a trouvé le bug de respec
+du 2026-09-06, là où la lecture du code avait conclu à tort à un simple défaut d'ergonomie) : écrire une
+page jetable à la racine (servie par le `http.server` ci-dessus) qui charge React/Babel, `game-logic.js`,
+`data.jsx`, puis **le vrai `data-state.jsx` et la vraie page** par-dessus un **faux `window.RTDB` en
+mémoire** — l'API tient en 6 lignes (`subscribePath`/`updatePath`/`setPath`/`getSnapshot`) et doit
+reproduire les deux sémantiques de Firebase qui comptent : **écho asynchrone** (`setTimeout`) et
+**`null` = suppression**. Piloter avec `npm i playwright-core` + `chromium.launch({channel:'chrome'})`
+(utilise le Chrome installé, **aucun navigateur à télécharger**). ⚠️ **Bouchonner `useCharState` ne sert
+à rien** — un premier banc qui le faisait ne reproduisait rien ; c'est en branchant la vraie couche
+d'état que le blocage est apparu. Penser à supprimer la page, `node_modules` et le `package.json` généré
+(`git checkout -- package.json package-lock.json`) après coup.
+
 ⚠️ **Ne jamais éditer un fichier accentué via PowerShell 5.1** (`Get-Content -Raw` + `Out-File`) :
 il relit l'UTF-8 en ANSI et réécrit un BOM + des accents cassés (`é`→`Ã©`). Utiliser l'outil Edit,
 ou `perl -i -pe` pour un search-replace global (ex. le bump du token de cache).
@@ -767,6 +795,40 @@ arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, 
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
 ## État actuel (2026-09-06)
+- **🐞 CORRIGÉ — « Confirmer » inerte après une réouverture de respec** (défaut **antérieur**, présent
+  depuis la livraison de la répartition du Mental le 2026-09-05). Cache `20260906-7`, **262 tests verts**,
+  **aucune règle RTDB**, **aucune migration**, aucune logique pure touchée. Mergé sur `main` (`3dab481`).
+  **Symptôme rapporté par le MJ** : après une confirmation puis un « ↺ Rouvrir la respec », plus rien
+  n'est confirmable, « même en passant par Tout à 0 ».
+  ⚠️ **La cause n'est PAS `attrsOpen`, qui fonctionne** — c'est la **réserve de répartition**. Monter
+  l'Habileté ou le Mental (donc toute vraie redistribution, et systématiquement après un « Tout à 0 »)
+  envoie des points en réserve dans le sous-panneau en pointillés ; tant qu'elle n'est pas vidée,
+  `valid` est faux. Or **le compteur d'en-tête affiche « 0 restant » en VERT** — il ne compte que les
+  caracs — et le motif du blocage n'existait que dans un `title`, **invisible au doigt sur tablette**.
+  Bouton gris, aucune explication.
+  👉 **LEÇON** : ici la garde bloquante et l'indicateur de complétude portaient sur **deux grandeurs
+  différentes**. Une garde composée (`attrsValid && splitLeft === 0 && mentLeft === 0`) doit exposer
+  **laquelle** de ses branches bloque, sinon l'UI affirme « tout va bien » pendant qu'elle refuse.
+  Livré : `confirmHint` **affiché** à côté du bouton (et non plus seulement en `title`), qui distingue
+  enfin la réserve d'Habileté de celle du Mental (le message parlait d'Habileté dans les deux cas) ;
+  cadre de répartition **en or** tant que `left > 0` ; bouton **« Tout placer »** (`fillSplit`/`fillMent`,
+  qui réutilisent `habSplit`/`mentalSplit` — c'est déjà leur sémantique) ; bouton **« Tout à 0 »**
+  (`clearDraft`) qui est le seul point d'entrée d'une redistribution à budget plein ; bouton
+  **« Garder la répartition »** (`keepAttrs`) pour le joueur qui ne veut rien changer. Détail des trois
+  gardes et des cinq affordances : carte de `pages-progression.jsx`.
+  🐞 **Ramassé au passage — Smith portait `attrs` = 14/20/0/0 = 34 points** pour un budget de 10 et un
+  cap de 6 (reliquat d'un test niveau 18) : sa page était bloquée pour une **autre** raison
+  (`respecValid` faux). Remis en base à `3/6/1/0` (= ses valeurs canoniques de `data.jsx` moins les 2
+  points de Magie), `habSplit {ad:6}`, `mentalSplit {hp:1}`, `attrsOpen` laissé **ouvert** pour qu'Erwan
+  refasse son choix. ⚠️ **Ses PV/Mana courants restent calculés sur les 34 anciens points** (valeurs
+  absolues en base) : un **« ⟲ Combat »** est nécessaire pour le recaler sur ses nouveaux caps.
+  ⚠️ **Méthode qui a permis de trouver** (la lecture du code seule avait conclu, à tort, à un simple
+  défaut d'ergonomie) : banc d'essai jetable — une page qui charge les **vrais** `data-state.jsx` et
+  `pages-progression.jsx` par-dessus un **faux `window.RTDB` en mémoire** (écho asynchrone, `null` =
+  suppression), piloté par `playwright-core` sur le Chrome installé (`channel:'chrome'`, pas de
+  téléchargement de navigateur). Rejoue un scénario au clic près sans authentification ni Firebase.
+  Le premier banc, qui bouchonnait `useCharState`, ne reproduisait rien — **c'est en branchant la vraie
+  couche d'état que le blocage est apparu**.
 - **Actions en attente — refonte du contrat « un joueur lance quelque chose »** — cache
   `20260906-4`, **262 tests verts** (game-logic 251 + auth 11), ✅ **RÈGLES RTDB PUBLIÉES ET
   VÉRIFIÉES le 2026-09-06** (`firebase deploy --only database` ; relecture en ligne avant/après :
