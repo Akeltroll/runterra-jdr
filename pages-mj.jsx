@@ -794,105 +794,218 @@ function EnemyAttackModal({ enemy, enemies, stOf, turn, onClose, stampKo }) {
   );
 }
 
-/* Une attaque en attente : crit roulé par l'app, dégâts pré-remplis éditables (le MJ ajuste à son d20
-   de toucher) + type + léthalité + appliquer/rejeter. */
-function PendingHitRow({ hit, target, onApply, onReject }) {
+/* ============================================================
+   ACTIONS EN ATTENTE — vue MJ (refonte du 2026-09-06)
+   Une action = UNE carte encadrée, jamais des lignes éparses : c'est l'aide visuelle
+   qui permet de repérer les instances d'une même compétence.
+   Spec : docs/superpowers/specs/2026-09-06-actions-en-attente-design.md
+   ============================================================ */
+
+/* Repérage d'une instance : pastille + encre par nature d'effet. Miroir d'EFFECT_TONE
+   (pages-competences) — le joueur et le MJ voient les mêmes couleurs. */
+const INSTANCE_TONE = {
+  damage: { ic: '🔴', ink: 'var(--hp)', label: 'Dégâts' },
+  heal:   { ic: '🟢', ink: 'var(--buff)', label: 'Soin' },
+  status: { ic: '🟠', ink: 'var(--skillbuff)', label: 'Effet' },
+};
+
+/* Une instance de DÉGÂTS : crit roulé par l'app, dégâts pré-remplis éditables (le MJ
+   ajuste à son d20 de toucher) + type + léthalité. */
+function DamageInstanceRow({ inst, target, onApply, onReject, head }) {
   // Résistance critique de la CIBLE, appliquée ici et pas au cast : le crit est roulé
-  // côté joueur, mais seul le MJ voit la fiche de la cible visée (§ refonte 2026-09-04).
-  // Elle ne rogne que la part de dégâts au-dessus du coup normal.
-  // ⚠️ La cible peut être un PNJ (`combat/enemies`) OU un PJ : c'est `resolveTarget`
-  // (PendingHitsPanel) qui tranche et fournit un objet uniforme. Cette ligne lisait
-  // `enemies.find(...)` et affichait « cible disparue » pour tout PJ visé.
+  // côté joueur, mais seul le MJ voit la fiche de la cible visée.
   const rescrit = (target && target.rescrit) || 0;
   // Une cible PJ dont la fiche n'est pas encore arrivée de Firebase n'est pas résolvable :
   // ses pools seraient devinés (cf. `loaded` dans resolveTarget).
   const ready = !!target && (target.kind !== 'pj' || target.loaded);
-  const critMult = hit.critMult || 1;
+  const critMult = inst.critMult || 1;
   const redMult = critMultAfterResist(critMult, rescrit);
-  const critShown = hit.didCrit ? Math.round((hit.computedDmg || 0) * redMult) : null;
-  const rolled = hit.didCrit ? critShown : hit.computedDmg;
+  const critShown = inst.didCrit ? Math.round((inst.computedDmg || 0) * redMult) : null;
+  const rolled = inst.didCrit ? critShown : inst.computedDmg;
   const [dmg, setDmg] = useState(String(rolled || 0));
-  const [type, setType] = useState(hit.type || 'physique');
+  const [type, setType] = useState(inst.type || 'physique');
   // Deux léthalités snapshotées au cast ; le champ visible suit le type choisi par le MJ
   // (physique → réduit l'armure, magique → réduit la rés. magique, brut → sans objet).
-  const [lethaP, setLethaP] = useState(String(hit.letha || 0));
-  const [lethaM, setLethaM] = useState(String(hit.lethaMag || 0));
+  const [lethaP, setLethaP] = useState(String(inst.letha || 0));
+  const [lethaM, setLethaM] = useState(String(inst.lethaMag || 0));
   const isBrut = type === 'brut';
   const isMag = type === 'magique';
   const lethaVal = isMag ? lethaM : lethaP;
   const setLethaVal = isMag ? setLethaM : setLethaP;
   const lethaNum = isBrut ? 0 : Math.max(0, parseInt(lethaVal, 10) || 0);
-  const info = critInfo(hit.crit || 0);
+  const info = critInfo(inst.crit || 0);
   return (
-    <div className="panel" style={{ padding:'10px 14px', display:'flex', flexDirection:'column', gap:8 }}>
-      <div className="row" style={{ justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
-        <span style={{ fontSize:13 }}>
-          <b className="gold">{hit.attackerName}</b> · {hit.skillName} →{' '}
+    <div className="col" style={{ gap: 6, padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+        <span style={{ fontSize: 13 }}>
+          {head} <b style={{ color: 'var(--hp)' }}>Dégâts</b> →{' '}
           <b style={{ color: target && target.kind === 'pj' ? 'var(--gold-pale)' : undefined }}>
             {target ? target.name : '— cible disparue —'}
           </b>
-          {target && target.kind === 'pj' && <span className="faint" style={{ fontSize:11 }}> (joueur)</span>}
+          {target && target.kind === 'pj' && <span className="faint" style={{ fontSize: 11 }}> (joueur)</span>}
         </span>
-        {hit.didCrit
-          ? <span className="mono" style={{ fontSize:11, color:'var(--skillbuff)' }}>
+        {inst.didCrit
+          ? <span className="mono" style={{ fontSize: 11, color: 'var(--skillbuff)' }}>
               🎲 CRIT ×{critMult.toFixed(2)}
               {rescrit > 0 && <span className="faint"> − R.Crit {rescrit}% → ×{redMult.toFixed(2)}</span>}
             </span>
-          : <span className="mono faint" style={{ fontSize:11 }}>normal</span>}
+          : <span className="mono faint" style={{ fontSize: 11 }}>normal</span>}
       </div>
-      <div className="row gap-2 wrap" style={{ fontSize:11, color:'var(--ink-faint)' }}>
-        <span>Base : <b>{hit.computedDmg}</b></span>
-        {critShown != null && <span>Crit : <b>{critShown}</b>{rescrit > 0 && <span className="faint"> (brut {hit.critDmg})</span>}</span>}
-        <span>%Crit {hit.crit || 0}{info.guaranteedTiers ? ` · ${info.guaranteedTiers} palier(s) garanti(s)` : ''}{info.extraChancePct ? ` · +${info.extraChancePct}%` : ''}</span>
+      <div className="row gap-2 wrap" style={{ fontSize: 11, color: 'var(--ink-faint)' }}>
+        <span>Base : <b>{inst.computedDmg}</b></span>
+        {critShown != null && <span>Crit : <b>{critShown}</b>{rescrit > 0 && <span className="faint"> (brut {inst.critDmg})</span>}</span>}
+        <span>%Crit {inst.crit || 0}{info.guaranteedTiers ? ` · ${info.guaranteedTiers} palier(s) garanti(s)` : ''}{info.extraChancePct ? ` · +${info.extraChancePct}%` : ''}</span>
       </div>
-      <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>
-        <input style={{ ...ENEMY_FLD, width:80 }} value={dmg} onChange={e => setDmg(e.target.value)} title="Dégâts (ajuste au d20 de toucher)" />
-        <label className="row gap-1" style={{ alignItems:'center', fontSize:11, opacity: isBrut ? .4 : 1 }}
+      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <input style={{ ...ENEMY_FLD, width: 80 }} value={dmg} onChange={e => setDmg(e.target.value)} title="Dégâts (ajuste au d20 de toucher)" />
+        <label className="row gap-1" style={{ alignItems: 'center', fontSize: 11, opacity: isBrut ? .4 : 1 }}
           title={isBrut ? 'Dégâts bruts : aucune mitigation, la léthalité ne sert pas'
             : (isMag ? 'Léthalité magique (réduit la rés. magique de la cible)'
                      : "Léthalité physique (réduit l'armure de la cible)")}>
-          <span style={{ color:`var(--stat-${isMag ? 'mag' : 'phys'})`, fontWeight:600 }}>
+          <span style={{ color: `var(--stat-${isMag ? 'mag' : 'phys'})`, fontWeight: 600 }}>
             {isMag ? 'Léth. mag.' : 'Léth. phys.'}
           </span>
-          <input style={{ ...ENEMY_FLD, width:56 }} value={isBrut ? '0' : lethaVal} disabled={isBrut}
+          <input style={{ ...ENEMY_FLD, width: 56 }} value={isBrut ? '0' : lethaVal} disabled={isBrut}
             onChange={e => setLethaVal(e.target.value)} />
         </label>
         <div className="row gap-1">
-          {['physique','magique','brut'].map(t => (
-            <button key={t} className={'btn btn-sm ' + (type===t ? 'btn-gold' : 'btn-ghost')} onClick={() => setType(t)} style={{ textTransform:'capitalize' }}>{t}</button>
+          {['physique', 'magique', 'brut'].map(t => (
+            <button key={t} className={'btn btn-sm ' + (type === t ? 'btn-gold' : 'btn-ghost')} onClick={() => setType(t)} style={{ textTransform: 'capitalize' }}>{t}</button>
           ))}
         </div>
         <button className="btn btn-sm btn-gold" disabled={!ready}
           title={target && !ready ? 'Fiche du joueur pas encore chargée' : ''}
-          onClick={() => onApply(hit, target, Math.max(0, parseInt(dmg,10)||0), type, lethaNum)} style={{ marginLeft:'auto' }}>Appliquer</button>
-        <button className="btn btn-sm btn-ghost" onClick={() => onReject(hit.id)}>Rejeter</button>
+          onClick={() => onApply(inst, target, Math.max(0, parseInt(dmg, 10) || 0), type, lethaNum)}
+          style={{ marginLeft: 'auto' }}>Appliquer</button>
+        <button className="btn btn-sm btn-ghost" onClick={() => onReject(inst)} title="Retirer cette instance">✕</button>
       </div>
     </div>
   );
 }
-function PendingHitsPanel({ enemies, stampKo, stOf, turn }) {
+
+/* Une instance de SOIN : un simple remplissage de pool, plafonné au max de la cible.
+   Ni armure, ni critique, ni léthalité — d'où une ligne bien plus courte que les dégâts. */
+function HealInstanceRow({ inst, target, onApply, onReject, head }) {
+  const [amount, setAmount] = useState(String(inst.amount || 0));
+  const ready = !!target && (target.kind !== 'pj' || target.loaded);
+  return (
+    <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap', padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+      <span style={{ fontSize: 13, flex: '1 1 180px' }}>
+        {head} <b style={{ color: 'var(--buff)' }}>Soin</b> →{' '}
+        <b style={{ color: target && target.kind === 'pj' ? 'var(--gold-pale)' : undefined }}>
+          {target ? target.name : '— cible disparue —'}
+        </b>
+      </span>
+      <input style={{ ...ENEMY_FLD, width: 80 }} value={amount} onChange={e => setAmount(e.target.value)} title="Soin (ajustable)" />
+      <button className="btn btn-sm btn-gold" disabled={!ready}
+        title={target && !ready ? 'Fiche du joueur pas encore chargée' : ''}
+        onClick={() => onApply(inst, target, Math.max(0, parseInt(amount, 10) || 0))}
+        style={{ marginLeft: 'auto' }}>Appliquer</button>
+      <button className="btn btn-sm btn-ghost" onClick={() => onReject(inst)} title="Retirer cette instance">✕</button>
+    </div>
+  );
+}
+
+/* Une instance de STATUT : buff, bouclier, compteurs, transformation — ou un effet
+   purement narratif, auquel cas « Appliquer » vaut accusé de réception et n'écrit rien. */
+function StatusInstanceRow({ inst, target, onApply, onReject, head }) {
+  const ready = !!target && (target.kind !== 'pj' || target.loaded);
+  return (
+    <div className="row gap-2" style={{ alignItems: 'flex-start', flexWrap: 'wrap', padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+      <div className="col" style={{ gap: 2, flex: '1 1 220px', minWidth: 0 }}>
+        <span style={{ fontSize: 13 }}>
+          {head} <b style={{ color: 'var(--skillbuff)' }}>{inst.narrative ? 'En table' : 'Effet'}</b> →{' '}
+          <b>{target ? target.name : '— cible disparue —'}</b>
+        </span>
+        <span className="faint" style={{ fontSize: 11.5, lineHeight: 1.4 }}>{inst.label}</span>
+      </div>
+      <button className="btn btn-sm btn-gold" disabled={!ready}
+        title={inst.narrative ? 'Aucune écriture : accusé de réception'
+          : (target && !ready ? 'Fiche du joueur pas encore chargée' : '')}
+        onClick={() => onApply(inst, target)} style={{ marginLeft: 'auto' }}>
+        {inst.narrative ? 'Valider' : 'Appliquer'}
+      </button>
+      <button className="btn btn-sm btn-ghost" onClick={() => onReject(inst)} title="Retirer cette instance">✕</button>
+    </div>
+  );
+}
+
+/* La carte d'une ACTION : en-tête (lanceur, compétence, coût, nombre d'instances),
+   une ligne par instance, et le pied de décision. */
+function PendingActionCard({ action, resolveTarget, color, onApply, onRejectInstance, onCancel, onFail }) {
+  const insts = Object.values(action.instances || {}).sort((a, b) => (a.seq || 0) - (b.seq || 0));
+  const n = insts.length;
+  const refund = actionRefundPlan(action, 'cancel');
+  const cost = action.cost || {};
+  return (
+    <div className="panel" style={{ borderLeft: `3px solid ${color || 'var(--gold)'}`, padding: '10px 14px' }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 6 }}>
+        <span style={{ fontSize: 13.5 }}>
+          <b className="gold">{action.attackerName}</b> · <b>{action.skillName}</b>
+        </span>
+        <span className="row gap-2" style={{ alignItems: 'center' }}>
+          {cost.mana > 0 && <span className="mono faint" style={{ fontSize: 11 }}>{cost.mana} mana</span>}
+          {action.round ? <span className="mono faint" style={{ fontSize: 11 }}>R{action.round}</span> : null}
+          <span className="badge" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>
+            {n} instance{n > 1 ? 's' : ''}
+          </span>
+        </span>
+      </div>
+      {insts.map((inst, i) => {
+        const tone = INSTANCE_TONE[inst.kind] || INSTANCE_TONE.status;
+        const head = <span className="mono" style={{ fontSize: 11, color: tone.ink }}>{tone.ic} {inst.seq || i + 1}/{n}</span>;
+        const target = resolveTarget(inst.targetId);
+        const common = { key: inst.id, inst, target, head, onReject: onRejectInstance };
+        if (inst.kind === 'damage') return <DamageInstanceRow {...common} onApply={onApply} />;
+        if (inst.kind === 'heal') return <HealInstanceRow {...common} onApply={onApply} />;
+        return <StatusInstanceRow {...common} onApply={onApply} />;
+      })}
+      <div className="row gap-2 wrap" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+        <button className="btn btn-sm btn-ghost" onClick={() => onCancel(action)}
+          title={refund
+            ? "Annule la compétence : mana et cooldown rendus au lanceur, toutes les instances retirées."
+            : "Retire les instances restantes. Une instance a déjà été appliquée : la compétence a eu lieu, rien n'est remboursé."}>
+          {refund ? '↺ Annuler la compétence' : '↺ Retirer le reste'}
+        </button>
+        <button className="btn btn-sm btn-ghost" onClick={() => onFail(action)}
+          title="La compétence a bien été lancée mais ne produit rien (parade, contre, dissipation) : tout est retiré, RIEN n'est remboursé.">
+          ⊘ Échec
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PendingActionsPanel({ enemies, stampKo, stOf, turn }) {
   const toast = useToast();
-  const { hits, removeHit } = usePendingHits();
-  if (!hits.length) return null;
-  /* Une attaque en attente vise soit un PNJ (`combat/enemies`), soit un PJ. On rend un
-     objet UNIFORME pour que la carte n'ait pas à connaître les deux mondes.
+  const { actions, removeAction, resolveInstance } = usePendingActions();
+  /* Une action vidée de ses instances ne doit pas rester en file. Le cas normal est
+     couvert par `resolveInstance` (la dernière instance emporte le nœud), mais deux
+     clics rapides peuvent le faire sur un instantané périmé et laisser une carte vide.
+     ⚠️ Le filet est AVANT le `return null` : les hooks ne peuvent pas vivre après. */
+  const live = actions.filter(a => Object.keys(a.instances || {}).length > 0);
+  useEffect(() => {
+    actions.forEach(a => { if (!Object.keys(a.instances || {}).length) removeAction(a.id); });
+  }, [actions.length, live.length]);
+  if (!live.length) return null;
+  /* Une instance vise soit un PNJ (`combat/enemies`), soit un PJ. On rend un objet
+     UNIFORME pour que les lignes n'aient pas à connaître les deux mondes.
      ⚠️ Un PJ coûte un `mjLive` (ses stats effectives, invisibles des autres joueurs) :
-     c'est pour ça que la résolution joueur→joueur ne peut se faire QUE chez le MJ, et
-     c'est aussi pourquoi ce lot n'a demandé aucune nouvelle règle RTDB. */
+     c'est pour ça que la résolution ne peut se faire QUE chez le MJ. */
   const resolveTarget = (id) => {
     const e = enemies.find(x => x.id === id);
-    if (e) return { kind:'enemy', id, name:e.name, rescrit:e.rescrit || 0, enemy:e };
+    if (e) return { kind: 'enemy', id, name: e.name, rescrit: e.rescrit || 0, enemy: e };
     const c = CHARACTERS.find(x => x.id === id);
     if (!c) return null;
     const st = stOf ? stOf(c.id) : null;
     const L = mjLive(c, st, turn);
-    // ⚠️ `loaded` garde une écriture, pas un affichage : sans état Firebase, `mjLive`
+    // ⚠️ `loaded` garde une ÉCRITURE, pas un affichage : sans état Firebase, `mjLive`
     // retombe sur les PV DE RÉFÉRENCE (c.hpCur est un RATIO, pas une valeur absolue).
-    // Appliquer un coup à cet instant écraserait les vrais PV du joueur par un nombre
-    // inventé. La fenêtre est courte (l'abonnement staff arrive vite) mais elle existe.
-    return { kind:'pj', id, name:c.name, rescrit:(L.eff && L.eff.rescrit) || 0, char:c, st, live:L, loaded: !!st };
+    // Appliquer un coup à cet instant écraserait les vrais PV du joueur.
+    return { kind: 'pj', id, name: c.name, rescrit: (L.eff && L.eff.rescrit) || 0, char: c, st, live: L, loaded: !!st };
   };
-  const apply = async (hit, target, finalDmg, type, letha) => {
+
+  const applyDamage = async (action, inst, target, finalDmg, type, letha) => {
     let r, hpBefore;
     if (target.kind === 'enemy') {
       hpBefore = target.enemy.hpCur;
@@ -900,37 +1013,113 @@ function PendingHitsPanel({ enemies, stampKo, stOf, turn }) {
     } else {
       const L = target.live;
       hpBefore = L.hp;
-      r = applyHitToCharacter(target.id, { armure:L.eff.armure, resmag:L.eff.resmag, hpCur:L.hp, shield:L.shield },
+      r = applyHitToCharacter(target.id, { armure: L.eff.armure, resmag: L.eff.resmag, hpCur: L.hp, shield: L.shield },
         finalDmg, type, letha || 0, turn, (target.st || {}).counters);
       if (r.glaciation != null) pushLog(`<b>${target.name}</b> gagne une charge de Glaciation (${r.glaciation}/5)`, 'buff');
     }
-    // KO differe (spec §4.2) : on horodate la transition vivant -> a terre pour que le
-    // moteur sache si la cible est tombee PENDANT son propre creneau (elle agit quand meme)
-    // ou avant (elle est sautee).
+    // KO differe (spec initiative §4.2) : on horodate la transition vivant -> a terre.
     if (stampKo) stampKo(target.id, hpBefore, r.hpCur);
     const lethaTag = letha > 0 ? `, léth. ${type === 'magique' ? 'mag.' : 'phys.'} ${letha}` : '';
-    toast(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}) à <b>${target.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
-    pushLog(`<b>${hit.attackerName}</b> inflige <b>${r.applied}</b> (${type}${lethaTag}) à <b>${target.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`, r.hpCur === 0 ? 'debuff' : 'gold');
+    const txt = `<b>${action.attackerName}</b> inflige <b>${r.applied}</b> (${type}${lethaTag}) à <b>${target.name}</b>${r.hpCur === 0 ? ' — KO !' : ''}`;
+    toast(txt, r.hpCur === 0 ? 'debuff' : 'gold');
+    pushLog(txt, r.hpCur === 0 ? 'debuff' : 'gold');
     // Vol de vie / Sapience / Omnivamp : soin de l'attaquant sur les dégâts infligés.
-    // Séparation par source : attaque de base → vol/sapience ; compétence → omnivamp.
-    const heal = lifestealHeal(r.applied, type, { omni: hit.omni || 0, vol: hit.vol || 0, sapience: hit.sapience || 0 }, hit.skillId === 'basic');
+    const heal = lifestealHeal(r.applied, type, { omni: inst.omni || 0, vol: inst.vol || 0, sapience: inst.sapience || 0 }, action.skillId === 'basic');
     if (heal > 0) {
-      const hr = await healCharacter(hit.attackerId, heal, hit.hpMax || 0);
+      const hr = await healCharacter(action.attackerId, heal, inst.hpMax || 0);
       if (hr.healed > 0) {
-        toast(`<b>${hit.attackerName}</b> se soigne de <b>${hr.healed}</b> PV (vol de vie)`, 'buff');
-        pushLog(`<b>${hit.attackerName}</b> récupère <b>${hr.healed}</b> PV (vol de vie)`, 'buff');
+        toast(`<b>${action.attackerName}</b> se soigne de <b>${hr.healed}</b> PV (vol de vie)`, 'buff');
+        pushLog(`<b>${action.attackerName}</b> récupère <b>${hr.healed}</b> PV (vol de vie)`, 'buff');
       }
     }
-    removeHit(hit.id);
   };
+
+  const applyHeal = async (action, inst, target, amount) => {
+    let healed = 0;
+    if (target.kind === 'enemy') healed = healEnemy(target.enemy, amount).healed;
+    else healed = (await healCharacter(target.id, amount, (target.live.eff || {}).hp || 0)).healed;
+    const txt = healed > 0
+      ? `<b>${action.attackerName}</b> soigne <b>${target.name}</b> de <b>${healed}</b> PV`
+      : `<b>${target.name}</b> est déjà au maximum — aucun soin appliqué`;
+    toast(txt, 'buff');
+    pushLog(txt, 'buff');
+  };
+
+  const applyStatus = async (action, inst, target) => {
+    // Une instance narrative n'écrit rien : « Valider » vaut accusé de réception.
+    if (!inst.narrative) await applyStatusToCharacter(target.id, action.skillId, inst);
+    const txt = inst.narrative
+      ? `<b>${action.attackerName}</b> — <b>${action.skillName}</b> : ${inst.label}`
+      : `<b>${target.name}</b> gagne <b>${action.skillName}</b> — ${inst.label}`;
+    toast(txt, 'buff');
+    pushLog(txt, 'buff');
+  };
+
+  const onApply = (action) => async (inst, target, a, b, c) => {
+    if (!target) { toast('Cible introuvable — instance retirée', 'debuff'); resolveInstance(action, inst.id, false); return; }
+    try {
+      if (inst.kind === 'damage') await applyDamage(action, inst, target, a, b, c);
+      else if (inst.kind === 'heal') await applyHeal(action, inst, target, a);
+      else await applyStatus(action, inst, target);
+      resolveInstance(action, inst.id, true);
+    } catch (e) {
+      toast('Application refusée : droits insuffisants', 'debuff');
+    }
+  };
+
+  /* Rejet d'UNE instance. Ne rembourse rien tant qu'il en reste d'autres — sauf
+     `manaPer` ; rejeter la dernière équivaut à annuler la compétence (§6 de la spec). */
+  const onRejectInstance = (action) => async (inst) => {
+    const plan = actionRefundPlan(action, 'instance');
+    resolveInstance(action, inst.id, false);
+    await announceRefund(plan, action, toast);
+  };
+  const onCancel = async (action) => {
+    const plan = actionRefundPlan(action, 'cancel');
+    removeAction(action.id);
+    await announceRefund(plan, action, toast, 'annulée par le MJ');
+  };
+  /* ⊘ Échec : la compétence a bien été lancée mais ne produit rien (parade, contre,
+     dissipation). Tout est retiré, RIEN n'est rendu — et le journal dit « échoue »
+     plutôt que « inflige 0 », ce qui est la vérité de la scène. */
+  const onFail = (action) => {
+    removeAction(action.id);
+    const txt = `<b>${action.attackerName}</b> — <b>${action.skillName}</b> échoue (le coût reste dépensé)`;
+    toast(txt, 'debuff');
+    pushLog(txt, 'debuff');
+  };
+
   return (
-    <div style={{ marginBottom:24 }}>
-      <h3 style={{ fontSize:16, marginBottom:12 }}>Attaques en attente <span className="mono faint" style={{ fontSize:12 }}>· {hits.length}</span></h3>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:12 }}>
-        {hits.map(h => <PendingHitRow key={h.id} hit={h} target={resolveTarget(h.targetId)} onApply={apply} onReject={removeHit} />)}
+    <div style={{ marginBottom: 24 }}>
+      <h3 style={{ fontSize: 16, marginBottom: 12 }}>Actions en attente <span className="mono faint" style={{ fontSize: 12 }}>· {live.length}</span></h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+        {live.map(a => (
+          <PendingActionCard key={a.id} action={a} resolveTarget={resolveTarget}
+            color={(CHARACTERS.find(c => c.id === a.attackerId) || {}).color}
+            onApply={onApply(a)} onRejectInstance={onRejectInstance(a)} onCancel={onCancel} onFail={onFail} />
+        ))}
       </div>
     </div>
   );
+}
+
+/* Exécute le remboursement et l'annonce. `plan` à null = rien à rendre (instance parmi
+   d'autres, coût déjà consommé par une application, attaque de base).
+   ⚠️ try/catch : un rejet d'écriture silencieux ferait croire au remboursement (leçon
+   des journaux, 2026-08-21). */
+async function announceRefund(plan, action, toast, verb) {
+  if (!plan) return;
+  try {
+    const r = await refundCast(plan);
+    const parts = [];
+    if (r.mana > 0) parts.push(`${r.mana} mana`);
+    if (r.cd) parts.push('cooldown');
+    const txt = `<b>${action.attackerName}</b> — <b>${action.skillName}</b> ${verb || 'rejetée'} : ${parts.join(' et ') || 'rien'} rendu(s)`;
+    toast(txt, 'buff');
+    pushLog(txt, 'buff');
+  } catch (e) {
+    toast(`Remboursement impossible (${action.attackerName} — ${action.skillName}) : droits insuffisants`, 'debuff');
+  }
 }
 
 /* État de séance MJ-local (localStorage). v2 possible : partagé en Firebase. */
@@ -1078,6 +1267,7 @@ function MJPage({ go }) {
               <button className="btn btn-sm btn-ghost" onClick={() => { if (confirm('Nouveau combat : remettre le tour à 1 et vider toutes les charges + cooldowns ?')) resetCombat().then((r) => {
                 if (r && !r.logCleared) toast('Combat réinitialisé, mais le journal n’a pas pu être vidé : droits insuffisants', 'debuff');
                 if (r && !r.initCleared) toast('Combat réinitialisé, mais l’initiative n’a pas pu être vidée : droits insuffisants', 'debuff');
+                if (r && !r.queueCleared) toast('Combat réinitialisé, mais les actions en attente n’ont pas pu être vidées : droits insuffisants', 'debuff');
               }); }} title="Nouveau combat (reset charges + cooldowns)" style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>⟲ Combat</button>
             </div>
             <ExportImportPanel />
@@ -1094,7 +1284,7 @@ function MJPage({ go }) {
             {CHARACTERS.map(c => <MJCompactCard key={c.id} c={c} st={stOf(c.id)} turn={turn} onFull={() => setFull(c)} />)}
           </div>
           <div style={{ marginTop:28 }}>
-            <PendingHitsPanel enemies={enemies} stampKo={stampKo} stOf={stOf} turn={turn} />
+            <PendingActionsPanel enemies={enemies} stampKo={stampKo} stOf={stOf} turn={turn} />
           </div>
           <div style={{ marginTop:28 }}>
             {(() => {

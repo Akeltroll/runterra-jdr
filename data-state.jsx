@@ -148,7 +148,13 @@ function useSharedTurn() {
     let initCleared = true;
     try { await window.RTDB.setPath(INITIATIVE, null); }
     catch (e) { initCleared = false; console.error('Purge de l\'initiative refusee :', e); }
-    return { logCleared, initCleared };
+    // La file d'actions n'etait PAS purgee (defaut anterieur, depuis pendingHits) : une
+    // attaque non resolue survivait a un nouveau combat et restait applicable, avec des
+    // degats calcules sur des stats d'avant. Meme precaution de catch : ecriture SUR LE NOEUD.
+    let queueCleared = true;
+    try { await window.RTDB.setPath(PENDING_ACTIONS, null); }
+    catch (e) { queueCleared = false; console.error('Purge des actions en attente refusee :', e); }
+    return { logCleared, initCleared, queueCleared };
   }, []);
   // Fin de tour : avance le tour, puis applique la perte de Glaciation de Rathael (-3 s'il
   // n'a pas subi de dégâts ce tour-ci). Le tour qui se termine est `turn`.
@@ -297,20 +303,110 @@ function useMJEnemies() {
   return { enemies, addEnemy, updateEnemy, removeEnemy };
 }
 
-/* File d'attaques en attente : le joueur PROPOSE (au cast), le MJ résout (ajuste + applique).
-   Lecture tout inscrit, écriture tout inscrit (création) ; le staff applique/supprime. */
-const PENDING_HITS = `${CAMPAIGN}/combat/pendingHits`;
-function usePendingHits() {
+/* File d'ACTIONS en attente : le joueur PROPOSE (au cast), le MJ résout instance par
+   instance. Remplace `combat/pendingHits`, qui ne savait transporter qu'un coup de
+   dégâts sur une cible.
+   Spec : docs/superpowers/specs/2026-09-06-actions-en-attente-design.md
+   Lecture tout inscrit ; écriture MJ ou propriétaire de l'action (règle RTDB). */
+const PENDING_ACTIONS = `${CAMPAIGN}/combat/pendingActions`;
+function usePendingActions() {
   const [map, setMap] = useState(null);
-  useEffect(() => window.RTDB.subscribePath(PENDING_HITS, (v) => setMap(v || {})), []);
-  const hits = map ? Object.values(map).sort((a, b) => (a.ts || 0) - (b.ts || 0)) : [];
-  const addHit = useCallback((hit) => {
-    const id = 'hit_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e4);
-    window.RTDB.updatePath(PENDING_HITS, { [id]: Object.assign({ id, ts: Date.now() }, hit) });
+  useEffect(() => window.RTDB.subscribePath(PENDING_ACTIONS, (v) => setMap(v || {})), []);
+  const actions = map ? Object.values(map).sort((a, b) => (a.ts || 0) - (b.ts || 0)) : [];
+  /* Écrit l'action et ses instances EN UNE SEULE opération : une action à moitié
+     déposée serait résolue à moitié par le MJ. */
+  const addAction = useCallback((action, instances) => {
+    const id = 'act_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e4);
+    const inst = {};
+    (instances || []).forEach((it, i) => {
+      const iid = 'i' + (i + 1);
+      inst[iid] = Object.assign({ id: iid }, it);
+    });
+    return window.RTDB.updatePath(PENDING_ACTIONS,
+      { [id]: Object.assign({ id, ts: Date.now(), appliedCount: 0, instances: inst }, action) });
   }, []);
-  const removeHit = useCallback((id) => window.RTDB.updatePath(PENDING_HITS, { [id]: null }), []);
-  return { hits, addHit, removeHit };
+  const removeAction = useCallback((id) => window.RTDB.updatePath(PENDING_ACTIONS, { [id]: null }), []);
+  /* Retire une instance résolue. `applied` incrémente `appliedCount`, SEUL champ muté
+     après création : c'est lui qui interdit de rembourser une compétence dont un coup
+     a déjà porté (cf. actionRefundPlan). La dernière instance emporte l'action entière —
+     sinon un nœud vide traînerait dans la file du MJ. */
+  const resolveInstance = useCallback((action, instId, applied) => {
+    const rest = Object.keys((action && action.instances) || {}).filter((k) => k !== instId);
+    if (!rest.length) return window.RTDB.updatePath(PENDING_ACTIONS, { [action.id]: null });
+    const patch = { [`${action.id}/instances/${instId}`]: null };
+    if (applied) patch[`${action.id}/appliedCount`] = (action.appliedCount | 0) + 1;
+    return window.RTDB.updatePath(PENDING_ACTIONS, patch);
+  }, []);
+  return { actions, addAction, removeAction, resolveInstance };
 }
+
+/* Applique une instance de SOIN. Un soin ignore armure et critique : c'est un simple
+   remplissage de pool, plafonné au max de la cible.
+   ⚠️ Le plafond vient de l'appelant (`hpMax`) : seul le MJ voit les stats effectives
+   d'un PJ, et `healCharacter` refuse déjà de dépasser le courant si on lui ment. */
+function healEnemy(enemy, amount) {
+  const heal = Math.max(0, amount | 0);
+  if (!enemy || !heal) return { healed: 0, hpCur: (enemy && enemy.hpCur) || 0 };
+  const cur = Math.max(0, enemy.hpCur | 0);
+  const cap = Math.max(cur, enemy.hpMax | 0);
+  const next = Math.min(cur + heal, cap);
+  if (next !== cur) window.RTDB.updatePath(`${ENEMIES}/${enemy.id}`, { hpCur: next });
+  return { healed: next - cur, hpCur: next };
+}
+
+/* Applique une instance de STATUT sur un PJ : buff de compétence, bouclier, compteurs,
+   transformation, et le soin PV d'un buff de PV. Tout est snapshoté au cast
+   (`buildSelfEffect`, game-logic) — ici on ne fait qu'écrire.
+   ⚠️ C'est le SEUL endroit où un effet de compétence entre en base depuis la refonte
+   du 2026-09-06 : `cast()` n'écrit plus rien. Une instance `narrative` n'écrit rien du
+   tout — « Appliquer » y vaut accusé de réception. */
+async function applyStatusToCharacter(charId, skillId, payload) {
+  payload = payload || {};
+  if (!charId || payload.narrative) return { applied: false };
+  const p = charPath(charId);
+  const st = (await window.RTDB.getSnapshot(p)) || {};
+  const patch = {};
+  if (payload.mods && Object.keys(payload.mods).length) {
+    patch[`skillBuffs/${skillId}`] = { mods: payload.mods, until: payload.until != null ? payload.until : null };
+  }
+  if (payload.shield) patch.shield = Math.max(0, st.shield | 0) + Math.max(0, payload.shield | 0);
+  if (payload.hpGain) {
+    // Un buff de PV déplace le plafond ET remplit la jauge (décision figée). Le
+    // nouveau max a été snapshoté au cast : le recalculer ici demanderait toute la
+    // chaîne d'effectifs, que cet orchestrateur n'a pas.
+    const cur = Math.max(0, st.hpCur | 0);
+    patch.hpCur = Math.min(cur + Math.max(0, payload.hpGain | 0), Math.max(cur, payload.hpMax | 0));
+  }
+  if (payload.counters) Object.keys(payload.counters).forEach((k) => {
+    patch[`counters/${k}`] = Math.max(0, payload.counters[k] | 0) || null;
+  });
+  if (payload.transformUntil) patch['counters/souverainUntil'] = payload.transformUntil;
+  if (Object.keys(patch).length) await window.RTDB.updatePath(p, patch);
+  return { applied: true };
+}
+
+/* Rembourse une action rejetée par le MJ : le mana revient (plafonné au max snapshoté
+   au cast) et le cooldown retrouve sa valeur d'AVANT (null = comp de nouveau prête).
+   `plan` vient de `actionRefundPlan` (game-logic, pur) ; `restoreCd` distingue une
+   annulation complète d'un simple rendu de `manaPer`.
+   ⚠️ Relecture en base avant écriture, comme `healCharacter` : le mana a pu bouger
+   entre le cast et le verdict du MJ (potion, autre sort), et un patch calculé sur
+   l'état de la carte MJ écraserait ce mouvement. Écriture staff. */
+async function refundCast(plan) {
+  if (!plan || !plan.attackerId) return { mana: 0, manaCur: null };
+  const p = charPath(plan.attackerId);
+  const st = (await window.RTDB.getSnapshot(p)) || {};
+  const cur = Math.max(0, Number(st.manaCur) || 0);
+  const next = refundManaValue(cur, plan.mana, plan.manaMax);
+  const patch = {};
+  if (next !== cur) patch.manaCur = next;
+  if (plan.restoreCd && plan.skillId && plan.skillId !== 'basic') {
+    patch[`cooldowns/${plan.skillId}`] = plan.cdPrev != null ? plan.cdPrev : null;
+  }
+  if (Object.keys(patch).length) await window.RTDB.updatePath(p, patch);
+  return { mana: next - cur, manaCur: next, cd: !!plan.restoreCd };
+}
+
 /* Applique des dégâts (déjà ajustés par le MJ) à un ennemi : réduction armure/resmag puis pool HP. */
 function applyHitToEnemy(enemy, finalDmg, type, lethalite = 0) {
   const dmg = mitigateDamage(Math.max(0, finalDmg | 0), type, { armure: enemy.armure || 0, resmag: enemy.resmag || 0 }, Math.max(0, lethalite | 0));
@@ -326,7 +422,7 @@ function applyHitToEnemy(enemy, finalDmg, type, lethalite = 0) {
    ⚠️ Le passif de Rathael (Chair gelée, +1 charge de Glaciation par coup subi) est
    traité ICI et non au site d'appel : c'est le seul endroit du code où « un PJ subit
    des dégâts » est vrai, et les deux appelants — une attaque de PNJ (EnemyAttackModal)
-   et désormais une attaque d'un autre PJ (PendingHitsPanel) — doivent le déclencher à
+   et désormais une attaque d'un autre PJ (PendingActionsPanel) — doivent le déclencher à
    l'identique. Il vivait dans EnemyAttackModal ; l'y laisser aurait fait qu'une gifle
    entre joueurs ne chargerait pas Rathael, sans que rien ne le signale.
    Renvoie `glaciation` (nouvelle valeur) pour que l'appelant journalise. */
@@ -691,7 +787,8 @@ Object.assign(window, {
   useSharedTurn, COMBAT_TURN,
   useInitiative, INITIATIVE, useAllHp,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
-  usePendingHits, applyHitToEnemy, applyHitToCharacter, healCharacter, PENDING_HITS,
+  usePendingActions, applyHitToEnemy, applyHitToCharacter, healCharacter, healEnemy,
+  applyStatusToCharacter, refundCast, PENDING_ACTIONS,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
   pushEconomyLog, useEconomyLog, ECONOMY_LOG, purseName,
   COIN_KEYS, setCharCoins, setSharedCoins,

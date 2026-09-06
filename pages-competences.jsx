@@ -1,19 +1,84 @@
 /* ============================================================
-   Onglet COMPÉTENCES — cast (mana + cooldown + dégâts affichés),
-   compteurs (charges/marques/CN/tranches), cooldowns sur tour partagé.
-   Formules = SKILLS (data.jsx) → fns pures de game-logic.js. Le MJ saisit
-   le nombre de dégâts dans « Subir » de l'ennemi (pas d'auto-application).
+   Onglet COMBAT — le joueur PROPOSE une action, le MJ la résout.
+   Un cast ne fait que trois choses : vérifier la légalité, payer (mana +
+   cooldown), déposer une ACTION dans `combat/pendingActions`. AUCUN effet
+   n'est écrit ici depuis la refonte du 2026-09-06 — dégâts, soins, buffs,
+   boucliers, compteurs et transformations sont TOUS appliqués par le MJ.
+   Spec : docs/superpowers/specs/2026-09-06-actions-en-attente-design.md
+   Formules = SKILLS (data.jsx) → fns pures de game-logic.js.
    ============================================================ */
 
-/* Variables d'attaque à demander selon la compétence (non persistées). */
+/* Variables d'attaque à demander selon la compétence (non persistées).
+   ⚠️ `nbTargets` a DISPARU (refonte du 2026-09-06) : le nombre de cibles n'est plus
+   saisi, il EST la longueur de la sélection du bloc « Cibles ». Une case de moins, et
+   plus de désaccord possible entre un « 3 » tapé et une seule cible réellement choisie. */
 const SKILL_VARS = {
   tir_cible: ['firstHit'],
   attaque_sournoise: ['furtif'],
   pugilat: ['side', 'moved'],
   ecrasement: ['moved'],
   demi_ours: ['moved'],
-  salve_corsaire: ['nbTargets'],
 };
+
+/* Couleurs d'effet, partagées carte joueur ↔ carte MJ (cf. INSTANCE_TONE, pages-mj). */
+const EFFECT_TONE = {
+  damage: { ic: '🔴', ink: 'var(--hp)' },
+  heal:   { ic: '🟢', ink: 'var(--buff)' },
+  status: { ic: '🟠', ink: 'var(--skillbuff)' },
+};
+
+/* Une ligne de ciblage : un effet, ses cibles choisies, un « + ajouter » filtré par camp.
+   Sert AUSSI à l'attaque de base (décision MJ du 2026-09-06 : une seule UI de ciblage
+   à apprendre) — elle y est simplement bornée à `max: 1`. */
+function TargetRow({ effKey, spec, pool, selected, onChange, detail }) {
+  const tone = EFFECT_TONE[effKey] || EFFECT_TONE.damage;
+  const max = spec.max;
+  const canAdd = max == null || selected.length < max;
+  // Un combattant déjà choisi ne se repropose pas : deux instances identiques sur la
+  // même cible se résoudraient à l'identique, autant qu'il ré-ouvre la liste.
+  const avail = pool.filter(t => selected.indexOf(t.id) < 0);
+  return (
+    <div className="row" style={{ alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+      <span className="badge" style={{ background: 'var(--bg-inset)', color: tone.ink, minWidth: 74, textAlign: 'center' }}>
+        {tone.ic} {EFFECT_LABEL[effKey]}
+      </span>
+      <div className="col" style={{ flex: 1, gap: 4, minWidth: 0 }}>
+        <div className="row gap-1 wrap" style={{ alignItems: 'center' }}>
+          {selected.map(id => {
+            const t = pool.find(x => x.id === id);
+            return (
+              <button key={id} className="btn btn-sm btn-ghost" title="Retirer cette cible"
+                onClick={() => onChange(selected.filter(x => x !== id))}
+                style={{ borderColor: tone.ink, color: 'var(--ink)', padding: '2px 8px' }}>
+                {(t && t.name) || '— cible absente —'} ✕
+              </button>
+            );
+          })}
+          {canAdd && avail.length > 0 && (
+            <select value="" onChange={e => { if (e.target.value) onChange(selected.concat([e.target.value])); }}
+              style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px dashed var(--line-strong)',
+                borderRadius: 6, padding: '3px 7px', fontSize: 12.5 }}>
+              <option value="">+ ajouter…</option>
+              {['foes', 'allies', 'pjs'].map(g => {
+                const rows = avail.filter(t => t.group === g);
+                if (!rows.length) return null;
+                return (
+                  <optgroup key={g} label={g === 'foes' ? 'Ennemis' : g === 'allies' ? 'Alliés (PNJ)' : 'Joueurs'}>
+                    {rows.map(t => <option key={t.id} value={t.id}>{t.name}{t.hint || ''}</option>)}
+                  </optgroup>
+                );
+              })}
+            </select>
+          )}
+          {!selected.length && !avail.length && (
+            <span className="faint" style={{ fontSize: 12 }}>aucune cible disponible</span>
+          )}
+        </div>
+        {detail && <span className="mono faint" style={{ fontSize: 11.5 }}>{detail}</span>}
+      </div>
+    </div>
+  );
+}
 
 /* Type de dégâts de l'arme équipée (slot armePrincipale) → 'Physique'|'Magique'|'Hybride'. */
 function weaponTypeOf(state, char) {
@@ -30,6 +95,29 @@ function runeModsOf(state) {
 }
 
 const CD_LOCKED = 999999; // sentinelle « 1×/combat » (débloqué par Nouveau combat)
+
+/* Libellé d'une compétence sans AUCUN effet chiffré (Fondu au noir, Voile dimensionnel,
+   Ailes de Givre). `buildCastPlan` en fait une instance NARRATIVE, sans quoi ces comps
+   — 40 à 100 mana, cooldown long — écriraient une action vide et resteraient hors du
+   contrôle du MJ, ce qui serait pire qu'avant la refonte. */
+function narrativeLabel(sk) {
+  const first = String((sk && sk.note) || '').split('.')[0].trim();
+  return first ? (first.length > 110 ? first.slice(0, 110) + '…' : first) : (sk && sk.name) || 'Effet géré en table';
+}
+
+/* Résumé lisible d'un cast pour le journal de combat : « 120 dégâts → Gnoll A, Gnoll B
+   · 95 soin → Urskaar ». Une entrée par cast, pas une par instance. */
+function instanceSummary(instances, nameOf) {
+  const list = instances || [];
+  const dmg = list.filter(i => i.kind === 'damage');
+  const heal = list.filter(i => i.kind === 'heal');
+  const st = list.filter(i => i.kind === 'status');
+  const parts = [];
+  if (dmg.length) parts.push(`${dmg[0].computedDmg} dégâts → ${dmg.map(i => nameOf(i.targetId)).join(', ')}`);
+  if (heal.length) parts.push(`${heal[0].amount} soin → ${heal.map(i => nameOf(i.targetId)).join(', ')}`);
+  if (st.length) parts.push(st[0].narrative ? 'effet en table' : `sur soi : ${st[0].label}`);
+  return parts.join(' · ');
+}
 
 /* ============================================================
    INITIATIVE — panneau joueur (lot 5)
@@ -272,8 +360,11 @@ function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
   );
 }
 
-function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast, locked, minLevel }) {
-  const [vars, setVars] = useState({ firstHit: false, furtif: false, side: 'droite', moved: 0, nbTargets: 1, duration: (sk.duration ? sk.duration.min : 1) });
+function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast, locked, minLevel, pools }) {
+  const [vars, setVars] = useState({ firstHit: false, furtif: false, side: 'droite', moved: 0, duration: (sk.duration ? sk.duration.min : 1) });
+  /* Sélection de cibles PAR EFFET, état LOCAL et non persisté : c'est un choix par
+     lancement, comme les variables d'attaque. Vidée après chaque cast réussi. */
+  const [sel, setSel] = useState({});
   if (locked) {
     return (
       <div className="panel" style={{ borderLeft: '3px solid var(--line-strong)', opacity: 0.5 }}>
@@ -293,7 +384,14 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
   const dmg = sk.dmg ? sk.dmg(eff, ctx) : null;
   const shield = sk.shield ? sk.shield(eff, ctx) : null;
   const heal = sk.heal ? sk.heal(eff, ctx) : null;
-  const total = (dmg != null && sk.id === 'salve_corsaire') ? dmg * (vars.nbTargets || 1) : null;
+  // Ciblage : dérivé des champs de la compétence, surchargeable par `sk.targeting`.
+  // Recalculé à chaque rendu parce qu'il dépend de `ctx` (une comp dont les dégâts
+  // tombent à null selon une variable perd sa ligne « Dégâts »).
+  const targeting = skillTargeting(sk, eff, ctx);
+  const tKeys = Object.keys(targeting).filter(k => targeting[k].camp !== 'self');
+  const check = castSelectionValid(targeting, sel);
+  const nDmg = (sel.damage || []).length;
+  const total = (dmg != null && nDmg > 1) ? dmg * nDmg : null;
   const enoughMana = manaCur >= (sk.mana || 0);
   const cdLabel = ready ? 'Prêt' : (readyAt === CD_LOCKED ? '1×/combat utilisé' : `prêt tour ${readyAt}`);
   const cdInfo = sk.kind === 'turn' ? '1×/tour'
@@ -324,7 +422,6 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
               </label>
             )}
             {needed.includes('moved') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Cases <input type="number" min="0" value={vars.moved} onChange={e => setVars(s => ({ ...s, moved: Math.max(0, e.target.value | 0) }))} style={{ width: 56, background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }} /></label>}
-            {needed.includes('nbTargets') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Cibles <input type="number" min="1" value={vars.nbTargets} onChange={e => setVars(s => ({ ...s, nbTargets: Math.max(1, e.target.value | 0) }))} style={{ width: 56, background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }} /></label>}
             {sk.duration && (
               <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Durée
                 <select value={vars.duration} onChange={e => setVars(s => ({ ...s, duration: Math.max(sk.duration.min, Math.min(sk.duration.max, e.target.value | 0)) }))} style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }}>
@@ -332,6 +429,26 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
                 </select>
               </label>
             )}
+          </div>
+        )}
+        {/* Ciblage par effet. Une ligne par effet ciblable ; les effets sur SOI ne sont
+            pas listés (implicites) mais rappelés sous les lignes. */}
+        {tKeys.length > 0 && (
+          <div style={{ marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--line)' }}>
+            <div className="overline" style={{ marginBottom: 6 }}>Cibles</div>
+            {tKeys.map(k => (
+              <TargetRow key={k} effKey={k} spec={targeting[k]} pool={(pools && pools[targeting[k].camp]) || []}
+                selected={sel[k] || []} onChange={(next) => setSel(s => Object.assign({}, s, { [k]: next }))}
+                detail={k === 'damage' && dmg != null
+                  ? `${dmg} par cible${total != null ? ` · total ${total}` : ''}`
+                  : (k === 'heal' && heal != null ? `${heal} par cible` : '')} />
+            ))}
+          </div>
+        )}
+        {targeting.status && (
+          <div className="row gap-1" style={{ alignItems: 'center', marginBottom: 8 }}>
+            <span className="mono" style={{ fontSize: 11.5, color: 'var(--skillbuff)' }}>🟠 effet sur toi</span>
+            {shield != null && shield > 0 && <span className="mono faint" style={{ fontSize: 11.5 }}>· +{shield} bouclier</span>}
           </div>
         )}
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -348,9 +465,14 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
             )}
             {heal != null && <span className="mono" style={{ fontSize: 12.5, color: 'var(--buff)' }}>soin allié {heal}</span>}
           </div>
-          <button className="btn btn-gold" onClick={() => onCast(ctx, dmg, needed.includes('nbTargets') ? Math.max(1, vars.nbTargets || 1) : 1)} disabled={!ready || !enoughMana}
-            title={!enoughMana ? 'Pas assez de mana' : (!ready ? 'En cooldown' : '')}>Lancer</button>
+          <button className="btn btn-gold"
+            onClick={() => { if (onCast(ctx, sel)) setSel({}); }}
+            disabled={!ready || !enoughMana || !check.ok}
+            title={!enoughMana ? 'Pas assez de mana' : (!ready ? 'En cooldown' : (check.ok ? '' : check.reason))}>Lancer</button>
         </div>
+        {!check.ok && ready && enoughMana && (
+          <div className="faint" style={{ fontSize: 11.5, marginTop: 6, color: 'var(--gold-pale)' }}>{check.reason}</div>
+        )}
         {sk.note && <div className="faint" style={{ fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>{sk.note}</div>}
       </div>
     </div>
@@ -359,7 +481,9 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
 
 function CompetencesBody({ char, staff }) {
   const toast = useToast();
-  const { state, setField, setCounter, setCooldown, setSkillBuff, setInvItem, removeInvItem } = useCharState(char.id);
+  // ⚠️ `setSkillBuff` n'est PLUS pris ici : depuis la refonte du 2026-09-06, un buff de
+  // compétence est écrit par le MJ à la résolution (`applyStatusToCharacter`), jamais au cast.
+  const { state, setField, setCounter, setCooldown, setInvItem, removeInvItem } = useCharState(char.id);
   const { turn } = useSharedTurn();
   const { enemies } = useMJEnemies();
   const { enemies: foes, allies } = splitCombatants(enemies);
@@ -372,11 +496,13 @@ function CompetencesBody({ char, staff }) {
   const iniMeta = {};
   CHARACTERS.forEach(c => { iniMeta[c.id] = { name: c.name, side: 'pj' }; });
   enemies.forEach(e => { iniMeta[e.id] = { name: e.name, side: combatantSide(e) }; });
-  const { addHit } = usePendingHits();
-  const [targetId, setTargetId] = useState('');
+  const { addAction } = usePendingActions();
   // Mode d'attaque de base (geste à ratio fixe). État LOCAL, non persisté : c'est un
   // choix par coup, pas une posture qu'on garde — il se remet à « Attaque » au rechargement.
   const [atkMode, setAtkMode] = useState('normal');
+  // Cible(s) de l'attaque de base : même bloc de ciblage que les compétences (décision
+  // MJ du 2026-09-06), simplement borné à une cible.
+  const [basicSel, setBasicSel] = useState({});
   if (!state) return <div className="panel" style={{ margin: 20, padding: 20 }}>Chargement…</div>;
 
   const kit = SKILLS[char.id];
@@ -413,93 +539,64 @@ function CompetencesBody({ char, staff }) {
   const setMana = (v) => setField('manaCur', typeof v === 'function' ? v(state.manaCur || 0) : v);
   const kitWithId = Object.assign({ _id: char.id }, kit);
 
-  function cast(sk, ctx, dmgArg, nbHits) {
+  /* Pools de cibles, par camp d'effet. Un PJ compte parmi les alliés ; les PNJ marqués
+     `side:'ally'` aussi. `any` = tout le plateau (viser un camarade reste possible :
+     tir fratricide, PJ charmé, duel).
+     ⚠️ Pas de PV chiffrés pour les PJ, contrairement aux PNJ : seule la feuille `hpCur`
+     des autres PJ est lisible par un joueur (ouverte le 2026-09-02 pour l'initiative) —
+     leur PV MAX dépend de modificateurs et d'équipement restés cloisonnés, donc un
+     « 240 PV » sans total serait trompeur. Seul « — à terre » est affiché. */
+  const foeRows = foes.filter(e => e.hpCur > 0).map(e => ({ id: e.id, name: e.name, group: 'foes',
+    hint: enemyPublicView(e).mode === 'exact' ? ` (${e.hpCur} PV)` : '' }));
+  const allyRows = allies.filter(e => e.hpCur > 0).map(e => ({ id: e.id, name: e.name, group: 'allies',
+    hint: enemyPublicView(e).mode === 'exact' ? ` (${e.hpCur} PV)` : '' }));
+  const pjRows = CHARACTERS.map(c => ({ id: c.id, group: 'pjs',
+    name: c.name + (c.id === char.id ? ' (toi)' : ''),
+    hint: (allHp[c.id] != null && allHp[c.id] <= 0) ? ' — à terre' : '' }));
+  const pools = { foes: foeRows, allies: allyRows.concat(pjRows), self: [],
+    any: foeRows.concat(allyRows, pjRows) };
+
+  /* Un cast NE FAIT PLUS QUE TROIS CHOSES : vérifier la légalité, payer (mana +
+     cooldown), déposer l'action dans la file du MJ.
+     ⚠️ AUCUN effet n'est écrit ici depuis la refonte du 2026-09-06 — buff, bouclier,
+     compteurs, transformation, soins et dégâts sont TOUS appliqués par le MJ à la
+     résolution (`applyStatusToCharacter` / `applyHitTo*` / `healCharacter`). C'est ce
+     qui rend le rejet exact : il n'y a jamais rien à défaire. Ne pas réintroduire
+     d'écriture d'effet ici « pour le confort du joueur » sans relire le §2 de
+     docs/superpowers/specs/2026-09-06-actions-en-attente-design.md.
+     Renvoie `true` si l'action est partie — la carte vide alors sa sélection. */
+  function cast(sk, ctx, selection) {
     ctx = ctx || baseCtx;
-    nbHits = Math.max(1, nbHits || 1);
-    const cost = sk.mana || 0;
+    selection = selection || {};
     const skIndex = kit.actives.indexOf(sk);
     if (!skillUnlocked(skIndex, level)) {
       toast(`<b>${char.name}</b> — ${sk.name} se débloque au niveau ${skIndex + 1}`, 'gold');
-      return;
+      return false;
     }
-    // Dégâts/cible (réutilise le calcul de la carte ; repli si appel sans dmgArg).
-    const dmg = sk.dmg ? (dmgArg != null ? dmgArg : sk.dmg(eff, ctx)) : null;
-    // Garde « pas de cible » : une action à dégâts exige une cible (avant toute dépense).
-    if (dmg != null && !targetId) {
-      toast(`<b>${char.name}</b> — choisis une cible d'abord`, 'gold');
-      return;
-    }
+    const targeting = skillTargeting(sk, eff, ctx);
+    const check = castSelectionValid(targeting, selection);
+    if (!check.ok) { toast(`<b>${char.name}</b> — ${check.reason}`, 'gold'); return false; }
+    const cost = sk.mana || 0;
     const manaCur = state.manaCur || 0;
-    if (manaCur < cost) { toast(`<b>${char.name}</b> — pas assez de mana (${manaCur}/${cost})`, 'gold'); return; }
+    if (manaCur < cost) { toast(`<b>${char.name}</b> — pas assez de mana (${manaCur}/${cost})`, 'gold'); return false; }
+    // Cooldown d'AVANT le cast : snapshoté pour le remboursement si le MJ annule.
+    const cdPrev = cooldowns[sk.id] != null ? cooldowns[sk.id] : null;
+    const plan = buildCastPlan(sk, eff, ctx, selection,
+      { turn, base, selfId: char.id, wType, cdPrev, narrative: narrativeLabel(sk) });
+    // Paiement AVANT dépôt : sinon la compétence est relançable pendant que le MJ arbitre.
     setField('manaCur', manaCur - cost);
-    if (sk.kind === 'combat') setCooldown(sk.id, CD_LOCKED);
-    else setCooldown(sk.id, nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));
-    const logParts = []; // effets appliqués au lanceur, agrégés en une entrée de journal
-    // Compteur conditionnel (ex. Mur de Givre : +1 charge de Glaciation si déjà ≥ 1).
-    if (sk.counterBump) {
-      const cb = sk.counterBump;
-      const cur = counters[cb.key] || 0;
-      if (cur >= (cb.min || 0)) setCounter(cb.key, Math.min(cb.max != null ? cb.max : cur + cb.by, cur + cb.by));
-    }
-    // Compteur fixé (ex. Éclat de l'âme : consomme toutes les charges → glaciation = 0).
-    // Après calcul des dégâts (capturés via dmgArg), donc la conso n'affecte pas le coup.
-    if (sk.counterSet) Object.keys(sk.counterSet).forEach(k => setCounter(k, sk.counterSet[k]));
-    // Transformation (ex. Souverain Glacial) : pose une fenêtre de tours (souverainUntil = dernier tour
-    // actif) → le passif Glaciation gagne +2 charges/coup pendant l'ultime (lu par glaciationOnHit).
-    if (sk.transform) setCounter('souverainUntil', turn + (sk.transform.turns - 1));
-    // Buff sur soi : snapshot de mods plats → effet de combat orange. selfBuff = % de la stat
-    // de base ; selfBuffFlat = valeurs plates littérales (objet) ou fonction (eff, ctx) → objet
-    // (ex. Mur de Givre = scaling par niveau, Souverain Glacial = PV par charge).
-    const sbf = typeof sk.selfBuffFlat === 'function' ? (sk.selfBuffFlat(eff, ctx) || {}) : sk.selfBuffFlat;
-    if (sk.selfBuff || sbf) {
-      const flat = {};
-      if (sk.selfBuff) Object.keys(sk.selfBuff).forEach(k => { const f = Math.round(sk.selfBuff[k] * (base[k] || 0)); if (f) flat[k] = (flat[k] || 0) + f; });
-      if (sbf) Object.keys(sbf).forEach(k => { const f = Math.round(sbf[k]); if (f) flat[k] = (flat[k] || 0) + f; });
-      // Durée optionnelle : until = tour de fin (turn + durée − 1). Sans sk.duration → permanent (null).
-      let until = null, durTxt = '';
-      if (sk.duration) {
-        const d = Math.max(sk.duration.min, Math.min(sk.duration.max, (ctx.duration | 0) || sk.duration.min));
-        until = turn + (d - 1);
-        durTxt = ` (${d} tour${d > 1 ? 's' : ''})`;
-      }
-      setSkillBuff(sk.id, flat, until);
-      if (flat.hp) {
-        const newMax = (eff.hp || 0) + flat.hp;
-        setField('hpCur', Math.min((state.hpCur || 0) + flat.hp, newMax));
-      }
-      logParts.push((flat.hp ? `+${flat.hp} PV` : 'effet de combat') + durTxt);
-      toast(`<b>${char.name}</b> — ${sk.name} actif (effet de combat)`, 'gold');
-    }
-    // Bouclier au cast (one-shot, ajouté au pool).
-    if (sk.shield) {
-      const sh = sk.shield(eff, ctx);
-      if (sh) { setField('shield', (state.shield || 0) + sh); logParts.push(`+${sh} bouclier`); toast(`<b>${char.name}</b> gagne ${sh} bouclier`, 'gold'); }
-    }
-    // Comp à dégâts + cible → N attaques en attente (un coup = une carte ; chacune son crit).
-    if (dmg != null && targetId) {
-      let anyCrit = false;
-      for (let i = 0; i < nbHits; i++) {
-        const cr = rollCrit(eff.crit || 0, eff.dcrit || 0);
-        if (cr.didCrit) anyCrit = true;
-        addHit({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
-          type: (wType === 'Magique' ? 'magique' : 'physique'),
-          computedDmg: dmg, critDmg: Math.round(dmg * cr.multiplier), didCrit: cr.didCrit,
-          critMult: cr.multiplier, letha: eff.letha || 0, lethaMag: eff.lethaMag || 0,
-          crit: eff.crit || 0, dcrit: eff.dcrit || 0,
-          omni: eff.omni || 0, vol: eff.vol || 0, sapience: eff.sapience || 0, hpMax: eff.hp || 0, targetId });
-      }
-      // `targetName` et pas `enemies.find` : une compétence peut désormais viser un PJ,
-      // qui ne vit pas dans `combat/enemies` et se serait journalisé « un ennemi ».
-      const suffix = nbHits > 1 ? ` ×${nbHits}` : '';
-      pushLog(`<b>${char.name}</b> vise <b>${targetName(targetId)}</b> avec <b>${sk.name}</b>${suffix} (${dmg}/coup${anyCrit ? ' — CRIT !' : ''}) — en attente MJ`, anyCrit ? 'buff' : 'gold');
-      toast(`<b>${char.name}</b> — ${sk.name} : ${nbHits} coup(s) envoyé(s) au MJ`, 'buff');
-    } else {
-      pushLog(`<b>${char.name}</b> lance <b>${sk.name}</b>${logParts.length ? ' — ' + logParts.join(', ') : ''}`, logParts.length ? 'buff' : 'gold');
-      toast(`<b>${char.name}</b> lance ${sk.name}`, 'buff');
-    }
+    setCooldown(sk.id, sk.kind === 'combat' ? CD_LOCKED : nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));
+    addAction({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
+      source: 'skill', round: turn, cost: plan.cost }, plan.instances);
+    const sum = instanceSummary(plan.instances, targetName);
+    pushLog(`<b>${char.name}</b> lance <b>${sk.name}</b>${sum ? ' — ' + sum : ''} — en attente MJ`,
+      plan.instances.some(i => i.didCrit) ? 'buff' : 'gold');
+    toast(`<b>${char.name}</b> — ${sk.name} : ${plan.instances.length} effet(s) envoyé(s) au MJ`, 'buff');
+    return true;
   }
 
-  // Attaque de base : même flux que les comps (cible → attaque en attente MJ), sans mana ni cooldown.
+  // Attaque de base : même flux que les compétences (elle passe par la file du MJ),
+  // sans mana ni cooldown.
   const eqWeaponName = (() => {
     const eqId = state.equipment && state.equipment.armePrincipale;
     const it = (eqId && state.inventory) ? state.inventory[eqId] : null;
@@ -509,31 +606,39 @@ function CompetencesBody({ char, staff }) {
   const basicPower = (wType === 'Magique' ? (eff.ap || 0) : (eff.ad || 0));
   const mode = basicMode(atkMode);
   const basicDmg = basicModeDamage(basicPower, atkMode);
-  /* Nom de la cible, PNJ ou PJ (les deux camps passent par la même file d'attaques). */
+  /* Nom d'un combattant, PNJ ou PJ (les deux camps passent par la même file). */
   function targetName(id) {
+    if (id === char.id) return char.name;
     const en = enemies.find(e => e.id === id);
     if (en) return en.name;
     const c = CHARACTERS.find(x => x.id === id);
     return c ? c.name : 'sa cible';
   }
+  /* Ciblage de l'attaque de base : le MÊME bloc que les compétences, borné à une cible.
+     `max: 1` est la seule constante à changer le jour où les règles prévoient un
+     balayage d'arme lourde (décision MJ du 2026-09-06). */
+  const BASIC_TARGETING = { damage: { camp: 'any', min: 1, max: 1 } };
   function basicAttack() {
-    if (!targetId) { toast(`<b>${char.name}</b> — choisis une cible d'abord`, 'gold'); return; }
-    // ⚠️ Un mode réduit ne roule PAS le dé de crit (ruling MJ, cf. BASIC_MODES) : on ne
-    // neutralise pas le résultat après coup, on ne lance pas. Le %Crit envoyé au MJ vaut
-    // alors 0 — sa carte doit dire la vérité de CE coup, pas la fiche de l'attaquant.
-    const cr = mode.crit ? rollCrit(eff.crit || 0, eff.dcrit || 0) : { didCrit: false, multiplier: 1 };
-    const critDmg = Math.round(basicDmg * cr.multiplier);
-    addHit({ attackerId: char.id, attackerName: char.name, skillId: 'basic',
-      skillName: mode.id === 'normal' ? 'Attaque de base' : `${mode.label} (${Math.round(mode.mult * 100)} %)`,
-      modeId: mode.id,
-      type: (wType === 'Magique' ? 'magique' : 'physique'), computedDmg: basicDmg, critDmg,
-      didCrit: cr.didCrit, critMult: cr.multiplier, letha: eff.letha || 0, lethaMag: eff.lethaMag || 0,
-      crit: mode.crit ? (eff.crit || 0) : 0, dcrit: eff.dcrit || 0,
-      omni: eff.omni || 0, vol: eff.vol || 0, sapience: eff.sapience || 0, hpMax: eff.hp || 0, targetId });
+    const check = castSelectionValid(BASIC_TARGETING, basicSel);
+    if (!check.ok) { toast(`<b>${char.name}</b> — ${check.reason}`, 'gold'); return; }
+    const label = mode.id === 'normal' ? 'Attaque de base'
+      : `${mode.label} (${Math.round(mode.mult * 100)} %)`;
+    // ⚠️ Un mode réduit ne roule PAS le dé de crit (ruling MJ) : on ne neutralise pas
+    // le résultat après coup, on ne lance pas — et le %Crit envoyé vaut alors 0, parce
+    // que la carte du MJ doit dire la vérité de CE coup, pas la fiche de l'attaquant.
+    const fake = { id: 'basic', name: label, mana: 0, dmg: () => basicDmg };
+    const plan = buildCastPlan(fake, eff, baseCtx, basicSel,
+      { turn, base, selfId: char.id, wType, cdPrev: null, noCrit: !mode.crit });
+    plan.instances.forEach(i => { if (i.kind === 'damage') i.modeId = mode.id; });
+    addAction({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
+      source: 'basic', round: turn, cost: plan.cost }, plan.instances);
+    const hit = plan.instances[0] || {};
+    const shown = hit.didCrit ? `${hit.critDmg} — CRITIQUE !` : `${basicDmg}`;
     const verb = mode.id === 'normal' ? 'attaque' : `${mode.label.toLowerCase()} →`;
-    const shown = cr.didCrit ? `${critDmg} — CRITIQUE !` : `${basicDmg}`;
-    pushLog(`<b>${char.name}</b> ${verb} <b>${targetName(targetId)}</b> (${shown}) — en attente MJ`, cr.didCrit ? 'buff' : 'gold');
+    pushLog(`<b>${char.name}</b> ${verb} <b>${targetName(hit.targetId)}</b> (${shown}) — en attente MJ`,
+      hit.didCrit ? 'buff' : 'gold');
     toast(`<b>${char.name}</b> — ${mode.label} (${shown}) envoyé au MJ`, 'buff');
+    setBasicSel({});
   }
 
   return (
@@ -554,9 +659,10 @@ function CompetencesBody({ char, staff }) {
       </div>
       <MyResources char={char} eff={eff} state={state} activeBuffs={activeBuffs}
         setHp={setHp} setMana={setMana} setInvItem={setInvItem} removeInvItem={removeInvItem} />
-      {/* Ciblage. Rendu MÊME sans PNJ sur le plateau : depuis que les PJ sont ciblables,
-          un duel entre joueurs est un combat valide, et l'ancienne garde `enemies.length > 0`
-          faisait disparaître le sélecteur tout entier dans ce cas. */}
+      {/* État du plateau, en lecture seule. Le CIBLAGE, lui, a quitté ce panneau pour
+          descendre sur chaque carte (refonte du 2026-09-06) : un sélecteur global à une
+          cible ne peut pas exprimer « ces deux gnolls prennent les dégâts, Urskaar prend
+          le soin ». Rendu MÊME sans PNJ : un duel entre joueurs est un combat valide. */}
       <div className="panel" style={{ padding: '10px 14px' }}>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
           <div>
@@ -585,44 +691,6 @@ function CompetencesBody({ char, staff }) {
               )}
             </div>
           </div>
-          <label className="row gap-2" style={{ alignItems: 'center', fontSize: 12.5 }}>Cible
-            <select value={targetId} onChange={e => setTargetId(e.target.value)}
-              style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '6px 9px', fontSize: 13 }}>
-              <option value="">— aucune —</option>
-              {/* Les alliés restent ciblables (soin, tir fratricide) mais dans un groupe
-                  séparé : on ne tape pas un PNJ allié par glissement de souris. */}
-              {foes.filter(en => en.hpCur > 0).map(en => {
-                const v = enemyPublicView(en);
-                return <option key={en.id} value={en.id}>{en.name}{v.mode === 'exact' ? ` (${en.hpCur} PV)` : ''}</option>;
-              })}
-              {allies.filter(en => en.hpCur > 0).length > 0 && (
-                <optgroup label="Alliés">
-                  {allies.filter(en => en.hpCur > 0).map(en => {
-                    const v = enemyPublicView(en);
-                    return <option key={en.id} value={en.id}>{en.name}{v.mode === 'exact' ? ` (${en.hpCur} PV)` : ''}</option>;
-                  })}
-                </optgroup>
-              )}
-              {/* Joueurs. En DERNIER groupe : viser un camarade est l'exception (tir
-                  fratricide, PJ charmé, duel, gifle), pas le geste courant.
-                  ⚠️ Pas de PV chiffrés ici, contrairement aux PNJ : seule la feuille
-                  `hpCur` des autres PJ est lisible par un joueur (ouverte le 2026-09-02
-                  pour l'initiative) — leur PV MAX dépend de modificateurs et d'équipement
-                  qui restent cloisonnés, donc un « 240 PV » sans total serait trompeur.
-                  Un PJ à terre reste listable : le MJ arbitre les coups de grâce. */}
-              <optgroup label="Joueurs">
-                {CHARACTERS.map(c => {
-                  const hp = allHp[c.id];
-                  const down = hp != null && hp <= 0;
-                  return (
-                    <option key={c.id} value={c.id}>
-                      {c.name}{c.id === char.id ? ' (toi)' : ''}{down ? ' — à terre' : ''}
-                    </option>
-                  );
-                })}
-              </optgroup>
-            </select>
-          </label>
         </div>
       </div>
       {(() => {
@@ -656,6 +724,13 @@ function CompetencesBody({ char, staff }) {
               </button>
             ))}
           </div>
+          {/* Même bloc de ciblage que les compétences, borné à une cible. */}
+          <div style={{ marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--line)' }}>
+            <div className="overline" style={{ marginBottom: 6 }}>Cible</div>
+            <TargetRow effKey="damage" spec={BASIC_TARGETING.damage} pool={pools.any}
+              selected={basicSel.damage || []}
+              onChange={(next) => setBasicSel({ damage: next })} />
+          </div>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <div className="col" style={{ gap: 2 }}>
               <span className="mono" style={{ fontSize: 22, color: 'var(--hp)', fontWeight: 700 }}>
@@ -668,7 +743,9 @@ function CompetencesBody({ char, staff }) {
                 <span className="faint" style={{ fontSize: 11.5 }}>Coup retenu : pas de jet de critique.</span>
               )}
             </div>
-            <button className="btn btn-gold" onClick={basicAttack}>
+            <button className="btn btn-gold" onClick={basicAttack}
+              disabled={!(basicSel.damage || []).length}
+              title={(basicSel.damage || []).length ? '' : 'Choisis une cible d’abord'}>
               {mode.id === 'normal' ? 'Attaquer' : mode.label}
             </button>
           </div>
@@ -679,8 +756,8 @@ function CompetencesBody({ char, staff }) {
         {kit.actives.map((sk, i) => (
           <ActiveCard key={sk.id} sk={sk} eff={eff} baseCtx={baseCtx} color={color}
             ready={cooldownReady(cooldowns[sk.id], turn)} readyAt={cooldowns[sk.id]} turn={turn}
-            manaCur={state.manaCur || 0} onCast={(ctx, dmg, nbHits) => cast(sk, ctx, dmg, nbHits)}
-            locked={!skillUnlocked(i, level)} minLevel={i + 1} />
+            manaCur={state.manaCur || 0} onCast={(ctx, selection) => cast(sk, ctx, selection)}
+            pools={pools} locked={!skillUnlocked(i, level)} minLevel={i + 1} />
         ))}
       </div>
       <MyTurnBar me={char.id} meName={char.name} ini={ini} toast={toast} round={turn} />

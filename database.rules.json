@@ -65,10 +65,15 @@
           "enemies": {
             ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')"
           },
-          "pendingHits": {
-            "$hitId": {
-              ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
-              ".validate": "newData.hasChildren(['attackerId', 'targetId', 'computedDmg'])"
+          "pendingActions": {
+            "$actionId": {
+              ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin' || (newData.exists() ? newData.child('attackerId').val() : data.child('attackerId').val()) === root.child('users').child(auth.uid).child('charId').val())",
+              ".validate": "newData.hasChildren(['attackerId', 'skillId'])",
+              "instances": {
+                "$instId": {
+                  ".validate": "newData.hasChildren(['kind', 'targetId'])"
+                }
+              }
             }
           },
           "initiative": {

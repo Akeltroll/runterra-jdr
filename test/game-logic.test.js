@@ -1842,3 +1842,214 @@ test('basicModeDamage : puissance invalide = 0, jamais NaN', () => {
   assert.equal(L.basicModeDamage(null, 'gifle'), 0);
   assert.equal(L.basicModeDamage(-50, 'normal'), 0);
 });
+
+/* ============================================================
+   ACTIONS EN ATTENTE (spec 2026-09-06)
+   ============================================================ */
+
+/* Competences de reference, calquees sur les vraies formes de data.jsx. */
+const SK_DMG    = { id: 'frappe', name: 'Frappe', mana: 20, dmg: () => 120 };
+const SK_MULTI  = { id: 'salve', name: 'Salve', mana: 60, dmg: () => 90,
+  targeting: { damage: { max: null } } };
+const SK_MIXTE  = { id: 'align', name: 'Alignement', mana: 40, dmg: () => 100, heal: () => 80,
+  targeting: { damage: { min: 0, max: null }, heal: { camp: 'allies', min: 0, max: null } } };
+const SK_STATUT = { id: 'mur', name: 'Mur de Givre', mana: 50, dmg: () => null,
+  duration: { min: 1, max: 2 },
+  selfBuffFlat: () => ({ armure: 20, resmag: 20 }),
+  counterBump: { key: 'glaciation', by: 1, min: 1, max: 5 } };
+const SK_NARR   = { id: 'fondu', name: 'Fondu au noir', mana: 40, dmg: () => null };
+const EFF = { crit: 0, dcrit: 150, mana: 300, hp: 500, ad: 200, letha: 0, lethaMag: 0 };
+
+/* --- skillTargeting --- */
+test('skillTargeting : une comp a degats cible 1 ennemi par defaut', () => {
+  const t = L.skillTargeting(SK_DMG, EFF, {});
+  assert.deepEqual(t.damage, { camp: 'any', min: 1, max: 1 });
+  assert.equal(t.heal, undefined);
+  assert.equal(t.status, undefined);
+});
+test('skillTargeting : dmg() qui rend null ne cree PAS d effet de degats', () => {
+  // Cinq comps declarent `dmg: () => null` (Fondu au noir, Ralliement, Mur de Givre,
+  // Ailes de Givre, Souverain Glacial) : tester `!!sk.dmg` leur donnerait une ligne
+  // « Degats » vide et exigerait une cible pour rien.
+  assert.equal(L.skillTargeting(SK_NARR, EFF, {}).damage, undefined);
+  assert.equal(L.skillTargeting(SK_STATUT, EFF, {}).damage, undefined);
+});
+test('skillTargeting : comp mixte = deux effets, chacun son camp', () => {
+  const t = L.skillTargeting(SK_MIXTE, EFF, {});
+  assert.equal(t.damage.max, null);
+  assert.equal(t.heal.camp, 'allies');
+  assert.equal(t.heal.min, 0);
+});
+test('skillTargeting : un effet sur soi donne un effet status implicite', () => {
+  const t = L.skillTargeting(SK_STATUT, EFF, {});
+  assert.equal(t.status.camp, 'self');
+});
+
+/* --- castSelectionValid --- */
+test('castSelectionValid : refuse un lancement sans cible', () => {
+  const t = L.skillTargeting(SK_DMG, EFF, {});
+  const r = L.castSelectionValid(t, { damage: [] });
+  assert.equal(r.ok, false);
+  assert.equal(r.effect, 'damage');
+  assert.match(r.reason, /au moins 1 cible/);
+});
+test('castSelectionValid : refuse au-dela du max', () => {
+  const t = L.skillTargeting(SK_DMG, EFF, {});
+  assert.equal(L.castSelectionValid(t, { damage: ['a', 'b'] }).ok, false);
+});
+test('castSelectionValid : max null = illimite', () => {
+  const t = L.skillTargeting(SK_MULTI, EFF, {});
+  assert.equal(L.castSelectionValid(t, { damage: ['a', 'b', 'c', 'd'] }).ok, true);
+});
+test('castSelectionValid : un effet sur soi n exige aucune cible', () => {
+  const t = L.skillTargeting(SK_STATUT, EFF, {});
+  assert.equal(L.castSelectionValid(t, {}).ok, true);
+});
+test('castSelectionValid : une comp a effets TOUS optionnels exige quand meme une cible', () => {
+  // Alignement de sequence : min 0 des deux cotes. Sans garde globale, « Lancer »
+  // partirait avec zero cible et brulerait 40 mana en « effet en table ».
+  const t = L.skillTargeting(SK_MIXTE, EFF, {});
+  const r = L.castSelectionValid(t, { damage: [], heal: [] });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /au moins une cible/);
+});
+test('castSelectionValid : une comp SANS effet ciblable reste lancable', () => {
+  // Fondu au noir ne cible rien : la garde globale ne doit pas la bloquer.
+  assert.equal(L.castSelectionValid(L.skillTargeting(SK_NARR, EFF, {}), {}).ok, true);
+});
+test('castSelectionValid : min 0 laisse passer un effet non cible', () => {
+  // Alignement peut ne blesser personne ou ne soigner personne selon la scene.
+  const t = L.skillTargeting(SK_MIXTE, EFF, {});
+  assert.equal(L.castSelectionValid(t, { damage: ['g1'], heal: [] }).ok, true);
+});
+
+/* --- buildCastPlan --- */
+const OPTS = { turn: 3, base: { hp: 400, ad: 180, armure: 40 }, selfId: 'rathael',
+  wType: 'Physique', cdPrev: null, rng: () => 0.99 };   // rng haut = jamais de crit
+
+test('buildCastPlan : N cibles = N instances de degats, une par cible', () => {
+  const p = L.buildCastPlan(SK_MULTI, EFF, {}, { damage: ['g1', 'g2', 'g3'] }, OPTS);
+  assert.equal(p.instances.length, 3);
+  assert.deepEqual(p.instances.map(i => i.targetId), ['g1', 'g2', 'g3']);
+  assert.deepEqual(p.instances.map(i => i.seq), [1, 2, 3]);
+  p.instances.forEach(i => { assert.equal(i.kind, 'damage'); assert.equal(i.computedDmg, 90); });
+});
+test('buildCastPlan : comp mixte = degats aux ennemis ET soin aux allies', () => {
+  const p = L.buildCastPlan(SK_MIXTE, EFF, {}, { damage: ['g1', 'g2'], heal: ['urskaar'] }, OPTS);
+  assert.equal(p.instances.length, 3);
+  assert.deepEqual(p.instances.map(i => i.kind), ['damage', 'damage', 'heal']);
+  assert.equal(p.instances[2].targetId, 'urskaar');
+  assert.equal(p.instances[2].amount, 80);
+});
+test('buildCastPlan : le cout appartient a l ACTION, pas a l instance', () => {
+  // 3 cibles ne coutent pas 3x60 mana : c'est le pivot des regles de remboursement.
+  const p = L.buildCastPlan(SK_MULTI, EFF, {}, { damage: ['g1', 'g2', 'g3'] }, OPTS);
+  assert.equal(p.cost.mana, 60);
+  assert.equal(p.cost.manaPer, 0);
+  assert.equal(p.cost.manaMax, 300);
+});
+test('buildCastPlan : effet sur soi = une instance status sur le lanceur', () => {
+  const ctx = { counters: { glaciation: 2 }, duration: 2 };
+  const p = L.buildCastPlan(SK_STATUT, EFF, ctx, {}, OPTS);
+  assert.equal(p.instances.length, 1);
+  const st = p.instances[0];
+  assert.equal(st.kind, 'status');
+  assert.equal(st.targetId, 'rathael');
+  assert.deepEqual(st.mods, { armure: 20, resmag: 20 });
+  assert.equal(st.until, 4);                        // turn 3 + (2 tours - 1)
+  assert.deepEqual(st.counters, { glaciation: 3 }); // counterBump +1
+});
+test('buildCastPlan : counterBump sous son minimum ne se declenche pas', () => {
+  // Mur de Givre ne donne sa charge que si Rathael en a deja au moins une.
+  const p = L.buildCastPlan(SK_STATUT, EFF, { counters: {}, duration: 1 }, {}, OPTS);
+  assert.equal(p.instances[0].counters, null);
+});
+test('buildCastPlan : une comp sans effet chiffre produit une instance NARRATIVE', () => {
+  // Sinon Fondu au noir (40 mana, CD 3) ecrirait une action vide et resterait
+  // hors du controle du MJ — pire qu'avant la refonte.
+  const p = L.buildCastPlan(SK_NARR, EFF, {}, {},
+    Object.assign({}, OPTS, { narrative: 'Camouflage 3 tours' }));
+  assert.equal(p.instances.length, 1);
+  assert.equal(p.instances[0].kind, 'status');
+  assert.equal(p.instances[0].narrative, true);
+  assert.equal(p.instances[0].label, 'Camouflage 3 tours');
+  assert.equal(p.cost.mana, 40);
+});
+test('buildCastPlan : un buff de PV snapshote le gain ET le nouveau plafond', () => {
+  const sk = { id: 'ours', mana: 100, dmg: () => 300, selfBuff: { hp: 0.30, ad: 0.30 } };
+  const p = L.buildCastPlan(sk, EFF, {}, { damage: ['g1'] }, OPTS);
+  const st = p.instances.find(i => i.kind === 'status');
+  assert.equal(st.mods.hp, 120);        // 30 % de 400 (stat de BASE)
+  assert.equal(st.hpGain, 120);
+  assert.equal(st.hpMax, 620);          // eff.hp 500 + 120
+});
+test('buildCastPlan : noCrit ne roule pas le de et envoie le %Crit a 0', () => {
+  // Ruling MJ : un mode d'attaque reduit (gifle) ne neutralise pas le resultat
+  // apres coup, il ne lance pas — et la carte du MJ doit dire la verite de CE coup.
+  const p = L.buildCastPlan(SK_DMG, Object.assign({}, EFF, { crit: 100 }), {},
+    { damage: ['g1'] }, Object.assign({}, OPTS, { noCrit: true }));
+  assert.equal(p.instances[0].didCrit, false);
+  assert.equal(p.instances[0].critMult, 1);
+  assert.equal(p.instances[0].crit, 0);
+});
+
+/* --- actionRefundPlan --- */
+function mkAction(over) {
+  return Object.assign({ attackerId: 'jett', attackerName: 'Jett', skillId: 'align',
+    skillName: 'Alignement', source: 'skill', appliedCount: 0,
+    cost: { mana: 40, manaPer: 0, manaMax: 300, cdPrev: null },
+    instances: { i1: {}, i2: {}, i3: {} } }, over);
+}
+
+test('actionRefundPlan : annuler la competence rembourse tout', () => {
+  const p = L.actionRefundPlan(mkAction(), 'cancel');
+  assert.equal(p.mana, 40);
+  assert.equal(p.restoreCd, true);
+  assert.equal(p.cdPrev, null);
+});
+test('actionRefundPlan : rejeter UNE instance parmi d autres ne rembourse rien', () => {
+  assert.equal(L.actionRefundPlan(mkAction(), 'instance'), null);
+});
+test('actionRefundPlan : rejeter la DERNIERE instance = annulation complete', () => {
+  // Regle du MJ : on garde cette logique jusqu'a ce qu'il n'y ait plus d'instances,
+  // auquel cas on revient au cas ou le MJ a annule la competence entiere.
+  const p = L.actionRefundPlan(mkAction({ instances: { i3: {} } }), 'instance');
+  assert.ok(p);
+  assert.equal(p.mana, 40);
+  assert.equal(p.restoreCd, true);
+});
+test('actionRefundPlan : une instance DEJA APPLIQUEE coupe tout remboursement', () => {
+  // Une salve sur 3 gnolls dont 2 meurent ne doit pas devenir gratuite.
+  assert.equal(L.actionRefundPlan(mkAction({ appliedCount: 1, instances: { i3: {} } }), 'instance'), null);
+  assert.equal(L.actionRefundPlan(mkAction({ appliedCount: 2 }), 'cancel'), null);
+});
+test('actionRefundPlan : Echec ne rembourse jamais rien', () => {
+  assert.equal(L.actionRefundPlan(mkAction(), 'fail'), null);
+  assert.equal(L.actionRefundPlan(mkAction({ instances: { i1: {} } }), 'fail'), null);
+});
+test('actionRefundPlan : manaPer rend la part de la cible rejetee, sans le cooldown', () => {
+  // Prevu pour le jour ou un kit facture a la cible ; vaut 0 partout aujourd'hui.
+  const p = L.actionRefundPlan(
+    mkAction({ cost: { mana: 40, manaPer: 10, manaMax: 300, cdPrev: null } }), 'instance');
+  assert.equal(p.mana, 10);
+  assert.equal(p.restoreCd, false);
+});
+test('actionRefundPlan : le cooldown d avant le cast est restitue tel quel', () => {
+  const p = L.actionRefundPlan(
+    mkAction({ cost: { mana: 40, manaPer: 0, manaMax: 300, cdPrev: 7 } }), 'cancel');
+  assert.equal(p.cdPrev, 7);
+});
+test('actionRefundPlan : une attaque de base ne rembourse rien', () => {
+  const a = mkAction({ source: 'basic', skillId: 'basic',
+    cost: { mana: 0, manaPer: 0, manaMax: 300, cdPrev: null }, instances: { i1: {} } });
+  assert.equal(L.actionRefundPlan(a, 'instance'), null);
+  assert.equal(L.actionRefundPlan(a, 'cancel'), null);
+});
+
+test('refundManaValue : plafonne au max, ne baisse jamais le courant', () => {
+  assert.equal(L.refundManaValue(100, 40, 300), 140);
+  assert.equal(L.refundManaValue(280, 40, 300), 300);   // plafond
+  assert.equal(L.refundManaValue(320, 40, 300), 320);   // deja au-dessus : inchange
+  assert.equal(L.refundManaValue(100, 40, 0), 140);     // plafond inconnu : somme brute
+  assert.equal(L.refundManaValue(0, 0, 300), 0);
+});

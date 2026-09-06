@@ -1034,6 +1034,211 @@
   function nextReadyAt(currentTurn, cd) {
     return currentTurn + (cd | 0);
   }
+  /* ============================================================
+     ACTIONS EN ATTENTE — ciblage, plan de cast, remboursement
+     Spec : docs/superpowers/specs/2026-09-06-actions-en-attente-design.md
+     Contrat : un joueur propose UNE ACTION composée de N INSTANCES, chacune
+     portant UN effet (dégâts / soin / statut) sur UNE cible. Le MJ résout
+     instance par instance. AUCUN effet n'est écrit au cast — c'est ce qui rend
+     le rejet exact : il n'y a jamais rien à défaire.
+     ============================================================ */
+
+  var EFFECT_LABEL = { damage: 'Dégâts', heal: 'Soin', status: 'Effet' };
+
+  /* Une compétence a-t-elle un effet sur son lanceur ? (buff, bouclier, compteur,
+     transformation) — c'est ce qui donne son instance `status`. */
+  function hasSelfEffect(sk) {
+    return !!(sk && (sk.shield || sk.selfBuff || sk.selfBuffFlat
+      || sk.counterBump || sk.counterSet || sk.transform));
+  }
+
+  /* Ce qu'une compétence peut cibler, effet par effet :
+       { damage: {camp,min,max}, heal: {...}, status: {camp:'self'} }
+     `camp` ∈ 'foes' | 'allies' | 'any' | 'self' ; `max: null` = illimité.
+     ⚠️ Dérivée des champs EXISTANTS de `SKILLS` : on n'a pas réécrit les 18 kits.
+     Le test « cette comp fait-elle des dégâts ? » ne peut PAS être `!!sk.dmg` —
+     cinq compétences déclarent `dmg: () => null` (Fondu au noir, Ralliement, Mur
+     de Givre, Ailes de Givre, Souverain Glacial). Il faut évaluer la fonction.
+     Un champ `targeting` optionnel dans data.jsx surcharge au cas par cas. */
+  function skillTargeting(sk, eff, ctx) {
+    var out = {};
+    if (!sk) return out;
+    var over = sk.targeting || {};
+    var dmg = typeof sk.dmg === 'function' ? sk.dmg(eff || {}, ctx || {}) : null;
+    var heal = typeof sk.heal === 'function' ? sk.heal(eff || {}, ctx || {}) : null;
+    if (dmg != null) out.damage = Object.assign({ camp: 'any', min: 1, max: 1 }, over.damage);
+    if (heal != null) out.heal = Object.assign({ camp: 'allies', min: 1, max: 1 }, over.heal);
+    if (hasSelfEffect(sk)) out.status = Object.assign({ camp: 'self', min: 1, max: 1 }, over.status);
+    return out;
+  }
+
+  /* La sélection de cibles du joueur est-elle lançable ? Alimente l'état désactivé
+     du bouton « Lancer » et son infobulle. Les effets sur soi sont implicites. */
+  function castSelectionValid(targeting, selection) {
+    var t = targeting || {}, s = selection || {};
+    var keys = Object.keys(t), aimable = 0, total = 0;
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i], spec = t[k] || {};
+      if (spec.camp === 'self') continue;
+      aimable++;
+      var n = (s[k] || []).length;
+      total += n;
+      var min = spec.min == null ? 1 : spec.min;
+      var max = spec.max;
+      var lbl = EFFECT_LABEL[k] || k;
+      if (n < min) return { ok: false, effect: k,
+        reason: lbl + ' : choisis au moins ' + min + ' cible' + (min > 1 ? 's' : '') };
+      if (max != null && n > max) return { ok: false, effect: k,
+        reason: lbl + ' : ' + max + ' cible' + (max > 1 ? 's' : '') + ' au maximum' };
+    }
+    // ⚠️ Garde globale : une compétence dont TOUS les effets sont optionnels (Alignement
+    // de séquence peut ne blesser personne ou ne soigner personne) passerait la boucle
+    // avec zéro cible et partirait en « effet en table » — 40 mana pour rien.
+    if (aimable > 0 && total === 0) return { ok: false, effect: null,
+      reason: 'Choisis au moins une cible' };
+    return { ok: true, effect: null, reason: '' };
+  }
+
+  /* Effet sur le lanceur, snapshoté au cast et appliqué SEULEMENT à la résolution.
+     Reprend à l'identique les calculs qui vivaient dans `cast()` : selfBuff (% de la
+     stat de BASE), selfBuffFlat (valeurs plates ou fonction), durée, bouclier,
+     counterBump/counterSet, transformation. */
+  function buildSelfEffect(sk, eff, ctx, opts) {
+    if (!hasSelfEffect(sk)) return null;
+    eff = eff || {}; ctx = ctx || {}; opts = opts || {};
+    var turn = opts.turn || 1, base = opts.base || {};
+    var out = { label: '', mods: null, until: null, shield: 0, counters: null,
+      transformUntil: null, hpGain: 0, hpMax: eff.hp || 0 };
+    var parts = [];
+    var flat = {};
+    if (sk.selfBuff) Object.keys(sk.selfBuff).forEach(function (k) {
+      var f = Math.round(sk.selfBuff[k] * (base[k] || 0)); if (f) flat[k] = (flat[k] || 0) + f;
+    });
+    var sbf = typeof sk.selfBuffFlat === 'function' ? (sk.selfBuffFlat(eff, ctx) || {}) : sk.selfBuffFlat;
+    if (sbf) Object.keys(sbf).forEach(function (k) {
+      var f = Math.round(sbf[k]); if (f) flat[k] = (flat[k] || 0) + f;
+    });
+    if (Object.keys(flat).length) {
+      out.mods = flat;
+      var txt = Object.keys(flat).map(function (k) { return '+' + flat[k] + ' ' + k.toUpperCase(); }).join(', ');
+      if (sk.duration) {
+        var d = Math.max(sk.duration.min, Math.min(sk.duration.max, (ctx.duration | 0) || sk.duration.min));
+        out.until = turn + (d - 1);
+        txt += ' (' + d + ' tour' + (d > 1 ? 's' : '') + ')';
+      }
+      parts.push(txt);
+      // Un buff de PV déplace le plafond ET remplit la jauge (décision figée) : on
+      // snapshote le nouveau max pour que la résolution n'ait pas à le recalculer.
+      if (flat.hp) { out.hpGain = flat.hp; out.hpMax = (eff.hp || 0) + flat.hp; }
+    }
+    if (typeof sk.shield === 'function') {
+      var sh = Math.max(0, sk.shield(eff, ctx) | 0);
+      if (sh) { out.shield = sh; parts.push('+' + sh + ' bouclier'); }
+    }
+    var counters = {}, cur = ctx.counters || {};
+    if (sk.counterBump) {
+      var cb = sk.counterBump, c0 = cur[cb.key] | 0;
+      if (c0 >= (cb.min || 0)) {
+        counters[cb.key] = Math.min(cb.max != null ? cb.max : c0 + cb.by, c0 + cb.by);
+        parts.push(cb.key + ' → ' + counters[cb.key]);
+      }
+    }
+    if (sk.counterSet) Object.keys(sk.counterSet).forEach(function (k) {
+      counters[k] = sk.counterSet[k] | 0; parts.push(k + ' → ' + counters[k]);
+    });
+    if (Object.keys(counters).length) out.counters = counters;
+    if (sk.transform) {
+      out.transformUntil = turn + (sk.transform.turns - 1);
+      parts.push('transformation ' + sk.transform.turns + ' tours');
+    }
+    out.label = parts.join(' · ') || 'effet';
+    return out;
+  }
+
+  /* Le plan complet d'un cast : ce qu'il coûte, et la liste des instances à déposer
+     dans la file du MJ. Pur — `opts.rng` rend les jets de critique déterministes.
+     opts = { turn, base, wType, selfId, cdPrev, rng, narrative } */
+  function buildCastPlan(sk, eff, ctx, selection, opts) {
+    eff = eff || {}; ctx = ctx || {}; selection = selection || {}; opts = opts || {};
+    var magic = opts.wType === 'Magique';
+    var selfId = opts.selfId || '';
+    var instances = [], seq = 0;
+    var dmg = typeof sk.dmg === 'function' ? sk.dmg(eff, ctx) : null;
+    if (dmg != null) (selection.damage || []).forEach(function (tid) {
+      // Un jet de critique PAR instance : trois cibles = trois jets, comme la salve
+      // le faisait déjà. `opts.noCrit` sert aux modes d'attaque réduits (une gifle
+      // ne roule pas le dé — ruling MJ du 2026-09-06).
+      var cr = opts.noCrit ? { didCrit: false, multiplier: 1 }
+        : rollCrit(eff.crit || 0, eff.dcrit || 0, opts.rng);
+      instances.push({ seq: ++seq, kind: 'damage', targetId: tid,
+        computedDmg: dmg, critDmg: Math.round(dmg * cr.multiplier),
+        didCrit: cr.didCrit, critMult: cr.multiplier,
+        type: magic ? 'magique' : 'physique',
+        letha: eff.letha || 0, lethaMag: eff.lethaMag || 0,
+        crit: opts.noCrit ? 0 : (eff.crit || 0), dcrit: eff.dcrit || 0,
+        vol: eff.vol || 0, sapience: eff.sapience || 0, omni: eff.omni || 0,
+        hpMax: eff.hp || 0 });
+    });
+    var heal = typeof sk.heal === 'function' ? sk.heal(eff, ctx) : null;
+    if (heal != null) (selection.heal || []).forEach(function (tid) {
+      instances.push({ seq: ++seq, kind: 'heal', targetId: tid, amount: Math.max(0, Math.round(heal)) });
+    });
+    var self = buildSelfEffect(sk, eff, ctx, opts);
+    if (self) instances.push(Object.assign({ seq: ++seq, kind: 'status', targetId: selfId }, self));
+    // ⚠️ Une compétence sans AUCUN effet chiffré (Fondu au noir, Voile dimensionnel,
+    // Ailes de Givre) produirait une action VIDE : le MJ ne verrait rien, et une comp
+    // à 40 mana / CD 3 resterait hors de son contrôle — pire qu'avant la refonte.
+    // Elle reçoit donc une instance narrative sur son lanceur, à accepter ou rejeter.
+    if (!instances.length) instances.push({ seq: 1, kind: 'status', targetId: selfId,
+      narrative: true, label: opts.narrative || 'Effet géré en table' });
+    return { instances: instances,
+      cost: { mana: Math.max(0, sk.mana | 0), manaPer: Math.max(0, sk.manaPer | 0),
+        manaMax: Math.max(0, eff.mana | 0),
+        cdPrev: opts.cdPrev != null ? opts.cdPrev : null } };
+  }
+
+  /* Remboursement d'une action rejetée. `mode` :
+       'cancel'   — « ↺ Annuler la compétence » : tout retiré
+       'instance' — « ✕ » sur une instance
+       'fail'     — « ⊘ Échec » : tout retiré, RIEN rendu (l'action a eu lieu, elle rate)
+     Règles (§6 de la spec, arbitrage MJ du 2026-09-06) :
+       · une instance rejetée alors que d'autres restent ne rend QUE `manaPer`
+         (mana facturé à la cible), qui vaut 0 pour toutes les comps actuelles ;
+       · rejeter la DERNIÈRE instance revient à annuler la compétence → tout rendu ;
+       · mais si le MJ a déjà APPLIQUÉ une instance, la compétence a eu lieu : plus
+         rien n'est rendu, jamais. Sans ce garde-fou une salve sur 3 gnolls dont 2
+         meurent serait remboursée. */
+  function actionRefundPlan(action, mode) {
+    if (!action || mode === 'fail') return null;
+    var cost = action.cost || {};
+    var applied = Math.max(0, action.appliedCount | 0);
+    var remaining = action.instances ? Object.keys(action.instances).length : 0;
+    var full = { attackerId: action.attackerId, attackerName: action.attackerName || '',
+      skillId: action.skillId, skillName: action.skillName || action.skillId,
+      mana: Math.max(0, cost.mana | 0), manaMax: Math.max(0, cost.manaMax | 0),
+      cdPrev: cost.cdPrev != null ? cost.cdPrev : null, restoreCd: true };
+    if (!full.attackerId) return null;
+    if (applied > 0) return null;
+    if (mode === 'instance' && remaining > 1) {
+      var per = Math.max(0, cost.manaPer | 0);
+      if (!per) return null;
+      return Object.assign({}, full, { mana: per, restoreCd: false });
+    }
+    if (!full.mana && full.cdPrev == null && !cost.mana) {
+      // Attaque de base : ni mana ni cooldown, rien à rendre.
+      if (action.source === 'basic') return null;
+    }
+    return full;
+  }
+  /* Mana après remboursement : jamais au-dessus du plafond du lanceur, jamais en
+     dessous de son mana courant (il a pu boire une potion entre-temps). Sans
+     plafond connu (`max` à 0), on rend simplement la somme. */
+  function refundManaValue(cur, amount, max) {
+    const c = Math.max(0, cur | 0);
+    const cap = (max | 0) > 0 ? Math.max(c, max | 0) : c + Math.max(0, amount | 0);
+    return Math.min(c + Math.max(0, amount | 0), cap);
+  }
+
   /* Déblocage des compétences par niveau : active n° i (0-based) requiert le niveau i+1. */
   function skillUnlocked(index, level) {
     return (Number(level) || 0) >= (Number(index) || 0) + 1;
@@ -1618,6 +1823,8 @@
     INIT_DIE, rollInitiative, initiativeTotal, initiativeStatus, initiativeReady,
     combatantJoinRound, initiativeJoinOnValidate, initiativeSlots, slotParticipants, initiativeState,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
+    EFFECT_LABEL, hasSelfEffect, skillTargeting, castSelectionValid, buildSelfEffect,
+    buildCastPlan, actionRefundPlan, refundManaValue,
     BASIC_MODES, basicMode, basicModeDamage,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
