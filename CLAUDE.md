@@ -94,7 +94,7 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   du multiplicateur entier, il faudrait alors un plancher artificiel. Bornée à 100 %.
   ⚠️ **Appliquée à la RÉSOLUTION MJ, jamais au cast** : le crit est roulé côté joueur, mais la cible
   peut changer (`EnemyAttackModal`) et seul le MJ voit les stats du défenseur. Les deux sites sont
-  `PendingHitRow` (joueur→ennemi, lit `enemy.rescrit`) et `EnemyAttackModal` (PNJ→PJ via
+  `DamageInstanceRow` (joueur→ennemi, lit `enemy.rescrit`) et `EnemyAttackModal` (PNJ→PJ via
   `mjLive(...).eff.rescrit`, PNJ→PNJ via le champ de l'ennemi).
   **`habSplit(F,H,C,split)`** / **`defaultHabSplit(F,H,C)`** / `HAB_DESTS` (purs, testés) =
   **répartition de l'Habileté** : chaque point donne, au choix du joueur, **+5 AD**, **+5 AP** ou
@@ -164,6 +164,16 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   + `planCoinConvert(coins, from, to, n)` (pur, testé : conversion **dans les deux sens** ; vers le bas =
   exact, vers le haut = seuls les multiples entiers passent et **le reste est laissé dans la bourse**,
   jamais arrondi ni perdu ; `n` borné au solde ; renvoie `null` si rien n'est convertible).
+  **ACTIONS EN ATTENTE** (spec `docs/superpowers/specs/2026-09-06-actions-en-attente-design.md`) :
+  `EFFECT_LABEL`, `hasSelfEffect(sk)`, **`skillTargeting(sk, eff, ctx)`** (ce qu'une comp peut cibler,
+  effet par effet — **dérivée des champs existants de `SKILLS`**, surchargeable par `sk.targeting` ;
+  ⚠️ elle ÉVALUE `sk.dmg` au lieu de tester `!!sk.dmg`, sinon les cinq comps à `dmg: () => null`
+  héritent d'une ligne « Dégâts » vide), **`castSelectionValid(targeting, selection)`**,
+  **`buildSelfEffect(sk, eff, ctx, opts)`** (buff/bouclier/compteurs/transfo snapshotés),
+  **`buildCastPlan(sk, eff, ctx, selection, opts)`** (→ `{cost, instances[]}`, un `rollCrit` par
+  instance, `rng` injectable), **`actionRefundPlan(action, mode)`** (`'cancel'`/`'instance'`/`'fail'`)
+  + `refundManaValue(cur, amount, max)` (plafonne au max snapshoté au cast, ne baisse jamais le
+  mana courant).
   **Modes d'attaque de base** : `BASIC_MODES` (6 gestes à ratio FIXE sur la puissance d'attaque —
   Attaque 100 % / Coup retenu 50 % / Coup de poing 25 % / Botter le cul 15 % / Bousculade 10 % /
   Gifle 5 %) + `basicMode(id)` (id inconnu → attaque pleine) + `basicModeDamage(power, id)`.
@@ -219,13 +229,21 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   alimente l'éditeur MJ `CoinEditor`). `COIN_KEYS` = les 4 dénominations (source unique).
   `useSharedTurn` (tour partagé ; `resetCombat` **async** : efface counters/cooldowns/`skillBuffs`/`combat/log`
   ET **ramène PV/bouclier aux caps de base** via `computeEffective` sans skillBuffs). **Plateau partagé** :
-  `useMJEnemies` (ennemis Firebase), `usePendingHits` (file d'attaques), orchestrateur `applyHitToEnemy`
+  `useMJEnemies` (ennemis Firebase), **`usePendingActions`** (file d'ACTIONS ; `addAction(action,
+  instances)` écrit l'action et ses instances EN UNE opération + `removeAction` +
+  **`resolveInstance(action, instId, applied)`** — retire une instance, incrémente `appliedCount`,
+  et la DERNIÈRE instance emporte le nœud entier), **`applyStatusToCharacter(charId, skillId,
+  payload)`** (SEUL endroit où un effet de compétence entre en base depuis le 2026-09-06 : buff,
+  bouclier, compteurs, transfo, soin PV — une instance `narrative` n'écrit rien), **`healEnemy`**,
+  **`refundCast(plan)`** (rend mana + cooldown d'une action annulée : `getSnapshot` puis écriture
+  `manaCur` + `cooldowns/$skillId` ; `plan.restoreCd` distingue une annulation d'un simple `manaPer`),
+  orchestrateur `applyHitToEnemy`
   (`mitigateDamage`→`applyDamageToPools`→PV ennemi) + son miroir **`applyHitToCharacter(charId, {armure,
   resmag, hpCur, shield}, dmg, type, letha, turn, counters)`** (même chaîne sur un **PJ** : bouclier puis
   PV, écrit `hpCur`/`shield`, renvoie `{applied, hpCur, shield, ko, glaciation}`).
   ⚠️ **Le passif Glaciation de Rathael est DANS cet orchestrateur**, pas chez ses appelants : c'est le
   seul endroit où « un PJ subit des dégâts » est vrai, et ses deux appelants (`EnemyAttackModal` pour
-  un coup de PNJ, `PendingHitsPanel` pour un coup d'un autre PJ) doivent le déclencher à l'identique.
+  un coup de PNJ, `PendingActionsPanel` pour un coup d'un autre PJ) doivent le déclencher à l'identique.
   ⚠️ L'appelant fournit le `eff` (via `mjLive`) : seul le MJ voit la fiche complète d'un PJ — c'est
   la raison pour laquelle la résolution joueur→joueur ne peut se faire que chez lui, et pourquoi elle
   n'a demandé **aucune règle RTDB**. **Journal** : `pushLog(text,kind)`/`useCombatLog()`
@@ -311,27 +329,36 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Caché/Barre/Exact + presets % en mode Barre → écrit `reveal`/`revealPct`),
   `EnemyAttackModal` (ennemi→joueur : **`rollCrit`** au lancement [base vs crit + badge 🎲, bouton « relancer »],
   champ **léthalité** éditable → `mitigateDamage`(+léthalité)+`applyDamageToPools`, écrit `hpCur`/`shield`
-  du joueur ciblé en Firebase, KO à 0). **Section « Attaques en attente »** (`PendingHitsPanel`,
-  file `combat/pendingHits`) : un joueur cast une comp à dégâts (ou frappe) → propose une attaque sur la
-  cible choisie. **La cible peut être un PNJ OU un PJ** (2026-09-06) : `PendingHitsPanel.resolveTarget`
-  la résout en un objet uniforme `{kind:'enemy'|'pj', name, rescrit, …}` — un PNJ vient de
-  `combat/enemies`, un PJ de `CHARACTERS` + `mjLive(c, stOf(id), turn)`, et c'est de là que sort sa
-  rés. critique. `PendingHitRow` lisait `enemies.find(...)` et affichait **« cible disparue »** avec
-  *Appliquer* désactivé pour tout PJ visé. Appliquer → `applyHitToEnemy` ou `applyHitToCharacter`.
+  du joueur ciblé en Firebase, KO à 0). **Section « Actions en attente »** (`PendingActionsPanel`,
+  file `combat/pendingActions`, refonte du 2026-09-06) : un joueur dépose **UNE action** composée de
+  **N instances** (`damage` / `heal` / `status`), chacune sur une cible. Rendu : **une carte encadrée
+  par action** (`PendingActionCard` — bordure gauche à la couleur du lanceur, en-tête
+  « lanceur · compétence », badge « N instances », coût, round) + une ligne par instance avec sa
+  pastille de couleur (`INSTANCE_TONE` : rouge dégâts / vert soin / orange statut) et son compteur
+  `2/3` — c'est l'aide visuelle qui permet de repérer les instances d'une même compétence.
+  Trois lignes distinctes : `DamageInstanceRow` (crit, type, léthalité, rés. critique de la cible),
+  `HealInstanceRow` (un montant, rien d'autre : ni armure ni crit), `StatusInstanceRow` (label
+  lisible ; « Valider » pour une instance narrative, qui n'écrit rien). Pied de carte :
+  **↺ Annuler la compétence** (rembourse) / **⊘ Échec** (retire tout sans rembourser) ; **✕** par instance.
+  **La cible peut être un PNJ OU un PJ** : `PendingActionsPanel.resolveTarget` la résout en un objet
+  uniforme `{kind:'enemy'|'pj', name, rescrit, …}` — un PNJ vient de `combat/enemies`, un PJ de
+  `CHARACTERS` + `mjLive(c, stOf(id), turn)`, et c'est de là que sort sa rés. critique.
+  Appliquer → `applyHitToEnemy` / `applyHitToCharacter` / `healCharacter` / `healEnemy` /
+  `applyStatusToCharacter` selon le `kind`.
   ⚠️ **Garde `target.loaded`** : sans état Firebase, `mjLive` retombe sur les PV **de référence**
   (`c.hpCur` est un RATIO, pas une valeur absolue) — appliquer à cet instant écraserait les vrais PV
   du joueur. *Appliquer* reste désactivé tant que la fiche n'est pas arrivée.
   **Le crit/surcrit est roulé par l'app au cast** (`rollCrit`) : la carte MJ affiche **base vs crit**
   (+ badge 🎲 CRIT ×mult, profil `critInfo`), pré-remplit le champ avec le nombre roulé ; le MJ ajuste à son
   d20 de toucher Roll20, règle le type **+ la léthalité** (réduit AR/RM), puis **Appliquer**
-  (`applyHitToEnemy(enemy,dmg,type,letha)`) ou **Rejeter**. Cartes : barre de bouclier
+  (`applyHitToEnemy(enemy,dmg,type,letha)`) ou **✕**. Cartes : barre de bouclier
   **toujours affichée** (0/0 si vide) ; **pulsation du cadre** selon les PV (classe `mj-card-warn`
   orange < 50%, `mj-card-danger` rouge < 25% — keyframes CSS dans `runeterra.css`).
   **Compteur de tour PARTAGÉ** dans l'en-tête (`useSharedTurn`, Firebase `combat/turn` :
   Fin de tour / précédent / **⟲ Combat** = reset tour + toutes charges/cooldowns + skillBuffs + journal)
   — pilote les CD des compétences. Sous chaque carte joueur : ligne **charges + cooldowns actifs**
   (lecture MJ). **`CombatLog`** (journal de combat partagé) affiché sous le plateau, « Vider » staff ;
-  `pushLog` alimenté à la résolution joueur→ennemi (`PendingHitsPanel`), ennemi→joueur (`EnemyAttackModal`),
+  `pushLog` alimenté à la résolution joueur→ennemi (`PendingActionsPanel`), ennemi→joueur (`EnemyAttackModal`),
   au bouton **« Subir »** (`EnemyCard.applySubir`, dégâts manuels MJ) et au **cast de compétence** (côté joueur, voir `pages-competences.jsx`).
 - `pages-admin.jsx` — page Admin (staff) : attribution rôle + perso par compte (`AdminUserRow`),
   **gestion de l'inventaire par perso** (`CharInventoryAdminPanel` : sélecteur de perso →
@@ -417,9 +444,17 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   Puis carte **Passif** (stepper de compteur + effet de stat en vert) + cartes **Actives** (mana, **badge CD statique** dans le coin
   [`1×/tour` / `CD N tours` / `1×/combat` / `Sans CD`, visible sans lancer la comp] + badge d'état
   prêt/tour, dégâts live, « Lancer »).
-  `cast(sk, ctx, dmg, nbHits)` **respecte les variables d'attaque** (1er coup/camouflé/cases/cibles) ; une comp
-  à **N cibles génère N attaques en attente** (un coup = une carte, chacune son `rollCrit`). **Garde « pas de
-  cible »** : toute action à dégâts sans cible → toast + abandon (avant mana/cooldown). Données
+  **CIBLAGE PAR EFFET** (refonte du 2026-09-06) : chaque carte porte un bloc « Cibles », **une ligne
+  par effet** (`TargetRow` — chips de cibles + « + ajouter » filtré par camp), alimenté par
+  `skillTargeting`. Une comp mixte (Jett C2 : blesse les ennemis ET soigne les alliés) se cible
+  effet par effet dans le MÊME cast. L'attaque de base utilise le **même** bloc, borné à `max: 1`.
+  ⚠️ Le sélecteur global « Cible » du bandeau a **disparu** : il ne pouvait pas exprimer « ces deux
+  gnolls prennent les dégâts, Urskaar prend le soin ». Le bandeau ne montre plus que l'état du plateau.
+  ⚠️ **`nbTargets` a disparu de `SKILL_VARS`** : le nombre de cibles EST la longueur de la sélection.
+  `cast(sk, ctx, selection)` **respecte les variables d'attaque** (1er coup/camouflé/cases) et ne fait
+  plus que trois choses : vérifier (`skillUnlocked` + `castSelectionValid`), payer (mana + cooldown),
+  déposer l'action (`buildCastPlan` → `addAction`). Il renvoie `true` si l'action est partie, ce qui
+  vide la sélection de la carte. Données
   `SKILLS` (data.jsx) → `dmg*` pures de `game-logic.js` (transcrites des scripts `.gs`, **le script prime**).
   Compteurs/cooldowns en `state/counters`+`state/cooldowns` (cooldown = **`readyAt`** = n° de tour de dispo) ;
   variables d'attaque (1er coup / furtif / cases / cibles) en état local de carte. **Persos câblés** :
@@ -430,21 +465,22 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (`glaciationOnHit(counters,turn)`, +1/coup, max 5, tout stackable en 1 tour ; **+2/coup pendant Souverain Glacial**
   tant que `turn ≤ counters.souverainUntil` [fenêtre posée au cast via `sk.transform.turns`] ; appelé dans
   `EnemyAttackModal.submit` ; marque `glaciationHitTurn`). **Perte auto −3** en fin de tour s'il n'a pas été touché
-  (`glaciationDecay(counters, endingTurn)`, dans `useSharedTurn.nextTurn`). Le stepper reste un override manuel. `cast` gère **`selfBuffFlat`** (buff
-  plat, ex. Mur de Givre +20 AR/RM au niv 2) et **`counterBump`** (incrément conditionnel de compteur au cast) ;
-  l'`eff` de la page Combat inclut les `skillBuffs` (aligné fiche/équip). **Durée de buff** : une comp avec
-  `duration:{min,max}` (ex. Mur de Givre 1/2 tours) affiche un sélecteur sur sa carte ; `cast` snapshote
-  `until = turn + (durée−1)` dans le buff → auto-expiration (filtrée par `sumSkillBuffs(buffs, turn)`, sans purge).
-  Visible des 3 rôles, sélecteur
+  (`glaciationDecay(counters, endingTurn)`, dans `useSharedTurn.nextTurn`). Le stepper reste un override manuel.
+  ⚠️ **`selfBuff` / `selfBuffFlat` / `shield` / `counterBump` / `counterSet` / `transform` ne sont PLUS
+  appliqués au cast** (refonte du 2026-09-06) : `buildSelfEffect` les **snapshote** dans une instance
+  `status`, et c'est `applyStatusToCharacter` — côté MJ — qui les écrit. Un buff n'apparaît donc sur la
+  fiche du joueur **qu'après** la validation du MJ. **Durée de buff** : une comp avec `duration:{min,max}`
+  (ex. Mur de Givre 1/2 tours) affiche un sélecteur sur sa carte ; `buildSelfEffect` snapshote
+  `until = turn + (durée−1)` → auto-expiration (filtrée par `sumSkillBuffs(buffs, turn)`, sans purge).
+  L'`eff` de la page Combat inclut les `skillBuffs` (aligné fiche/équip). Visible des 3 rôles, sélecteur
   de perso pour le staff. Logique pure + testée dans `game-logic.js`. **Plateau partagé** : bandeau
-  ennemis en lecture seule (`useMJEnemies`) + sélecteur de **cible** ; le cast d'une comp à dégâts
-  avec cible **roule le crit/surcrit** (`rollCrit`) et **snapshot la léthalité** (`eff.letha`) dans
-  l'attaque en attente (`usePendingHits.addHit`) que le MJ résout. **Buffs sur soi** :
-  une comp avec `selfBuff` (% de la stat de base) écrit `state/skillBuffs` (mods plats) → panneau
-  **« Effets de combat actifs » en orange** (`--skillbuff`) + boost en temps réel via `sumSkillBuffs`→
-  `computeEffective` ; un `selfBuff.hp` **soigne aussi** les PV au cast (la jauge se remplit) ; une comp
-  avec `shield` ajoute le bouclier au pool au cast. **Chaque cast journalise** (`pushLog` : buff/soin/bouclier
-  agrégés, ou attaque visée « en attente MJ », ou lancer simple). **Journal de combat** (`CombatLog`, lecture seule)
+  ennemis en lecture seule (`useMJEnemies`) ; chaque instance de dégâts **roule son propre crit/surcrit**
+  (`rollCrit`) et **snapshote les deux léthalités** (`eff.letha`/`eff.lethaMag`) dans l'action en attente
+  (`usePendingActions.addAction`) que le MJ résout. **Effets de combat actifs** : panneau
+  **en orange** (`--skillbuff`) alimenté par `state/skillBuffs` → boost temps réel via `sumSkillBuffs`→
+  `computeEffective`. **Chaque cast journalise UNE entrée** (`pushLog` + `instanceSummary` :
+  « 120 dégâts → Gnoll A, Gnoll B · 95 soin → Urskaar — en attente MJ »), et chaque résolution du MJ
+  en journalise une autre. **Journal de combat** (`CombatLog`, lecture seule)
   affiché en bas. **Déblocage par niveau** : active n° *i* → niveau *i* requis (`skillUnlocked`), carte
   verrouillée grisée + 🔒 ; **stepper « Niveau » staff** dans l'en-tête (`setField('level')`, niveau
   effectif = `state.level ?? char.level`, pilote aussi passif + budget runes).
@@ -514,8 +550,12 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   inscrit, écriture au niveau `$itemId` ; `sharedCoins` = R/W tout participant inscrit,
   `.validate` par dénomination (nombre ≥ 0) ; `combat/turn` = lecture tout inscrit, **écriture staff**
   (nombre ≥ 1) — tour partagé ; `combat/enemies` = lecture inscrits, **écriture staff** (ennemis
-  partagés) ; `combat/pendingHits` = lecture inscrits, **écriture tout inscrit** (un joueur propose
-  une attaque ; le staff applique/supprime) ; `combat/log` = lecture+**écriture tout inscrit**
+  partagés) ; **`combat/pendingActions` = lecture inscrits, écriture STAFF ou PROPRIÉTAIRE**
+  (`attackerId === son charId`, lu dans `newData` à la création et dans `data` à la suppression) —
+  un joueur dépose son action, le MJ la résout. ⚠️ Le `.write` est sur **`$actionId`**, ce qui couvre
+  la suppression du nœud entier ET celle d'une instance : le geste du MJ porte exactement sur le
+  nœud qui donne le droit. ⚠️ Durcissement par rapport à l'ancien `pendingHits`, où **n'importe quel
+  inscrit pouvait supprimer l'attaque de n'importe qui** ; `combat/log` = lecture+**écriture tout inscrit**
   (`.validate` `text` string) — journal de combat partagé ; **`economyLog` = lecture STAFF, écriture tout
   inscrit** (`.validate` `text` string) — journal d'économie réservé au MJ. NB : le `.read` staff y est écrit
   **explicitement** bien qu'il soit déjà hérité de `campaign/runeterra` — l'intention « MJ seul » doit rester
@@ -578,8 +618,17 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 /campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, crit, dcrit, rescrit, lethaAD, lethaAP, reveal, revealPct } ; lecture inscrits, écriture staff
                                               crit (%) + dcrit (% dég. crit, défaut 200) + lethaAD/lethaAP (léthalité physique/magique) = crit/léthalité ennemi→joueur (rollCrit au lancement ; léthalité AD→armure si physique, AP→rés. mag si magique, via mitigateDamage)
                                               reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
-/campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, lethaMag, crit, dcrit, vol, sapience, omni, hpMax, targetId, modeId, ts } ; crit roulé au cast ; le MJ ajuste+applique
-                                              **targetId = un PNJ (`combat/enemies`) OU un PJ (`charId`)** depuis 2026-09-06 ; la règle ne valide que sa présence, donc rien à republier
+/campaign/runeterra/combat/pendingActions/{actionId}/   ← ACTIONS proposées par les joueurs (remplace pendingHits depuis 2026-09-06)
+    attackerId, attackerName, skillId, skillName, source:'skill'|'basic', round, ts
+    cost: { mana, manaPer, manaMax, cdPrev }   ← le coût appartient à l'ACTION, pas à l'instance : N cibles = un seul mana et un seul cooldown
+                                                  cdPrev = cooldown d'AVANT le cast (absent = la comp était prête, Firebase efface les null)
+                                                  manaPer = mana facturé PAR CIBLE (0 partout aujourd'hui ; c'est la seule raison de rembourser une instance isolée)
+    appliedCount: 0   ← SEUL champ muté après création ; dès qu'il dépasse 0 plus RIEN n'est jamais remboursé (la comp a eu lieu)
+    instances: { {instId}: { id, seq, kind:'damage'|'heal'|'status', targetId, label, … } }
+        targetId = un PNJ (`combat/enemies`) OU un PJ (`charId`) ; pour un `status` c'est le lanceur lui-même
+        kind 'damage' : computedDmg, critDmg, didCrit, critMult, type, letha, lethaMag, crit, dcrit, vol, sapience, omni, hpMax, modeId
+        kind 'heal'   : amount
+        kind 'status' : mods, until, shield, counters, transformUntil, hpGain, hpMax — ou narrative:true (effet en table, « Valider » n'écrit rien)
                                               modeId = mode d'attaque de base (`BASIC_MODES`) quand `skillId === 'basic'` ; absent = attaque pleine
                                               letha/lethaMag = les DEUX léthalités snapshotées au cast ; le champ MJ affiché suit le type choisi (physique→letha, magique→lethaMag, brut→0)
 /campaign/runeterra/economyLog/{id}   ← journal d'ÉCONOMIE { id, ts, text, kind:'gold'(transfert)|'buff'(gain)|'debuff'(retrait) }
@@ -707,8 +756,94 @@ arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, 
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
 
 ## État actuel (2026-09-06)
+- **Actions en attente — refonte du contrat « un joueur lance quelque chose »** — cache
+  `20260906-4`, **262 tests verts** (game-logic 251 + auth 11), ⚠️ **RÈGLES RTDB À
+  REPUBLIER** (nœud `pendingActions`, `pendingHits` retiré), **aucune migration**.
+  📄 Spec et source de vérité : `docs/superpowers/specs/2026-09-06-actions-en-attente-design.md`.
+  **Le défaut de modèle** : `combat/pendingHits` disait « un joueur propose UN coup de
+  dégâts sur UNE cible ». Tout le reste **contournait le MJ** — `sk.heal` (Jett C2) était
+  affiché et appliqué nulle part ; les statuts (Smith C2 « Fondu au noir », Rathael C2
+  « Mur de Givre »), boucliers, compteurs et transformations s'écrivaient **au cast**, sans
+  que le MJ puisse rien en faire ; une comp à N cibles envoyait N coups sur la MÊME cible ;
+  une comp mixte (blesse les ennemis ET soigne les alliés) était inexprimable.
+  **Le nouveau contrat** : un joueur propose **UNE ACTION** composée de **N INSTANCES**,
+  chacune portant **UN effet** (`damage` / `heal` / `status`) sur **UNE cible**.
+  ⚠️ **INVERSION CENTRALE — `cast()` n'écrit plus AUCUN effet.** Il ne fait que trois
+  choses : vérifier la légalité, payer (mana + cooldown), déposer l'action. Dégâts, soins,
+  buffs, boucliers, compteurs et transformations sont **tous** appliqués par le MJ à la
+  résolution. C'est ce qui rend le rejet **exact** : un effet jamais appliqué n'a pas
+  besoin d'être défait. **Ne pas réintroduire d'écriture d'effet dans `cast()`** « pour le
+  confort du joueur » — la variante « appliquer au cast puis annuler » a été écartée
+  explicitement (§12 de la spec) : défaire un soin est faux dès que la cible a été touchée
+  entre-temps, et défaire un `counterSet` demanderait de snapshoter chaque compteur.
+  Contrepartie assumée : un buff n'apparaît sur la fiche du joueur qu'après le clic du MJ.
+  ⚠️ **Le coût appartient à l'ACTION, pas à l'instance** — c'est le pivot de tout le
+  remboursement. Règles tranchées par le MJ :
+  « ↺ Annuler la compétence » = tout retiré, **mana + cooldown rendus** ; « ✕ » sur une
+  instance parmi d'autres = **rien rendu** (sauf `manaPer`) ; « ✕ » sur la **dernière**
+  instance = équivaut à une annulation → tout rendu ; **mais si le MJ a déjà APPLIQUÉ une
+  instance (`appliedCount > 0`), plus rien n'est jamais rendu** — sans ce garde-fou une
+  salve sur 3 gnolls dont 2 meurent serait remboursée. « ⊘ Échec » = tout retiré, **rien
+  rendu** (la comp a été lancée mais est parée / contrée / dissipée).
+  ⚠️ **`appliedCount` est le SEUL champ muté après création**, et il remplace le bricolage
+  `castUsed` posé sur les coups frères le matin même — qui n'existait que faute d'un nœud
+  parent où compter.
+  ⚠️ **Une comp sans AUCUN effet chiffré reçoit une instance NARRATIVE** sur son lanceur
+  (`narrative: true`, label = 1re phrase de `sk.note`). Sans ça, Fondu au noir (40 mana,
+  CD 3), Voile dimensionnel (80) et Ailes de Givre (100) écriraient une action **vide** et
+  resteraient hors du contrôle du MJ — pire qu'avant la refonte. « Valider » n'écrit rien
+  (accusé de réception) ; « ⊘ Échec » retire sans rembourser.
+  ⚠️ **`skillTargeting` doit ÉVALUER `sk.dmg`, pas tester `!!sk.dmg`** : cinq compétences
+  déclarent `dmg: () => null` (Fondu au noir, Ralliement, Mur de Givre, Ailes de Givre,
+  Souverain Glacial) et hériteraient d'une ligne « Dégâts » vide exigeant une cible.
+  ⚠️ **Garde globale de `castSelectionValid`** : une comp dont TOUS les effets sont
+  optionnels (Alignement de séquence, `min: 0` des deux côtés) passerait la boucle avec
+  zéro cible et partirait en « effet en table » — 40 mana pour rien.
+  **Côté joueur** : le sélecteur global « Cible » a **disparu** du bandeau (il ne pouvait
+  pas exprimer « ces deux gnolls prennent les dégâts, Urskaar prend le soin »). Il est
+  remplacé par un bloc « Cibles » **sur chaque carte**, une ligne par effet
+  (`TargetRow`), liste filtrée par camp. **L'attaque de base utilise le MÊME bloc**
+  (décision MJ) borné à `max: 1` — une seule constante à changer le jour d'un balayage.
+  ⚠️ **`nbTargets` a disparu de `SKILL_VARS`** : le nombre de cibles EST la longueur de la
+  sélection. Plus de désaccord possible entre un « 3 » tapé et une seule cible choisie.
+  **Côté MJ** : `PendingActionsPanel` → **une carte encadrée par action** (bordure gauche
+  à la couleur du lanceur, en-tête « lanceur · compétence », badge « N instances », coût,
+  round) + une ligne par instance avec sa pastille `🔴/🟢/🟠` et son compteur `2/3` —
+  c'est l'aide visuelle demandée pour repérer les instances d'une même compétence.
+  Trois lignes distinctes : `DamageInstanceRow` (crit, type, léthalité, rés. critique de la
+  cible — inchangé), `HealInstanceRow` (un simple montant), `StatusInstanceRow`.
+  Livré : `EFFECT_LABEL`, `hasSelfEffect`, `skillTargeting`, `castSelectionValid`,
+  `buildSelfEffect`, `buildCastPlan`, `actionRefundPlan` (game-logic, purs, **26 tests**) ;
+  `usePendingActions` (+ `resolveInstance`), `healEnemy`, `applyStatusToCharacter`,
+  `refundCast` (data-state) ; `targeting` déclaré sur 6 comps de `data.jsx`.
+  🐞 **Ramassé au passage** : `resetCombat` (« ⟲ Combat ») **ne purgeait pas la file**
+  (défaut antérieur, depuis `pendingHits`) — une attaque non résolue survivait à un nouveau
+  combat et restait applicable avec des dégâts calculés sur des stats d'avant.
+  ⚠️ **Durcissement de règle au passage** : `pendingHits/$hitId` laissait **n'importe quel
+  inscrit supprimer l'attaque de n'importe qui**. `pendingActions/$actionId` restreint
+  l'écriture au staff **ou** au propriétaire (`attackerId === son charId`), en lisant
+  `newData` à la création et `data` à la suppression.
+  ⚠️ **Le `.write` est sur `$actionId`**, ce qui couvre la suppression du nœud entier ET
+  celle d'une instance : le geste du MJ porte exactement sur le nœud qui donne le droit
+  (le piège « `.write` sur l'enfant joker n'autorise pas le parent » est évité par
+  construction). Le `.validate` `hasChildren` se réévalue sur la donnée **fusionnée**, et
+  Firebase n'évalue pas les `.validate` d'une suppression.
+  👉 **RESTE À FAIRE** : (1) **publier les règles AVANT de pousser le code** — sans le nœud
+  `pendingActions`, le premier cast prend `PERMISSION_DENIED` et le joueur perd son mana
+  sans que rien n'arrive au MJ ; (2) la recette à deux sessions simultanées (§14 de la
+  spec, 7 cas).
+  👉 **Hors périmètre** : zones d'effet géométriques (le MJ désigne les cibles, l'app ne
+  modélise pas de plateau) ; les actions des PNJ (`EnemyAttackModal`) restent hors file,
+  le MJ étant déjà des deux côtés du clic ; les débuffs sur cible (stun, saignement,
+  marque) restent narratifs — le modèle les accueille (`status` sur une cible ennemie)
+  mais aucun n'est chiffré dans `SKILLS`.
 - **Modes d'attaque de base + ciblage des PJ dans l'onglet Combat** — cache `20260906-2`,
   **234 tests verts** (game-logic 223 + auth 11), **aucune règle RTDB à republier**, **aucune migration**.
+  ⚠️ **ENTRÉE HISTORIQUE, en partie PÉRIMÉE** : la refonte « Actions en attente » du même jour a
+  remplacé `combat/pendingHits` par `combat/pendingActions`, `PendingHitRow`/`PendingHitsPanel` par
+  `PendingActionCard`/`PendingActionsPanel`, et la phrase « aucune règle RTDB nouvelle » ne vaut plus
+  (il y en a une). **Ce qui reste vrai** : les `BASIC_MODES` eux-mêmes, le ruling « un mode réduit ne
+  roule pas le dé », et le fait qu'un PJ soit ciblable par un PJ.
   **Modes** : `BASIC_MODES` (game-logic, pur, testé) = 6 gestes à ratio FIXE sur la puissance
   d'attaque — Attaque 100 % / Coup retenu 50 % / Coup de poing 25 % / Botter le cul 15 % /
   Bousculade 10 % / Gifle 5 % — + `basicMode(id)` (id inconnu → attaque pleine) et
@@ -881,7 +1016,7 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   Ne pas « optimiser » en persistant un `activeId`.
   ⚠️ **KO DIFFÉRÉ (règle MJ)** : un combattant tombé à 0 PV **pendant son propre créneau** joue quand
   même son action ; tombé **avant**, il est sauté. Résolu par un horodatage `ko:{round,init}` posé aux
-  3 endroits où des PV tombent à 0 (`PendingHitsPanel`, `EnemyCard.applySubir`, `EnemyAttackModal`) —
+  3 endroits où des PV tombent à 0 (`PendingActionsPanel`, `EnemyCard.applySubir`, `EnemyAttackModal`) —
   c'est ce qui permet de garder la dérivation intégrale. Une entrée périmée est inoffensive
   (`slotParticipants` teste les PV d'abord, un ressuscité rejoue).
   ⚠️ **ARRIVÉE TARDIVE** : `joinRound` — un renfort lance son dé tout de suite mais n'entre qu'au
@@ -980,7 +1115,7 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   affichage fiche (**la 6e case « réservée » des stats secondaires est enfin occupée**), Équipement,
   Progression, assistant `npcStatsFromAttrs` et champ éditable de `EnemyCard` ;
   libellés `ATTRIBUTES` (data.jsx) remis à jour — ils annonçaient encore l'ancienne répartition ;
-  réduction appliquée dans `PendingHitRow` et `EnemyAttackModal` (badge `CRIT ×2,00 − R.Crit 15 % →
+  réduction appliquée dans `DamageInstanceRow` et `EnemyAttackModal` (badge `CRIT ×2,00 − R.Crit 15 % →
   ×1,85`, pré-remplissage du champ dégâts, mention au journal de combat).
   ⚠️ **`EnemyAttackModal` : la suggestion de dégâts suit la cible tant que le MJ n'a pas saisi son
   d20** (drapeau `touched`) — la cible y est modifiable, et écraser une saisie manuelle au changement
@@ -1218,7 +1353,7 @@ ont été **supprimées** une fois entièrement fusionnées — leur historique 
   3. **Léthalité magique** (`lethaMag`) — la seule stat réellement manquante. `letha` reste = **physique**
      (aucune migration : items/modifs/runes déjà en base gardent leur sens). `mitigateDamage` **inchangé**
      (il reçoit un scalaire ; l'appelant choisit selon le type) → zéro test de mitigation réécrit.
-     Les deux léthalités sont snapshotées au cast ; le champ MJ de `PendingHitRow` **suit le type choisi**
+     Les deux léthalités sont snapshotées au cast ; le champ MJ de `DamageInstanceRow` **suit le type choisi**
      (grisé en « brut »), symétrique de `EnemyAttackModal`. Vocabulaire unifié partout :
      « Léth. phys. » / « Léth. mag. » (les ennemis gardent leurs clés `lethaAD`/`lethaAP`, seuls les
      libellés changent).
