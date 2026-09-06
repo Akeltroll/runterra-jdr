@@ -164,6 +164,11 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   + `planCoinConvert(coins, from, to, n)` (pur, testé : conversion **dans les deux sens** ; vers le bas =
   exact, vers le haut = seuls les multiples entiers passent et **le reste est laissé dans la bourse**,
   jamais arrondi ni perdu ; `n` borné au solde ; renvoie `null` si rien n'est convertible).
+  **Modes d'attaque de base** : `BASIC_MODES` (6 gestes à ratio FIXE sur la puissance d'attaque —
+  Attaque 100 % / Coup retenu 50 % / Coup de poing 25 % / Botter le cul 15 % / Bousculade 10 % /
+  Gifle 5 %) + `basicMode(id)` (id inconnu → attaque pleine) + `basicModeDamage(power, id)`.
+  ⚠️ Rien à voir avec l'ancien `ATTACK_MODES` (posture, retirée — voir Décisions) : ce sont des
+  gestes choisis coup par coup. `crit:false` sur tous sauf `normal` = **le mode ne roule pas le dé**.
   Combat (vue MJ) : `mitigateDamage`
   (armure/resmag, AR-120, **léthalité** réduit AR/RM sans passer sous 0, brut sans réduction) +
   `applyDamageToPools` (bouclier puis HP, KO) — reproduit le moteur Excel. **Visibilité PV ennemis** :
@@ -215,7 +220,15 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `useSharedTurn` (tour partagé ; `resetCombat` **async** : efface counters/cooldowns/`skillBuffs`/`combat/log`
   ET **ramène PV/bouclier aux caps de base** via `computeEffective` sans skillBuffs). **Plateau partagé** :
   `useMJEnemies` (ennemis Firebase), `usePendingHits` (file d'attaques), orchestrateur `applyHitToEnemy`
-  (`mitigateDamage`→`applyDamageToPools`→PV ennemi) ; **journal** `pushLog(text,kind)`/`useCombatLog()`
+  (`mitigateDamage`→`applyDamageToPools`→PV ennemi) + son miroir **`applyHitToCharacter(charId, {armure,
+  resmag, hpCur, shield}, dmg, type, letha, turn, counters)`** (même chaîne sur un **PJ** : bouclier puis
+  PV, écrit `hpCur`/`shield`, renvoie `{applied, hpCur, shield, ko, glaciation}`).
+  ⚠️ **Le passif Glaciation de Rathael est DANS cet orchestrateur**, pas chez ses appelants : c'est le
+  seul endroit où « un PJ subit des dégâts » est vrai, et ses deux appelants (`EnemyAttackModal` pour
+  un coup de PNJ, `PendingHitsPanel` pour un coup d'un autre PJ) doivent le déclencher à l'identique.
+  ⚠️ L'appelant fournit le `eff` (via `mjLive`) : seul le MJ voit la fiche complète d'un PJ — c'est
+  la raison pour laquelle la résolution joueur→joueur ne peut se faire que chez lui, et pourquoi elle
+  n'a demandé **aucune règle RTDB**. **Journal** : `pushLog(text,kind)`/`useCombatLog()`
   (`combat/log`, ~30 derniers). **Journal d'économie SÉPARÉ** (`ECONOMY_LOG` = `campaign/runeterra/economyLog`) :
   `pushEconomyLog(text,kind)` + `useEconomyLog()` (lecture **staff only**, **jamais purgé par « ⟲ Combat »**,
   élagage à `LOG_MAX` via `staleLogIds` fait **à la lecture côté staff** — les joueurs n'ont que le droit
@@ -299,8 +312,16 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   `EnemyAttackModal` (ennemi→joueur : **`rollCrit`** au lancement [base vs crit + badge 🎲, bouton « relancer »],
   champ **léthalité** éditable → `mitigateDamage`(+léthalité)+`applyDamageToPools`, écrit `hpCur`/`shield`
   du joueur ciblé en Firebase, KO à 0). **Section « Attaques en attente »** (`PendingHitsPanel`,
-  file `combat/pendingHits`) : un joueur cast une comp à dégâts → propose une attaque sur un ennemi
-  ciblé. **Le crit/surcrit est roulé par l'app au cast** (`rollCrit`) : la carte MJ affiche **base vs crit**
+  file `combat/pendingHits`) : un joueur cast une comp à dégâts (ou frappe) → propose une attaque sur la
+  cible choisie. **La cible peut être un PNJ OU un PJ** (2026-09-06) : `PendingHitsPanel.resolveTarget`
+  la résout en un objet uniforme `{kind:'enemy'|'pj', name, rescrit, …}` — un PNJ vient de
+  `combat/enemies`, un PJ de `CHARACTERS` + `mjLive(c, stOf(id), turn)`, et c'est de là que sort sa
+  rés. critique. `PendingHitRow` lisait `enemies.find(...)` et affichait **« cible disparue »** avec
+  *Appliquer* désactivé pour tout PJ visé. Appliquer → `applyHitToEnemy` ou `applyHitToCharacter`.
+  ⚠️ **Garde `target.loaded`** : sans état Firebase, `mjLive` retombe sur les PV **de référence**
+  (`c.hpCur` est un RATIO, pas une valeur absolue) — appliquer à cet instant écraserait les vrais PV
+  du joueur. *Appliquer* reste désactivé tant que la fiche n'est pas arrivée.
+  **Le crit/surcrit est roulé par l'app au cast** (`rollCrit`) : la carte MJ affiche **base vs crit**
   (+ badge 🎲 CRIT ×mult, profil `critInfo`), pré-remplit le champ avec le nombre roulé ; le MJ ajuste à son
   d20 de toucher Roll20, règle le type **+ la léthalité** (réduit AR/RM), puis **Appliquer**
   (`applyHitToEnemy(enemy,dmg,type,letha)`) ou **Rejeter**. Cartes : barre de bouclier
@@ -387,8 +408,13 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   + `ConsumablesRow` (**potions buvables sans quitter l'onglet**). Maxima lus dans **`eff`**, la même chaîne
   que la fiche (items + runes + passif + `skillBuffs`) — jamais `base`, sinon un buff de PV afficherait une
   barre fausse. Carte **Attaque de base** (arme équipée → `eff.ad`/`eff.ap`, bouton
-  « Attaquer » → attaque en attente MJ, **sans mana ni cooldown**) + carte **Passif** (stepper de
-  compteur + effet de stat en vert) + cartes **Actives** (mana, **badge CD statique** dans le coin
+  « Attaquer » → attaque en attente MJ, **sans mana ni cooldown**) avec **rangée de modes**
+  (`BASIC_MODES`, game-logic : gifle 5 %, botter le cul 15 %… — état **local non persisté**, c'est un
+  choix par COUP ; le ratio s'applique à `eff.ad` **ou** `eff.ap`, une gifle de mage vaut 5 % d'AP).
+  ⚠️ Un mode réduit **ne roule pas** `rollCrit` — on ne neutralise pas le résultat après coup — et
+  l'attaque part avec `crit: 0` : la carte du MJ doit dire la vérité de CE coup, pas la fiche de
+  l'attaquant. Pas de plancher à 1 dégât : le MJ ajuste le champ à la résolution.
+  Puis carte **Passif** (stepper de compteur + effet de stat en vert) + cartes **Actives** (mana, **badge CD statique** dans le coin
   [`1×/tour` / `CD N tours` / `1×/combat` / `Sans CD`, visible sans lancer la comp] + badge d'état
   prêt/tour, dégâts live, « Lancer »).
   `cast(sk, ctx, dmg, nbHits)` **respecte les variables d'attaque** (1er coup/camouflé/cases/cibles) ; une comp
@@ -552,7 +578,9 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
 /campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, crit, dcrit, rescrit, lethaAD, lethaAP, reveal, revealPct } ; lecture inscrits, écriture staff
                                               crit (%) + dcrit (% dég. crit, défaut 200) + lethaAD/lethaAP (léthalité physique/magique) = crit/léthalité ennemi→joueur (rollCrit au lancement ; léthalité AD→armure si physique, AP→rés. mag si magique, via mitigateDamage)
                                               reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
-/campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, lethaMag, crit, dcrit, vol, sapience, omni, hpMax, targetId, ts } ; crit roulé au cast ; le MJ ajuste+applique
+/campaign/runeterra/combat/pendingHits/{id}   ← attaques proposées { attackerId, attackerName, skillId, skillName, type, computedDmg, critDmg, didCrit, critMult, letha, lethaMag, crit, dcrit, vol, sapience, omni, hpMax, targetId, modeId, ts } ; crit roulé au cast ; le MJ ajuste+applique
+                                              **targetId = un PNJ (`combat/enemies`) OU un PJ (`charId`)** depuis 2026-09-06 ; la règle ne valide que sa présence, donc rien à republier
+                                              modeId = mode d'attaque de base (`BASIC_MODES`) quand `skillId === 'basic'` ; absent = attaque pleine
                                               letha/lethaMag = les DEUX léthalités snapshotées au cast ; le champ MJ affiché suit le type choisi (physique→letha, magique→lethaMag, brut→0)
 /campaign/runeterra/economyLog/{id}   ← journal d'ÉCONOMIE { id, ts, text, kind:'gold'(transfert)|'buff'(gain)|'debuff'(retrait) }
                                               lecture STAFF (MJ/admin), écriture tout inscrit (un joueur qui prend au coffre doit pouvoir tracer)
@@ -603,7 +631,17 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
 - **Buffs de ressource remplissent la jauge** : `selfBuff.hp` **soigne** au cast (PV max + actuels),
   bouclier de comp affiché via jauge à max dynamique. **« ⟲ Combat » = retour total aux caps de base**
   (PV plafonnés au max normal, bouclier vidé, skillBuffs effacés).
-- **Système de mode de combat (offensif/équilibré/défensif) RETIRÉ** : attaques = dégâts pleins.
+- **Système de mode de combat (offensif/équilibré/défensif) RETIRÉ** — et définitivement abandonné
+  (`f509f42`) : c'était une **posture** choisie pour le tour, multipliant toute l'attaque et annulant
+  le crit.
+  ⚠️ **À ne pas confondre avec les `BASIC_MODES` ajoutés le 2026-09-06** (gifle, botter le cul…),
+  qui sont des **gestes nommés choisis coup par coup** sur la carte d'attaque de base. Le défaut
+  reste `normal` = **dégâts pleins** ; un mode réduit ne roule pas le dé de crit (ruling MJ).
+- **Ciblage d'un PJ par un PJ** (2026-09-06) : autorisé dans l'onglet Combat, en **dégâts seulement**.
+  Le joueur n'écrit jamais les PV de sa cible — il dépose une attaque en attente que **le MJ résout**.
+  ⚠️ **Soins ciblés sur allié et AOE = hors périmètre, renvoyés à la refonte des compétences**
+  (décision MJ) : la file d'attaques ne transporte que des dégâts, `sk.heal` (Jett C2) est affiché
+  mais **appliqué nulle part**, et une comp à N cibles envoie N coups sur la **MÊME** cible.
 - **Inventaire** : perso (par fiche) + commun (coffre partagé). Items `{id,cat,name,sub,qty,ic,img,type,mods}`,
   images dans `ATH/`. Bonus `mods` non encore branchés. **`type`** = emplacement explicite (saisi à
   l'édition si `cat==='Équipement'`), sinon `equipTypeForItem` infère. **Édition réservée au staff**
