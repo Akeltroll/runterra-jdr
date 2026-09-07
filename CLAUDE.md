@@ -227,7 +227,13 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   (slider horizontal plat du hub : carte active centrée/agrandie, voisines décalées/atténuées, wrap circulaire).
 - `data.jsx` — règles immuables : `CHARACTERS` (avec `inv`
   par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS` (caps §3, cap PJ 20), `ATTRIBUTES`, `RUNE`, `JOURNAL`,
-  `ITEM_CATALOG` (catalogue d'items pré-enregistrés pour l'ajout staff : `{cat,name,sub,ic,img,type}`).
+  `ITEM_CATALOG` (catalogue d'items pré-enregistrés pour l'ajout staff : `{cat,name,sub,ic,img,type}`
+  + `armorClass`/`weight`/`mods` sur les **18 armures de base** ajoutées le 2026-09-07).
+  ⚠️ **`ITEM_CATALOG` n'est qu'un FILET D'AMORÇAGE, pas la source de vérité du catalogue en jeu** :
+  `useItemCatalog` fait `catalogArray(map, !!inited, ITEM_CATALOG)` — dès que `campaign/runeterra/catalogInit`
+  est vrai (c'est le cas depuis longtemps), le tableau de `data.jsx` **n'est plus jamais lu**. Ajouter un objet
+  au jeu = écrire dans **Firebase** (page Admin, ou `firebase database:update`), pas éditer `data.jsx`.
+  Éditer les deux reste souhaitable pour qu'un ré-amorçage futur parte juste.
   `mkChar` attache `attrs` + `modifiers` (ne bake **plus** `stats` : calcul live via `charBaseStats`,
   voir `game-logic.js`). (`ATTACK_MODES` **retiré** — voir Décisions.) Aussi : `char.bio` (description courte
   par perso, affichée au hub) ; **`PORTRAITS`** (`{charId: 'ATH/Perso/X.webp'}`, partagé hub + Équipement) ;
@@ -818,6 +824,48 @@ supprime pas** `Woolost`/`JB` : on les resynchronise sur `main` (`git merge main
 d'une base propre. Les anciennes branches de fonctionnalité (auth-comptes-roles, inventaire,
 arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, catalogue-editable)
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
+
+## État actuel (2026-09-07)
+- **Catalogue d'objets : les 18 armures de base** — cache `20260907-1`, **255 tests verts**,
+  **aucune règle RTDB**, **aucune migration**, **aucune logique pure touchée**.
+  ⏳ **NON TERMINÉ : l'écriture Firebase reste à passer** (voir plus bas).
+  📄 Document de reprise : `docs/superpowers/specs/2026-09-07-catalogue-objets-design.md`.
+  **Le manque** : le catalogue partagé n'avait **aucune armure** (9 entrées `Équipement`, toutes des
+  armes, sans `weight` ni `mods` ni `armorClass`). Or le calibrage du 2026-09-04, aggravé le
+  2026-09-06, pariait explicitement sur les **armures d'équipement pour prendre le relais** d'une
+  armure de socle tombée à 6-9 au niveau 2. Elles n'existaient pas.
+  **La source retrouvée** : `info-mj/SPECIFICATION - Système refondu.md` **§7.2** — le fichier
+  n'était **pas sur la machine du MJ** (il traînait dans `Downloads`, il est désormais dans
+  `info-mj/`). Voir l'avertissement en tête de « Infos MJ » : 5 fichiers y manquent encore.
+  Livré : 3 classes × 6 profils = **18 armures** dans `ITEM_CATALOG` (`type:'armor'`, `armorClass`,
+  `weight` 4/10/20 repris d'`ARMOR_CLASSES`, `mods` PV/Armure/Rés.Mag), prix du guide d'économie
+  §9.1 (13/20/32 ar) et malus de classe **en clair dans le `sub`**.
+  ⚠️ **ÉDITER `data.jsx` NE SUFFIT PAS, et c'est le piège central du chantier** :
+  `useItemCatalog` (data-state.jsx:619) fait `catalogArray(map, !!inited, ITEM_CATALOG)` — dès que
+  `catalogInit` est vrai, **`ITEM_CATALOG` n'est plus jamais lu**. Les 18 armures n'apparaîtront dans
+  le picker qu'après :
+  `MSYS_NO_PATHCONV=1 firebase database:update "/campaign/runeterra/catalog" armures-catalog.json --instance runeterra-jdr-default-rtdb`
+  (patch prêt à la racine, **non commité** ; `update` = additif, ids **lisibles** `it_arm_<classe>_<profil>`
+  donc rejouable et réversible ; à supprimer une fois passé).
+  ⚠️ **Deux arbitrages du MJ** : (1) **le prix va dans la description**, pas dans un champ — le modèle
+  d'item n'a **aucun champ de prix** et n'en gagne pas ici ; conséquence assumée, le prix est du texte
+  non calculable (pas de revente auto). (2) **Les malus de classe** (Interm. −1 dépl. ; Lourde −1 dépl.,
+  −1 init., malus tests Hab.) sont **en clair dans le `sub` et arbitrés à la table**. Le −1 initiative
+  *aurait pu* être automatisé (`initiative/scores/$id/bonus` existe) — écarté délibérément : ce champ
+  est 100 % manuel MJ, et y mêler une source automatique rendrait impossible de savoir qui a écrit quoi.
+  👉 **RESTE À FAIRE EN JEU** : prévenir la table. Une armure d'étoffe légère (+7 Arm) **double presque**
+  l'armure d'un PJ niveau 2. À annoncer avec les **quatre répartitions**, qui attendent depuis le 2026-09-06.
+  👉 **DIVERGENCES RELEVÉES, NON TRAITÉES** (détail au §6 du document de reprise) — le catalogue et le
+  guide d'économie sont **deux référentiels indépendants** :
+  ⚠️ **Potions : les paliers 2 à 4 du catalogue sont 2 à 3× SOUS le guide** (30+20 % contre 75+30 % ;
+  50+25 % contre 200+50 % ; 100+30 % contre « la totalité »). **C'est le catalogue qui s'applique en
+  jeu** (`parseConsumableEffect` lit le `sub`), donc les joueurs boivent des potions trop faibles depuis
+  toujours. La légendaire « rend la totalité » n'est même pas exprimable dans le gabarit actuel.
+  ⚠️ **Armes : aucune n'a de `mods`**, alors que le §7.1 chiffre le palier de base (+15 AD physique,
+  +15 AP magique, +10/+10 hybride) ; et 3 seulement des 9 entrées correspondent aux 10 armes tarifées.
+  ⚠️ **Palier supérieur des armures : non chiffré dans la spec** (les armes le sont). Les prix existent
+  (125/185/300 ar). Une symétrie avec les armes (×2) donnerait 14/30/50 en Armure pure — **extrapolation,
+  pas la spec** : à faire trancher par le MJ.
 
 ## État actuel (2026-09-06)
 - **Spécialisation de la Force et de la Magie (dégâts / défense)** — cache `20260906-8`,
@@ -1798,9 +1846,12 @@ prédéfinies par compétence, ou pool de points libre ?).
   (`info-mj/Nouveau système de gestion des attaques de base (2).md`) + **maîtrise par perso×arme** (−25 % +
   perte des propriétés si non maîtrisée), idée de **maîtrise qui progresse à l'usage**. À reprendre.
 - **Inventaire + Équipement : clos côté code** (perso + commun, transferts, catalogue, plafond 99,
-  monnaie vivante, paperdoll, `item.mods` branchés). Reste uniquement de la **saisie de contenu** :
-  créer les **armures réelles** avec leur `type` + leurs `mods` (jusqu'ici seuls armes & accessoires
-  ont un `type` câblé) — pas de dev, juste remplir `ITEM_CATALOG` / l'éditeur.
+  monnaie vivante, paperdoll, `item.mods` branchés). Reste de la **saisie de contenu** — chantier
+  ouvert le 2026-09-07, document de reprise `docs/superpowers/specs/2026-09-07-catalogue-objets-design.md` :
+  **armures de base FAITES** (18, dans `data.jsx`) mais ⏳ **l'écriture Firebase reste à passer** ;
+  puis **armes** (aucune n'a de `mods`, alors que le §7.1 les chiffre : +15 AD / +15 AP / +10-10 hybride),
+  **potions** (le catalogue est 2 à 3× sous le guide d'économie, et c'est le catalogue qui s'applique
+  en jeu), et **palier supérieur des armures** (non chiffré dans la spec, à faire trancher par le MJ).
 - **Compétences** : **implémentées et déployées**, mais ⚠️ **DÉSÉQUILIBRÉES — voir « 🔜 PROCHAIN
   CHANTIER » en tête de ce backlog** (diagnostic chiffré du 2026-09-05). Ce qui suit décrit
   l'existant, pas un état satisfaisant. (Elias/Smith/Urskaar/Jett + **Rathael complet C1→C4 + ultime**).
@@ -1858,6 +1909,16 @@ prédéfinies par compétence, ou pool de points libre ?).
   orchestrateur `healCharacter`). Aucune règle RTDB.
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
+⚠️ **Le dossier est gitignoré (dépôt public) : RIEN ne le synchronise entre les postes du MJ et de
+l'admin.** Au 2026-09-07, la machine du MJ n'avait que 3 des 8 fichiers listés ici — `SPECIFICATION -
+Système refondu.md` traînait dans `Downloads` et a été replacé. **Restent manquants côté MJ** :
+`Compétences-Races PJ`, `Système de Runes.md`, `Nouveau système de gestion des attaques de base (2).md`,
+`Codes App Script.md`, `tableau_XP.png`. Les rapatrier AVANT tout chantier qui en dépend (le
+rééquilibrage des compétences a besoin du premier).
+- `info-mj/SPECIFICATION - Système refondu.md` — système hypermétrique. **§7.1 armes** (+15/+30/+70 AD ou AP
+  par palier) et **§7.2 armures** (3 classes × 6 profils = 18 armures de base, valeurs + noms + malus de
+  classe) : c'est la source des stats d'équipement, introuvable ailleurs. ⚠️ Ses §3/§4/§6 et ses cibles de
+  PV du §9 sont **PÉRIMÉS** (refontes des 2026-09-04 et 2026-09-05) ; seul le §7 fait encore foi.
 - `info-mj/Compétences-Races PJ (mis à jour).md` — kits complets (passif + comps) + races/
   traits par niveau. ⚠️ La section « Lunick » = ancien perso mort (ignorer) ; voir « Elias ».
 - `info-mj/Système de Runes.md` — règles de l'arbre de runes (points = niveau, Mineure→

@@ -366,6 +366,26 @@ const ITEM_CATALOG = [
   { cat:'Équipement', name:'Gantelet renforcé', sub:'1H',                             ic:'🥊', img:'ATH/Armes/gantelet.webp',      type:'weapon' },
   { cat:'Équipement', name:'Hachette',         sub:'Arme secondaire · brisage',       ic:'🪓', img:'ATH/Armes/hachette.webp',      type:'weapon' },
   { cat:'Équipement', name:'Dague',            sub:'1H',                              ic:'🗡', img:'ATH/Armes/dague.webp',         type:'accessory' },
+  // Équipement — armures de base (SPECIFICATION - Système refondu §7.2 : 3 classes × 6 profils).
+  // Prix = guide d'économie §9.1 ; poids = ARMOR_CLASSES ; malus de classe en clair dans `sub` (arbitrés par le MJ).
+  { cat:'Équipement', name:'Veste matelassée', sub:'Légère · 13 ar · +50 PV', ic:'🧥', img:'', type:'armor', armorClass:'legere', weight:4, mods:{ hp:50 } },
+  { cat:'Équipement', name:'Plastron de cuir bouilli', sub:'Intermédiaire · 20 ar · +100 PV · −1 dépl.', ic:'🧥', img:'', type:'armor', armorClass:'intermediaire', weight:10, mods:{ hp:100 } },
+  { cat:'Équipement', name:'Cuirasse de colosse', sub:'Lourde · 32 ar · +150 PV · −1 dépl., −1 init., malus Hab.', ic:'🧥', img:'', type:'armor', armorClass:'lourde', weight:20, mods:{ hp:150 } },
+  { cat:'Équipement', name:'Armure d\'étoffe', sub:'Légère · 13 ar · +7 Armure', ic:'🛡', img:'', type:'armor', armorClass:'legere', weight:4, mods:{ armure:7 } },
+  { cat:'Équipement', name:'Cotte de mailles', sub:'Intermédiaire · 20 ar · +15 Armure · −1 dépl.', ic:'🛡', img:'', type:'armor', armorClass:'intermediaire', weight:10, mods:{ armure:15 } },
+  { cat:'Équipement', name:'Harnois de plates', sub:'Lourde · 32 ar · +25 Armure · −1 dépl., −1 init., malus Hab.', ic:'🛡', img:'', type:'armor', armorClass:'lourde', weight:20, mods:{ armure:25 } },
+  { cat:'Équipement', name:'Cape du néant', sub:'Légère · 13 ar · +7 Rés. Mag', ic:'🌀', img:'', type:'armor', armorClass:'legere', weight:4, mods:{ resmag:7 } },
+  { cat:'Équipement', name:'Manteau de négatron', sub:'Intermédiaire · 20 ar · +15 Rés. Mag · −1 dépl.', ic:'🌀', img:'', type:'armor', armorClass:'intermediaire', weight:10, mods:{ resmag:15 } },
+  { cat:'Équipement', name:'Drapé d\'antimagie', sub:'Lourde · 32 ar · +25 Rés. Mag · −1 dépl., −1 init., malus Hab.', ic:'🌀', img:'', type:'armor', armorClass:'lourde', weight:20, mods:{ resmag:25 } },
+  { cat:'Équipement', name:'Cape doublée', sub:'Légère · 13 ar · +3 Armure, +3 Rés. Mag', ic:'⚜', img:'', type:'armor', armorClass:'legere', weight:4, mods:{ armure:3, resmag:3 } },
+  { cat:'Équipement', name:'Harnois composite', sub:'Intermédiaire · 20 ar · +6 Armure, +6 Rés. Mag · −1 dépl.', ic:'⚜', img:'', type:'armor', armorClass:'intermediaire', weight:10, mods:{ armure:6, resmag:6 } },
+  { cat:'Équipement', name:'Garde-corps runique', sub:'Lourde · 32 ar · +10 Armure, +10 Rés. Mag · −1 dépl., −1 init., malus Hab.', ic:'⚜', img:'', type:'armor', armorClass:'lourde', weight:20, mods:{ armure:10, resmag:10 } },
+  { cat:'Équipement', name:'Gambison clouté', sub:'Légère · 13 ar · +20 PV, +3 Armure', ic:'🦺', img:'', type:'armor', armorClass:'legere', weight:4, mods:{ hp:20, armure:3 } },
+  { cat:'Équipement', name:'Brigandine renforcée', sub:'Intermédiaire · 20 ar · +40 PV, +6 Armure · −1 dépl.', ic:'🦺', img:'', type:'armor', armorClass:'intermediaire', weight:10, mods:{ hp:40, armure:6 } },
+  { cat:'Équipement', name:'Mailles du gardien', sub:'Lourde · 32 ar · +60 PV, +10 Armure · −1 dépl., −1 init., malus Hab.', ic:'🦺', img:'', type:'armor', armorClass:'lourde', weight:20, mods:{ hp:60, armure:10 } },
+  { cat:'Équipement', name:'Tenue de l\'initié', sub:'Légère · 13 ar · +20 PV, +3 Rés. Mag', ic:'👘', img:'', type:'armor', armorClass:'legere', weight:4, mods:{ hp:20, resmag:3 } },
+  { cat:'Équipement', name:'Robe runique', sub:'Intermédiaire · 20 ar · +40 PV, +6 Rés. Mag · −1 dépl.', ic:'👘', img:'', type:'armor', armorClass:'intermediaire', weight:10, mods:{ hp:40, resmag:6 } },
+  { cat:'Équipement', name:'Cuirasse du templier', sub:'Lourde · 32 ar · +60 PV, +10 Rés. Mag · −1 dépl., −1 init., malus Hab.', ic:'👘', img:'', type:'armor', armorClass:'lourde', weight:20, mods:{ hp:60, resmag:10 } },
 ];
 
 /* --- Compétences (actif/passif) par perso. Formules = fns pures de game-logic.js
