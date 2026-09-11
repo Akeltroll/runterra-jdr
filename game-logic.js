@@ -769,19 +769,25 @@
 
   /* --- Vol de vie / Sapience / Omnivamp ---
      Soin rendu à l'attaquant = % des dégâts RÉELLEMENT infligés (post-mitigation).
-     Séparation PAR SOURCE (ruling MJ) :
-       attaque de base (isBasic) : vol de vie si physique, sapience si magique (jamais omni) ;
-       compétence                : omnivamp seul, quel que soit le type (jamais vol/sapience). */
+     ⚠️ RÈGLE CHANGÉE LE 2026-09-09 : l'omnivamp s'applique désormais à TOUTES les
+     sources, attaque de base comprise, et se CUMULE avec le vol de vie / la sapience.
+     Vol de vie et sapience restent, elles, réservées à l'attaque de base et départagées
+     par le type. Donc :
+       attaque de base physique : vol + omni       | magique : sapience + omni | brut : omni
+       compétence (tout type)   : omni
+     Le cumul est délibéré (ruling MJ) : sans lui, l'omnivamp serait INUTILE à quiconque
+     possède déjà du vol de vie, alors qu'elle est censée en être la version universelle.
+     Conséquence de tarif : l'omnivamp vaut ~1,25× le vol de vie (elle porte aussi les
+     dégâts de compétence, cf. le ratio de rotation optimale), et montera vers 1,50×
+     quand les compétences seront rééquilibrées — voir docs/bareme-stats.md. */
   function lifestealHeal(applied, type, stats, isBasic) {
     applied = Math.max(0, Number(applied) || 0);
     stats = stats || {};
-    let pct;
+    let pct = Number(stats.omni) || 0;
     if (isBasic) {
-      pct = type === 'physique' ? (Number(stats.vol) || 0)
-          : type === 'magique'  ? (Number(stats.sapience) || 0)
-          : 0;
-    } else {
-      pct = Number(stats.omni) || 0;
+      pct += type === 'physique' ? (Number(stats.vol) || 0)
+           : type === 'magique'  ? (Number(stats.sapience) || 0)
+           : 0;
     }
     return Math.round(applied * Math.max(0, pct) / 100);
   }
@@ -1682,6 +1688,17 @@
   var MAGIE_DESTS = ['ap', 'resmag'];
   var MAGIE_BASE_AP = 15, MAGIE_BASE_RM = 1;
   var MAGIE_DIRECTED = { ap: 10, resmag: 2 };
+  /* Socle d'armure et de résistance magique accordé à TOUT LE MONDE dès le niveau 1
+     (patch de durabilité, décision MJ du 2026-09-09). Gain mécanique réel : +3,3 à
+     +4,0 % d'EHP seulement, uniforme sur toute la campagne — la mitigation ne peut pas
+     faire plus avec une constante de 120 face aux 6-9 d'armure d'un PJ niveau 2.
+     ⚠️ La raison de ce patch est de LECTURE, pas d'arithmétique : « 2 de Rés. Mag » se
+     lit comme une passoire sur une fiche, « 7 » apaise. Ne pas le monter en croyant
+     corriger l'encaissement à bas niveau — ça ne marche pas par ce levier (les PV et
+     les armures d'équipement profil PV, si). Et attention, l'augmenter DIMINUE la
+     valeur marginale de chaque point d'armure d'objet (elle vaut PV/(AR+120)).
+     Aucune migration : armure et resmag sont calculées en live, jamais stockées. */
+  var BASE_AR_RM = 5;
   function defaultForceSplit(F) { return { ad: Math.max(0, F | 0), armure: 0 }; }
   function defaultMagieSplit(C) { return { ap: Math.max(0, C | 0), resmag: 0 }; }
   /* Normalisent une répartition stockée, même contrat que habSplit/mentalSplit :
@@ -1773,8 +1790,8 @@
                  + 5 * hUnit * hs.ad + fondu),
       ap:      Math.round(MAGIE_BASE_AP * eC + MAGIE_DIRECTED.ap * cUnit * cs.ap
                  + 5 * hUnit * hs.ap + fondu),
-      armure:  Math.round(level + FORCE_BASE_AR * eF + FORCE_DIRECTED.armure * fUnit * fs.armure),
-      resmag:  Math.round(level + MAGIE_BASE_RM * eC + MAGIE_DIRECTED.resmag * cUnit * cs.resmag),
+      armure:  Math.round(BASE_AR_RM + level + FORCE_BASE_AR * eF + FORCE_DIRECTED.armure * fUnit * fs.armure),
+      resmag:  Math.round(BASE_AR_RM + level + MAGIE_BASE_RM * eC + MAGIE_DIRECTED.resmag * cUnit * cs.resmag),
       crit:    5 + 2.5 * H,
       dcrit:   150 + 4 * H,
       rescrit: 3 * M,

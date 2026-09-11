@@ -573,6 +573,13 @@ Ordre : firebase SDK → `firebase-config.js` → `game-logic.js` → `data.jsx`
   ⚠️ **Le préfixe `MSYS_NO_PATHCONV=1` est OBLIGATOIRE depuis Git Bash** (vérifié le 2026-09-02) :
   sans lui, MSYS convertit `/.settings/rules` en chemin Windows et la CLI répond
   `Error: Path must begin with /` (exit 1). Ce n'est pas un problème de droits.
+  ⚠️ **Le `!` de Claude Code lance en Git Bash, pas en PowerShell** (vérifié le 2026-09-09) :
+  le préfixe `MSYS_NO_PATHCONV=1` y est donc **obligatoire** aussi.
+  ⚠️ **`database:update` / `database:set` exigent `--force` en non-interactif** : leur prompt de
+  confirmation n'a pas de stdin et retombe sur « non » (`Error: Command aborted`).
+  ⚠️ **Firebase réordonne les clés alphabétiquement** : comparer une relecture au fichier local
+  avec un `JSON.stringify` direct produit de **fausses divergences** (`{hp,armure}` contre
+  `{armure,hp}`). Trier les clés en profondeur avant de comparer.
   ⚠️ Le code de sortie a déjà été **255** malgré une sortie correcte (ne pas conclure à un échec) ;
   en CLI 15.28.1 il vaut **0**. Se fier à la sortie, pas au code. C'est ce qui permet de vérifier **avant** (dérive
   console ?) et **après** (le déploiement fait-il ce qu'on croit ?) chaque publication.
@@ -824,6 +831,86 @@ supprime pas** `Woolost`/`JB` : on les resynchronise sur `main` (`git merge main
 d'une base propre. Les anciennes branches de fonctionnalité (auth-comptes-roles, inventaire,
 arbre-runes-visuel, elias-crowe-niveau-2, retrait-mode-combat, admin-catalogue, catalogue-editable)
 ont été **supprimées** une fois entièrement fusionnées — leur historique vit dans `main`.
+
+## État actuel (2026-09-09)
+- **Barème de valeur des statistiques (équivalent AD) + 3 patchs d'équilibrage** — cache
+  `20260909-1`, **266 tests verts** (game-logic 255 + auth 11), **aucune règle RTDB**, **aucune
+  migration**. ✅ **Les 18 armures sont EN BASE** (l'écriture Firebase due depuis le 2026-09-07 est
+  enfin passée, vérifiée par relecture).
+  📄 **Le barème, à consulter** : `docs/bareme-stats.md`.
+  📄 Méthode, décisions et démonstrations :
+  `docs/superpowers/specs/2026-09-09-bareme-valeur-stats-design.md`.
+  **La question du MJ** : « ce qu'un point d'AD équivaut en HP ou en armure », pour équilibrer les
+  objets. Réponse : **il n'existe pas de taux universel** — PV et résistances se **multiplient**
+  (`EHP = PV/(1 − AR/(AR+120))`), donc 1 Armure vaut `PV/(AR+120)` PV, soit un facteur 8 entre le
+  niveau 2 et le 18. Un tarif d'objet doit **choisir un profil de référence** et assumer d'être faux
+  ailleurs. Le système portait **trois barèmes implicites contradictoires** : moteur de caracs
+  (1 Arm = 10 PV), spec §7.2 (6,0-7,1), mesure de combat (1,2-9,4).
+  **Barème retenu** (référence : **bruiser**, dont le ratio PV/AD vaut exactement le raccord ; mix de
+  dégâts 50/50 ; 3 colonnes = 3 paliers d'équipement) — en points d'AD :
+  `1 PV = 0,33` · `1 Armure = 1 Rés.Mag = 0,64 / 1,44 / 2,39` · `1 %Crit = 0,80 / 1,96 / 3,39` ·
+  `1 %DégCrit = 0,08 / 0,20 / 0,34` · `1 %Vol/Sapience = 0,32 / 0,72 / 1,13` ·
+  `1 %Omnivamp = 0,40 / 0,89 / 1,40` · `1 %RésCrit = 0,20 / 0,48 / 0,88`.
+  ⚠️ **Raccord offense/défense = `1 AD = 3 PV`, et il NE passe PAS par le mana** (décision MJ :
+  le mana est situationnel, « PV > Mana »). Cela **invalide la dérivation `1 AD = 2 PV`** qu'on lit
+  dans le moteur (`+5 AD ou +10 Mana`, puis `+15 PV ou +15 Mana`) : la page Progression affiche une
+  **équivalence de choix**, pas de valeur — le mana y est offert plus généreusement parce qu'il vaut
+  moins. Les répartitions du moteur ne changent pas, elles ne servent simplement pas de pivot.
+  ⚠️ **Seuls les PV ont une valeur STABLE** (0,33 à tous les niveaux) : toutes les autres stats sont
+  des **multiplicateurs**, leur valeur en AD triple ou quadruple du niveau 2 au 18. C'est la raison
+  d'être des paliers d'équipement — et le §7.1 le fait déjà juste (armes ×1/×2/×4,7 quand l'AD des
+  PJ fait ×1/×2,4/×4,2). Ne PAS chercher un barème unique valable à tous les niveaux.
+  ⚠️ **Le `%Dégâts Crit` n'est pas tarifable au barème général** (×8,1 d'écart entre archétypes,
+  contre ×2,2-×2,7 pour les autres) : il ne vaut rien sans chance de crit. Le réserver aux objets
+  à crit, ou toujours l'accompagner de `%Crit` dans le même objet.
+  ⚠️ **L'omnivamp est la seule stat dont le tarif dépend d'un AUTRE chantier** : elle vaut
+  `1,24 × vol de vie` (= le ratio de rotation optimale du diagnostic 2026-09-05) et montera
+  **mécaniquement à ×1,50** quand les compétences seront rééquilibrées. À re-tarifer alors.
+  **Contrôle par LoL** (barème `gold efficiency` du wiki) : son **bloc défensif est transposable**
+  (1 Armure = 7,5 PV → **6,4** après correction de constante, LoL utilisant `AR/(AR+100)` et nous
+  `AR/(AR+120)` — soit **-14 %**), et il tombe **exactement** sur le §7.2 du MJ (6,0-7,1), écrit sans
+  aucune référence à LoL. Son **raccord offense/défense ne l'est PAS** (13,1 PV par AD, facteur 6) :
+  LoL a la vitesse d'attaque, qui démultiplie l'AD, et un TTK de 10-15 coups contre 2,8 chez nous —
+  c'est aussi pourquoi **notre vol de vie est structurellement faible** (stat de sustain).
+  **Les 3 patchs livrés** :
+  1. **`BASE_AR_RM = 5`** (`computeStats`) — +5 AR/RM à tout le monde dès le niveau 1.
+     ⚠️ **Décision de LECTURE, pas d'arithmétique** : le gain réel est de **+3,3 à +4,0 % d'EHP**
+     seulement, uniforme sur toute la campagne. Motif du MJ : « 2 de RM se lit comme être une passoire
+     à la magie ». **Ne pas monter cette constante en croyant corriger l'encaissement à bas niveau** :
+     avec K=120 et des PJ à 6-9 d'armure, il faudrait **60 AR ET 60 RM** pour gagner 15 % d'EHP au
+     niveau 2. Le levier de l'encaissement précoce, ce sont les **PV** (une Veste matelassée à +50 PV
+     donne **+16 % d'EHP** à un PJ niveau 2, soit 4× ce patch). ⚠️ Et augmenter le socle **DIMINUE**
+     la valeur de chaque point d'armure d'objet (`PV/(AR+120)` décroît en AR).
+     **Aucune migration** : `armure`/`resmag` sont calculées en live, jamais stockées — donc **pas de
+     « ⟲ Combat »**, contrairement au changement du 2026-09-04.
+  2. **`lifestealHeal` : omnivamp universelle et CUMULÉE** — elle s'applique désormais aussi à
+     l'attaque de base et **s'ajoute** au vol de vie / à la sapience (physique : `vol + omni` ;
+     magique : `sapience + omni` ; brut : `omni` seule). Compétence : `omni` seule, inchangé.
+     ⚠️ **Le cumul est délibéré** : sans lui l'omnivamp serait **inutile** à quiconque a déjà du vol
+     de vie, alors qu'elle en est la version universelle. Vol/sapience restent réservées à l'AA.
+  3. **Armures légères : résistances 7 → 10** (`data.jsx` + base). Table transposée : Armure pure
+     **10**, RM pure **10**, Arm+RM **4+4**, PV+Arm **21 PV + 4 Arm**, PV+RM **21 PV + 4 RM** ;
+     PV pur (50) inchangé. Les intermédiaires et lourdes **ne bougent pas**.
+     ✅ **Ce patch corrige un vrai défaut de tarification** : le profil résistance léger rendait
+     **0,34 AD par ar** contre 0,48 (interm.) et 0,50 (lourde) — le seul objet mal tarifé du
+     catalogue. À 10, il rend **0,49**, aligné à 2 % près. Et le **point de bascule** (profil
+     résistance = profil PV) passe du niveau **18 au niveau 12**.
+     ⚠️ **Effet de bord assumé** : l'efficacité au poids passe à **2,50** Arm/poids pour la légère
+     contre 1,25 pour la lourde (le double). Pour un perso serré en capacité de charge, la légère
+     devient nettement dominante.
+  ⚠️ **QUESTION VOLONTAIREMENT LAISSÉE OUVERTE, ne pas la rouvrir comme un bug** : le profil PV
+  domine le profil résistance sur la **première moitié de la campagne** (facteur 3,7 au niveau 2,
+  égalité au 12, inversion ensuite). **On assume** — à bas niveau on s'équipe en PV, en fin de
+  campagne en résistance. La table du §7.2 est **juste au barème du milieu de campagne** ; l'écart
+  aux extrémités est structurel, pas une faute de saisie. Piste si le sujet revient : faire porter
+  aux armures de résistance ce que les PV ne donnent pas (**rés. critique**, passifs anti-crit du
+  §7.2) — tient dans `mods`, aucun changement de moteur.
+  👉 **RESTE À FAIRE EN JEU** : prévenir la table de **trois** changements simultanés (+5 AR/RM,
+  omnivamp cumulative, armures légères), qui s'ajoutent aux **quatre répartitions** en attente
+  d'annonce depuis le 2026-09-06.
+  👉 **Lot suivant tout tracé** : les **armes**. Le §7.1 les chiffre (+15/+30/+70 AD ou AP,
+  +10/+10 hybride), le barème confirme que **+15 AD ≡ une armure légère profil PV** (15,0 contre
+  16,7), et **aucune des 9 entrées d'`ITEM_CATALOG` n'a de `mods`**.
 
 ## État actuel (2026-09-07)
 - **Catalogue d'objets : les 18 armures de base** — cache `20260907-1`, **255 tests verts**,
@@ -1910,11 +1997,20 @@ prédéfinies par compétence, ou pool de points libre ?).
 
 ## Infos MJ (`info-mj/` — source de vérité des règles détaillées)
 ⚠️ **Le dossier est gitignoré (dépôt public) : RIEN ne le synchronise entre les postes du MJ et de
-l'admin.** Au 2026-09-07, la machine du MJ n'avait que 3 des 8 fichiers listés ici — `SPECIFICATION -
-Système refondu.md` traînait dans `Downloads` et a été replacé. **Restent manquants côté MJ** :
-`Compétences-Races PJ`, `Système de Runes.md`, `Nouveau système de gestion des attaques de base (2).md`,
-`Codes App Script.md`, `tableau_XP.png`. Les rapatrier AVANT tout chantier qui en dépend (le
-rééquilibrage des compétences a besoin du premier).
+l'admin.** Au 2026-09-07, la machine du MJ n'avait que 3 des 8 fichiers listés ici. Deux ont été
+retrouvés depuis et replacés : `SPECIFICATION - Système refondu.md` (2026-09-07) et
+`Nouveau système de gestion des attaques de base (2).md` (2026-09-09).
+**Restent manquants côté MJ** : `Compétences-Races PJ`, `Système de Runes.md`, `Codes App Script.md`,
+`tableau_XP.png`. Les rapatrier AVANT tout chantier qui en dépend (le rééquilibrage des compétences
+a besoin du premier).
+⚠️ **Où chercher un fichier manquant** : `~/Downloads` et `~/OneDrive/Documents/Claude` — les deux
+retrouvés y étaient. Et **chercher en `.docx`, pas en `.md`** : cette liste les nomme en `.md`, mais
+le MJ les produit sous Word. Convertisseur docx→md (paragraphes, titres, listes, tableaux) écrit le
+2026-09-09, à refaire au besoin : `zipfile` + `word/document.xml` en ElementTree, ~80 lignes de
+Python. Prendre la version la plus RÉCENTE par date de modification, pas par numéro de suffixe.
+⚠️ **`~/Downloads/Cat_gories_d_Armes_Runeterra.csv` est OBSOLÈTE** (avril 2025) : il décrit les armes
+par **modes offensif/équilibré/défensif**, c'est-à-dire le système de posture **retiré et
+définitivement abandonné** (`f509f42`). Ne pas s'en servir — le document `.docx` ci-dessus le remplace.
 - `info-mj/SPECIFICATION - Système refondu.md` — système hypermétrique. **§7.1 armes** (+15/+30/+70 AD ou AP
   par palier) et **§7.2 armures** (3 classes × 6 profils = 18 armures de base, valeurs + noms + malus de
   classe) : c'est la source des stats d'équipement, introuvable ailleurs. ⚠️ Ses §3/§4/§6 et ses cibles de
@@ -1923,8 +2019,17 @@ rééquilibrage des compétences a besoin du premier).
   traits par niveau. ⚠️ La section « Lunick » = ancien perso mort (ignorer) ; voir « Elias ».
 - `info-mj/Système de Runes.md` — règles de l'arbre de runes (points = niveau, Mineure→
   Avancée→Fondamentale, thématiques de famille = −2 CD).
-- `info-mj/Nouveau système de gestion des attaques de base (2).md` — catégories d'armes
-  (type/tenue/portée/propriétés) + descriptions des propriétés + règle de maîtrise.
+- `info-mj/Nouveau système de gestion des attaques de base (2).md` — **41 catégories d'armes**
+  (type/tenue/portée/propriétés) + **~35 propriétés** décrites + règle de maîtrise (sans maîtrise :
+  **−25 % dégâts ET perte de toutes les propriétés**). ⚠️ Il ne donne **AUCUNE valeur de stat** : les
+  bonus d'arme viennent du **§7.1 de `SPECIFICATION`**, les prix du **§9.1 du guide d'économie**. Les
+  trois sources sont disjointes et leurs nomenclatures **ne coïncident pas** (41 catégories / 10 armes
+  tarifées / 9 entrées `ITEM_CATALOG` / 10 dans `WEAPONS`).
+  ⚠️ **`type` y désigne la stat de CALCUL (AD/AP/hybride), pas le type de dégâts** — une arme
+  « physique » peut infliger des dégâts magiques. `tenue` = 1H/2H/poly (poly = **+2 aux jets
+  d'attaque** à deux mains). `WEAPONS` (data.jsx) en est une amorce partielle : il porte déjà
+  `cat`/`type`/`stat`, mais **mélange tenue et portée** dans son champ `type` (`'Portée'` y côtoie
+  `'1H'`/`'2H'`/`'Poly'`).
 - `info-mj/Codes App Script.md` — moteur de calcul du Google Sheet (référence ; pas le
   contenu compétences/runes).
 - `info-mj/Économie - guide des joueurs.md` — économie du monde côté joueurs : 4 monnaies
