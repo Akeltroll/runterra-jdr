@@ -65,3 +65,13 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   inscrit** (`.validate` `text` string) — journal d'économie réservé au MJ. NB : le `.read` staff y est écrit
   **explicitement** bien qu'il soit déjà hérité de `campaign/runeterra` — l'intention « MJ seul » doit rester
   lisible dans le fichier.
+
+## Check-list de déploiement historique (bascule anonyme → comptes, faite en juin)
+
+**Check-list de déploiement (bascule anonyme → comptes) :**
+1. Pousser le code sur `main` (GitHub Pages).
+2. Console → Authentication : créer les comptes joueurs (`pseudo@runeterra.local` + mdp).
+3. Console → Realtime Database / Données : vérifier `/users/{adminUID}` = `{username, role:"admin"}`.
+4. Publier les règles : `firebase deploy --only database` (ou console → Realtime Database / Règles).
+5. Console → Authentication : **désactiver** le provider « Anonyme ».
+6. Chaque joueur se connecte une fois → attribuer son perso via la page Admin.
