@@ -619,13 +619,14 @@ test('computeStats : seules Force et Habileté portent AD, Magie et Habileté po
   assert.equal(L.computeStats(20, 0, 0, 13, 18).dcrit, 150);
 });
 test('computeStats : Force/Magie donnent 1 AR/RM de socle + 2 par point dirige', () => {
+  // BASE_AR_RM = 5 accorde a tout le monde des le niveau 1 (patch du 2026-09-09).
   // Defaut (tout en degats) : 1 AR par point de Force, escalade, + 1 par niveau.
-  assert.equal(L.computeStats(4, 0, 0, 0, 2).armure, 6);   // 2 (niveau) + 1*4.20
-  assert.equal(L.computeStats(0, 0, 0, 4, 2).resmag, 6);
+  assert.equal(L.computeStats(4, 0, 0, 0, 2).armure, 11);  // 5 (socle) + 2 (niveau) + 1*4.20
+  assert.equal(L.computeStats(0, 0, 0, 4, 2).resmag, 11);
   // Tout en defense : socle 1 + 2 par point dirige = 3 par point.
-  assert.equal(L.computeStats(4, 0, 0, 0, 2, null, null, { ad: 0, armure: 4 }).armure, 15);
-  assert.equal(L.computeStats(0, 0, 0, 4, 2, null, null, null, { ap: 0, resmag: 4 }).resmag, 15);
-  assert.equal(L.computeStats(0, 0, 0, 0, 18).armure, 18); // socle de niveau seul
+  assert.equal(L.computeStats(4, 0, 0, 0, 2, null, null, { ad: 0, armure: 4 }).armure, 20);
+  assert.equal(L.computeStats(0, 0, 0, 4, 2, null, null, null, { ap: 0, resmag: 4 }).resmag, 20);
+  assert.equal(L.computeStats(0, 0, 0, 0, 18).armure, 23); // 5 (socle) + 18 (niveau)
 });
 /* --- Repartition Force / Magie : degats / defense (2026-09-06) --- */
 test('forceSplit / magieSplit : defaut TOUT EN DEGATS, sur- et sous-allocation', () => {
@@ -646,9 +647,9 @@ test('computeStats : un point de Force vaut +10 AD OU +2 Armure (socle 15 AD + 1
   const s = (sp) => L.computeStats(6, 0, 0, 0, 1, null, null, sp);
   const off = s({ ad: 6, armure: 0 }), def = s({ ad: 0, armure: 6 });
   assert.equal(off.ad, 162);      // 15*6.485 (socle) + 10*6.485 (dirige) + 0 de fondu
-  assert.equal(off.armure, 7);    // 1 (niveau) + 1*6.485 (socle), rien de dirige
+  assert.equal(off.armure, 12);   // 5 (socle AR/RM) + 1 (niveau) + 1*6.485, rien de dirige
   assert.equal(def.ad, 97);       // socle seul : 15*6.485
-  assert.equal(def.armure, 20);   // 1 + 6.485 + 2*6.485
+  assert.equal(def.armure, 25);   // 5 + 1 + 6.485 + 2*6.485
   // ⚠️ Le defaut (absent) reproduit EXACTEMENT l'ancien AD de 25/pt : c'est ce qui garde
   // valide la matrice de TTK du 2026-09-05, batie sur l'AD. Seule l'armure baisse.
   assert.equal(L.computeStats(6, 0, 0, 0, 1).ad, off.ad);
@@ -673,8 +674,8 @@ test('computeStats : socle de niveau au niveau 1, caracs nulles', () => {
   const s = L.computeStats(0, 0, 0, 0, 1);
   assert.equal(s.hp, 80);      // 50 universel + 30*1 socle
   assert.equal(s.mana, 65);    // 50 universel + 15*1 socle
-  assert.equal(s.armure, 1);   // 1*level (l'Habileté ne donne plus d'AR/RM)
-  assert.equal(s.resmag, 1);
+  assert.equal(s.armure, 6);   // BASE_AR_RM 5 + 1*level (l'Habileté ne donne plus d'AR/RM)
+  assert.equal(s.resmag, 6);
   assert.equal(s.ad, 20);      // fondu = max(0, 20 - 0)
   assert.equal(s.ap, 20);      // fondu
   assert.equal(s.rescrit, 0);
@@ -686,8 +687,8 @@ test('computeStats : bonus de départ Habileté dégressif 25/20/15/10/5, plafon
   // au-delà de 5, le bonus de départ ne grimpe plus
   assert.equal(L.computeStats(0, 8, 0, 0, 1).hp, 155);
   // et il ne donne plus ni armure ni rés. magique
-  assert.equal(L.computeStats(0, 5, 0, 0, 1).armure, 1);
-  assert.equal(L.computeStats(0, 5, 0, 0, 1).resmag, 1);
+  assert.equal(L.computeStats(0, 5, 0, 0, 1).armure, 6);   // socle seul, rien de l'Habileté
+  assert.equal(L.computeStats(0, 5, 0, 0, 1).resmag, 6);
 });
 test('computeStats : pas de Sapience ni de léthalité dans la base', () => {
   const s = L.computeStats(20, 20, 20, 20, 18);
@@ -899,16 +900,24 @@ test('dmgRathaelC3 : base AP + (AR+RM) scalée × charges (max ×3,5)', () => {
   assert.equal(L.dmgRathaelC3(eff, 5, 2), Math.floor(158 * 3.5)); // +250% à 5 charges
   assert.equal(L.dmgRathaelC3(eff, 9, 2), L.dmgRathaelC3(eff, 5, 2)); // plafond 5
 });
-test('lifestealHeal : séparation par source (attaque de base vs compétence)', () => {
+test('lifestealHeal : omnivamp universelle, CUMULÉE avec vol/sapience (2026-09-09)', () => {
   const s = { omni: 10, vol: 20, sapience: 30 };
-  // Attaque de base (isBasic=true) : vol si physique, sapience si magique, jamais omni
-  assert.equal(L.lifestealHeal(100, 'physique', s, true), 20);  // vol
-  assert.equal(L.lifestealHeal(100, 'magique', s, true), 30);   // sapience
-  assert.equal(L.lifestealHeal(100, 'brut', s, true), 0);       // ni vol ni sapience
-  // Compétence (isBasic=false) : omnivamp seul, quel que soit le type
+  // Attaque de base : vol (ou sapience) + omni. Le cumul est la règle, pas un max.
+  assert.equal(L.lifestealHeal(100, 'physique', s, true), 30);  // vol 20 + omni 10
+  assert.equal(L.lifestealHeal(100, 'magique', s, true), 40);   // sapience 30 + omni 10
+  assert.equal(L.lifestealHeal(100, 'brut', s, true), 10);      // omni seule (type non départagé)
+  // Compétence : omnivamp seule, quel que soit le type — vol/sapience restent hors jeu.
   assert.equal(L.lifestealHeal(100, 'physique', s, false), 10);
   assert.equal(L.lifestealHeal(100, 'magique', s, false), 10);
   assert.equal(L.lifestealHeal(100, 'brut', s, false), 10);
+  // Sans omnivamp, le comportement d'avant le 2026-09-09 est strictement conservé.
+  const t = { vol: 20, sapience: 30 };
+  assert.equal(L.lifestealHeal(100, 'physique', t, true), 20);
+  assert.equal(L.lifestealHeal(100, 'magique', t, true), 30);
+  assert.equal(L.lifestealHeal(100, 'brut', t, true), 0);
+  assert.equal(L.lifestealHeal(100, 'physique', t, false), 0);
+  // Omnivamp seule : elle porte maintenant l'attaque de base, ce qu'elle ne faisait pas.
+  assert.equal(L.lifestealHeal(100, 'physique', { omni: 10 }, true), 10);
   // Exemple MJ : attaque de base AD, 10% vol, 100 phys mitigés à 50 → 5 HP
   assert.equal(L.lifestealHeal(50, 'physique', { vol: 10 }, true), 5);
   // bornes : sans stat → 0 ; dégâts 0 → 0 ; arrondi
