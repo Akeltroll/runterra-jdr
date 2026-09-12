@@ -22,7 +22,7 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   ⚠️ Rien à voir avec l'ancien `ATTACK_MODES` (posture, retirée — voir Décisions) : ce sont des
   gestes choisis coup par coup. `crit:false` sur tous sauf `normal` = **le mode ne roule pas le dé**.
   Combat (vue MJ) : `mitigateDamage`
-  (armure/resmag, AR-120, **léthalité** réduit AR/RM sans passer sous 0, brut sans réduction) +
+  (armure/resmag, `AR/(AR+MITIGATION_K)` avec K=100 depuis le 2026-09-12, **léthalité** réduit AR/RM sans passer sous 0, brut sans réduction) +
   `applyDamageToPools` (bouclier puis HP, KO) — reproduit le moteur Excel. **Visibilité PV ennemis** :
   `enemyPublicView(enemy)` (pure, testée) = ce que voient les joueurs selon `enemy.reveal` ('hidden'=nom seul /
   'bar'=barre figée à `revealPct`, ne suit pas les vrais dégâts / 'exact'=barre live + PV chiffrés) ; KO toujours signalé.

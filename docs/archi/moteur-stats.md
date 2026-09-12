@@ -31,7 +31,7 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   escalade distribuée au prorata (répartir ne coûte rien), sur-allocation coupée au budget,
   sous-allocation reversée sur le défaut, absent = jamais confirmé.
   ⚠️ **Les deux destinations de Force/Magie n'ont PAS le même taux (10 contre 2)** — 1 point d'armure
-  vaut bien plus qu'1 d'AD (réduction en `AR/(AR+120)`). Ce n'est pas un arbitrage à somme nulle,
+  vaut bien plus qu'1 d'AD (réduction en `AR/(AR+100)`). Ce n'est pas un arbitrage à somme nulle,
   contrairement au Mental (15/15). C'est voulu.
   ⚠️ **Contrairement au Mental (décision D), AUCUNE répartition ne reproduit l'ancien coefficient** :
   avant, un point de Force donnait 25 AD **ET** 2 Armure. Le défaut tout-dégâts garde les **25 AD**
@@ -59,7 +59,7 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   re-vérifier la matrice.** Même ruling que l'Habileté : escalade distribuée au prorata → répartir ne
   coûte rien.
   ⚠️ **Chaîne de résolution d'une attaque, à connaître pour tout calibrage** :
-  `affiché × crit × 0,625 (d20) × (1 − AR/(AR+120))`. Le **facteur d20 vaut 0,625** (1-5 échec,
+  `affiché × crit × 0,625 (d20) × (1 − AR/(AR+100))`. Le **facteur d20 vaut 0,625** (1-5 échec,
   6-10 demi, 11-20 plein). Une attaque de base retire ~20-25 % des PV d'un pair ; le TTK tient dans
   ±0,3 attaque du niveau 1 au 18. **L'AA est l'unité de mesure du calibrage des compétences.**
   ⚠️ Les cibles de PV du **§9 de la spec hypermétrique ne sont plus valides** (le test les a

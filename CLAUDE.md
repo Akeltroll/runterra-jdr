@@ -48,7 +48,7 @@ Carte courte. **Le détail (fonctions, props, et surtout les ⚠️ « ne pas fa
 | Document | Couvre |
 |---|---|
 | `docs/archi/moteur-stats.md` | `computeStats`, les 4 répartitions (`habSplit`/`mentalSplit`/`forceSplit`/`magieSplit`), calibrage, crit/rés. crit, XP, onglet Progression (respec, planchers, 3 gardes de « Confirmer ») |
-| `docs/archi/combat.md` | Actions en attente (`buildCastPlan`, remboursement), modes d'attaque de base, mitigation, orchestrateurs de coups, vue MJ, onglet Combat, passif Glaciation, onglet Journal |
+| `docs/archi/combat.md` | Actions en attente (`buildCastPlan`, remboursement), modes d'attaque de base, mitigation (`MITIGATION_K` = 100), orchestrateurs de coups, vue MJ, onglet Combat, passif Glaciation, onglet Journal |
 | `docs/archi/inventaire-poids-monnaie.md` | Items/piles/catalogue, poids et capacités (perso, coffre, attelage), monnaie et journal d'économie, `components.jsx`, fiche, Admin, coffre commun, Équipement |
 | `docs/archi/firebase.md` | CLI Firebase (déployer, relire les règles en ligne, pièges Git Bash) et contenu de `database.rules.json` |
 | `docs/archi/divers.md` | Navigation d'`index.html`, auth, runes, récaps, hub, tests, dossiers |
@@ -250,22 +250,26 @@ jamais une nouvelle section ici.
 en ligne == dépôt (relecture du 2026-09-06). Les 18 armures de base sont **en base** (Firebase).
 ⚠️ **La mitigation est passée en `AR/(AR+100)`** (`MITIGATION_K`, 2026-09-12) — c'était 120.
 
-**👉 Reste à faire EN JEU (annonces à la table, toutes en attente)** :
-- **quatre répartitions dirigées** (Force AD/Armure, Habileté AD/AP/Mana, Mental PV/Mana, Magie
-  AP/Rés.Mag) — et l'armure/RM de chacun a **baissé sans qu'il ait rien fait** (défaut tout-dégâts) → 2026-09-06 ;
+**👉 Reste à faire EN JEU (annonces à la table)** :
+- ✅ **quatre répartitions dirigées** — **ANNONCÉ le 2026-09-12** (livré le 2026-09-06) ;
 - **18 armures au catalogue** (une légère double presque l'armure d'un PJ niveau 2) → 2026-09-07 ;
 - **3 patchs** : +5 AR/RM de socle, omnivamp cumulative, armures légères 7 → 10 → 2026-09-09 ;
 - **constante de mitigation 120 → 100** : tout le monde encaisse un peu mieux, **les monstres armurés
   nettement mieux** (un boss à 200 d'armure gagne +12 %) → 2026-09-12.
+⚠️ Ces trois-là sont **en ligne depuis le 2026-09-12** (push de 11 commits, cache `20260912-1`) : les
+joueurs les subissent déjà, annoncés ou non.
 
 **À éprouver à une vraie table** : initiative/créneaux (2026-09-02) ; rythme des actions en attente —
 un buff n'apparaît qu'après le clic du MJ (2026-09-06) ; encaissement des profils offensifs à bas
 niveau (2026-09-06).
 
-**Suivant** : les **armes**. Le chiffrage des maîtrises et de la portée est FAIT
-(`docs/armes-maitrises.md`, 41 catégories) ; restent à écrire les `mods` du catalogue (§7.1 :
-+15/+30/+70 AD ou AP, +10/+10 hybride). ⚠️ **Mais les `mods` ne suffiront pas** : ils pèsent 9 points
-quand l'écart de puissance entre armes en fait 108 — la correction doit venir des **propriétés**.
+**Suivant** : les **armes**. Le chiffrage des maîtrises et de la portée est FAIT et les propriétés
+ont été rerèglées en deux passes (`docs/armes-maitrises.md`, 41 catégories, étendue ramenée de 162 à
+**94 points**). Restent à écrire les `mods` du catalogue (§7.1 : +15/+30/+70 AD ou AP, +10/+10
+hybride). ⚠️ **Mais les `mods` ne suffiront pas** : ils pèsent 9 points quand l'écart de puissance
+entre armes en fait 94 — la correction vient des **propriétés**, pas des stats.
+⚠️ **Engagement à honorer** : le **bâton magique doit porter du mana bonus**, sinon Canalisation
+(5 % du mana ×2) redevient un mauvais échange.
 Puis le **rééquilibrage des compétences** (voir backlog).
 **Laissé ouvert exprès, ne pas rouvrir comme un bug** : le profil PV domine le profil résistance en
 début de campagne (2026-09-09).
