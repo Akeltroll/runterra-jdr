@@ -702,6 +702,24 @@
   }
 
   /* --- Combat (vue MJ ennemis) : reproduit le moteur Excel (Codes App Script) --- */
+  /* Constante de mitigation : réduction = AR / (AR + MITIGATION_K).
+     ⚠️ Passée de 120 à 100 le 2026-09-12 (décision MJ) — c'est la valeur de League of
+     Legends. Motif : l'armure paraissait trop peu contribuante. Chaque point d'armure
+     vaut ~+41 % de plus qu'avant (mesuré : 3,87 → 4,42 PV sur le bruiser de référence),
+     et la réduction affichée passe de 20,5 % à 23,7 % pour un PJ niveau 10.
+     Ce qui a été vérifié avant de trancher :
+       - le TTK du calibrage de septembre TIENT (amplitude ADC→ADC du niveau 1 au 18 :
+         0,47 attaque en K=120, 0,41 en K=100) — rien à recalibrer ;
+       - aucune migration : la mitigation est calculée à la résolution, jamais stockée.
+     ⚠️ Trois effets connus et assumés :
+       - le gain est concentré à HAUT niveau (+1,6 % d'EHP au niveau 2, +4,5 % au 18) —
+         baisser K ne corrige PAS l'encaissement à bas niveau, où le problème est le
+         NOMBRE de points d'armure (6-11), pas leur rendement ;
+       - les gros PNJ en profitent plus que les PJ (un boss à 200 d'armure encaisse
+         +12 % ; c'est proportionnel à l'armure possédée) ;
+       - la léthalité est amplifiée (+7,1 % → +8,3 % de dégâts pour 10 de léthalité).
+     Le barème de valeur des stats en dépend : voir docs/bareme-stats.md. */
+  var MITIGATION_K = 100;
   // Mitigation par armure / résistance magique. type ∈ {'physique','magique','brut'}.
   // La léthalité réduit l'AR/RM prise en compte, sans passer sous 0. brut = aucune réduction.
   function mitigateDamage(raw, type, defense, lethalite) {
@@ -712,7 +730,7 @@
     else if (type === 'magique') stat = Number((defense && defense.resmag) || 0);
     else return dmg; // brut (ou type inconnu) : pas de mitigation
     const eff = Math.max(0, stat - leth);
-    const reduction = eff / (eff + 120);
+    const reduction = eff / (eff + MITIGATION_K);
     return Math.ceil(dmg * (1 - reduction));
   }
 

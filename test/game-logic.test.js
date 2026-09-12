@@ -347,13 +347,13 @@ test('runeHasAdpChoice détecte toute clé « au choix AD/AP »', () => {
 });
 
 test('mitigateDamage : la léthalité magique réduit la rés. magique (miroir du physique)', () => {
-  // Même formule que le physique : eff = max(0, RM − léth), réduction = eff/(eff+120).
-  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }, 0), 50);
-  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }, 60), 67);  // eff 60 → 33 % réduit
-  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }, 120), 100); // eff 0
-  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }, 999), 100); // borné à 0
+  // Même formule que le physique : eff = max(0, RM − léth), réduction = eff/(eff+100).
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 100 }, 0), 50);
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 100 }, 50), 67);  // eff 50 → 33 % réduit
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 100 }, 100), 100); // eff 0
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 100 }, 999), 100); // borné à 0
   // La léthalité magique n'agit PAS sur l'armure (le type pilote la stat visée).
-  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120, resmag: 0 }, 0), 50);
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 100, resmag: 0 }, 0), 50);
 });
 
 test('mergeMods additionne deux objets de mods', () => {
@@ -361,13 +361,16 @@ test('mergeMods additionne deux objets de mods', () => {
 });
 
 /* --- Combat (vue MJ ennemis) : mitigation Excel + bouclier/HP --- */
-test('mitigateDamage — physique : AR/(AR+120)', () => {
-  // AR=120 → réduction 0.5 → ceil(100*0.5)=50
-  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }), 50);
+test('mitigateDamage — physique : AR/(AR+100)', () => {
+  // MITIGATION_K = 100 depuis le 2026-09-12 (était 120). AR=K → réduction 0.5.
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 100 }), 50);
+  // Verrou explicite de la constante : à AR=120 la réduction vaut 120/220, pas 0.5.
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }), 46); // ceil(100*(1-120/220))
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 300 }), 25); // 300/400 = 75 % réduit
 });
 
 test('mitigateDamage — magique utilise resmag', () => {
-  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 120 }), 50);
+  assert.equal(L.mitigateDamage(100, 'magique', { resmag: 100 }), 50);
 });
 
 test('mitigateDamage — brut ignore toute défense', () => {
@@ -848,10 +851,10 @@ test('rollCrit : espérance §6.3 (sanity, tolérance)', () => {
   assert.ok(Math.abs(avg - 2.25) < 0.1, `avg=${avg}`);
 });
 test('mitigateDamage : la léthalité réduit la résistance (sans passer sous 0)', () => {
-  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 0), 50);   // eff 120 → 50 %
-  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 120), 100); // eff 0 → aucune réduction
-  assert.equal(L.mitigateDamage(100, 'physique', { armure: 120 }, 200), 100); // eff borné à 0
-  assert.equal(L.mitigateDamage(100, 'brut',     { armure: 120 }, 50), 100);  // brut ignore tout
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 100 }, 0), 50);   // eff 100 → 50 %
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 100 }, 100), 100); // eff 0 → aucune réduction
+  assert.equal(L.mitigateDamage(100, 'physique', { armure: 100 }, 200), 100); // eff borné à 0
+  assert.equal(L.mitigateDamage(100, 'brut',     { armure: 100 }, 50), 100);  // brut ignore tout
 });
 test('attrSum : somme des 4 caractéristiques (entiers, tolère les clés absentes)', () => {
   assert.equal(L.attrSum({ force: 4, hab: 3, mental: 4, magie: 1 }), 12);

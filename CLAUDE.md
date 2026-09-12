@@ -85,7 +85,8 @@ Carte courte. **Le détail (fonctions, props, et surtout les ⚠️ « ne pas fa
   `docs/archi/firebase.md` (⚠️ `MSYS_NO_PATHCONV=1` obligatoire depuis Git Bash, `--force` en non-interactif).
 - `test/` — `game-logic.test.js`, `auth.test.js` (`node --test`), `smoke.mjs` (Playwright, compte de test).
 - `docs/` — `journal/` (historique des livraisons), `archi/` (détail technique), `backlog.md`,
-  `bareme-stats.md`, `superpowers/{specs,plans}/` (designs et plans).
+  `bareme-stats.md` (valeur des stats en équivalent AD), `armes-maitrises.md` (les 41 armes :
+  maîtrises et portée chiffrées), `superpowers/{specs,plans}/` (designs et plans).
 - `ATH/` — images (`Armes/`, `Items/`, `Perso/*.webp`).
 - `info-mj/` — **source de vérité du MJ**, **gitignoré** (dépôt public) : ne jamais committer. Voir « Infos MJ ».
 - `idée/` — assets lourds de travail, gitignoré.
@@ -245,26 +246,33 @@ sujet, lire son entrée** : c'est là que sont les ⚠️, les « ne pas faire �
 **Nouvelle livraison = nouveau fichier `docs/journal/<date>.md`** + une ligne dans l'index ci-dessous,
 jamais une nouvelle section ici.
 
-**Dernier état** : cache `20260909-1`, **266 tests verts** (game-logic 255 + auth 11). Règles RTDB
+**Dernier état** : cache `20260912-1`, **266 tests verts** (game-logic 255 + auth 11). Règles RTDB
 en ligne == dépôt (relecture du 2026-09-06). Les 18 armures de base sont **en base** (Firebase).
+⚠️ **La mitigation est passée en `AR/(AR+100)`** (`MITIGATION_K`, 2026-09-12) — c'était 120.
 
 **👉 Reste à faire EN JEU (annonces à la table, toutes en attente)** :
 - **quatre répartitions dirigées** (Force AD/Armure, Habileté AD/AP/Mana, Mental PV/Mana, Magie
   AP/Rés.Mag) — et l'armure/RM de chacun a **baissé sans qu'il ait rien fait** (défaut tout-dégâts) → 2026-09-06 ;
 - **18 armures au catalogue** (une légère double presque l'armure d'un PJ niveau 2) → 2026-09-07 ;
-- **3 patchs** : +5 AR/RM de socle, omnivamp cumulative, armures légères 7 → 10 → 2026-09-09.
+- **3 patchs** : +5 AR/RM de socle, omnivamp cumulative, armures légères 7 → 10 → 2026-09-09 ;
+- **constante de mitigation 120 → 100** : tout le monde encaisse un peu mieux, **les monstres armurés
+  nettement mieux** (un boss à 200 d'armure gagne +12 %) → 2026-09-12.
 
 **À éprouver à une vraie table** : initiative/créneaux (2026-09-02) ; rythme des actions en attente —
 un buff n'apparaît qu'après le clic du MJ (2026-09-06) ; encaissement des profils offensifs à bas
 niveau (2026-09-06).
 
-**Suivant** : les **armes** (§7.1 : +15/+30/+70 AD ou AP ; aucune entrée d'`ITEM_CATALOG` n'a de
-`mods`) → 2026-09-09 ; puis le **rééquilibrage des compétences** (voir backlog).
+**Suivant** : les **armes**. Le chiffrage des maîtrises et de la portée est FAIT
+(`docs/armes-maitrises.md`, 41 catégories) ; restent à écrire les `mods` du catalogue (§7.1 :
++15/+30/+70 AD ou AP, +10/+10 hybride). ⚠️ **Mais les `mods` ne suffiront pas** : ils pèsent 9 points
+quand l'écart de puissance entre armes en fait 108 — la correction doit venir des **propriétés**.
+Puis le **rééquilibrage des compétences** (voir backlog).
 **Laissé ouvert exprès, ne pas rouvrir comme un bug** : le profil PV domine le profil résistance en
 début de campagne (2026-09-09).
 
 | Entrée | Sujets |
 |---|---|
+| [2026-09-12](docs/journal/2026-09-12.md) | **`MITIGATION_K` 120 → 100** ; chiffrage des maîtrises d'armes et de la portée (41 armes) ; nerfs Attaque double / Canalisation / Adaptation ; dual wield de mini-armes |
 | [2026-09-09](docs/journal/2026-09-09.md) | Barème de valeur des stats (équivalent AD) ; patchs `BASE_AR_RM`, omnivamp cumulative, armures légères |
 | [2026-09-07](docs/journal/2026-09-07.md) | Les 18 armures de base au catalogue ; divergences catalogue ↔ guide d'économie (potions, armes) |
 | [2026-09-06](docs/journal/2026-09-06.md) | Spécialisation Force/Magie ; bug « Confirmer » inerte en respec ; **refonte actions en attente** ; modes d'attaque de base + ciblage PJ ; ressources + potions dans l'onglet Combat ; buffs absents du Combat |
