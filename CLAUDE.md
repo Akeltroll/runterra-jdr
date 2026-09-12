@@ -87,7 +87,11 @@ Carte courte. **Le détail (fonctions, props, et surtout les ⚠️ « ne pas fa
 - `docs/` — `journal/` (historique des livraisons), `archi/` (détail technique), `backlog.md`,
   `bareme-stats.md` (valeur des stats en équivalent AD), `armes-maitrises.md` (les 41 armes :
   maîtrises et portée chiffrées), `superpowers/{specs,plans}/` (designs et plans).
-- `ATH/` — images (`Armes/`, `Items/`, `Perso/*.webp`).
+- `ATH/` — images (`Armes/`, `Armures/`, `Items/`, `Perso/*.webp`).
+  ⚠️ **Source des icônes du catalogue** : `~/OneDrive/Bureau/Samy/MJ/Images` (PNG 1254 px, rangés par
+  catégorie) — **hors dépôt, rien ne le synchronise**, même statut qu'`info-mj/`. Conversion retenue :
+  384 px webp q82 (~28 ko). ⚠️ L'upload de la page Admin, lui, écrase à **128 px** en base64 dans la
+  RTDB (`downscaleImageToDataURL`) : c'est la cause des icônes floues. Préférer le fichier.
 - `info-mj/` — **source de vérité du MJ**, **gitignoré** (dépôt public) : ne jamais committer. Voir « Infos MJ ».
 - `idée/` — assets lourds de travail, gitignoré.
 
@@ -246,9 +250,13 @@ sujet, lire son entrée** : c'est là que sont les ⚠️, les « ne pas faire �
 **Nouvelle livraison = nouveau fichier `docs/journal/<date>.md`** + une ligne dans l'index ci-dessous,
 jamais une nouvelle section ici.
 
-**Dernier état** : cache `20260912-1`, **266 tests verts** (game-logic 255 + auth 11). Règles RTDB
-en ligne == dépôt (relecture du 2026-09-06). Les 18 armures de base sont **en base** (Firebase).
+**Dernier état** : cache `20260913-1`, **266 tests verts** (game-logic 255 + auth 11). Règles RTDB
+en ligne == dépôt (relecture du 2026-09-06). Les 18 armures de base sont **en base** (Firebase),
+dédoublonnées et imagées (2026-09-13).
 ⚠️ **La mitigation est passée en `AR/(AR+100)`** (`MITIGATION_K`, 2026-09-12) — c'était 120.
+⚠️ **Le catalogue en base contient du contenu créé par le MJ à la page Admin** : avant toute
+écriture en masse dans `/campaign/runeterra/catalog`, **relire la base et diffuser sur les NOMS** —
+les ids générés n'entrent jamais en collision, donc rien ne signale un doublon (vécu le 2026-09-13).
 
 **👉 Reste à faire EN JEU (annonces à la table)** :
 - ✅ **quatre répartitions dirigées** — **ANNONCÉ le 2026-09-12** (livré le 2026-09-06) ;
@@ -276,6 +284,7 @@ début de campagne (2026-09-09).
 
 | Entrée | Sujets |
 |---|---|
+| [2026-09-13](docs/journal/2026-09-13.md) | Dédoublonnage des 18 armures du catalogue (les valeurs du 2026-09-09 l'emportent) ; images du MJ converties en fichiers `ATH/Armures/` ; recalage des copies déjà distribuées |
 | [2026-09-12](docs/journal/2026-09-12.md) | **`MITIGATION_K` 120 → 100** ; chiffrage des maîtrises d'armes et de la portée (41 armes) ; nerfs Attaque double / Canalisation / Adaptation ; dual wield de mini-armes |
 | [2026-09-09](docs/journal/2026-09-09.md) | Barème de valeur des stats (équivalent AD) ; patchs `BASE_AR_RM`, omnivamp cumulative, armures légères |
 | [2026-09-07](docs/journal/2026-09-07.md) | Les 18 armures de base au catalogue ; divergences catalogue ↔ guide d'économie (potions, armes) |
