@@ -7,13 +7,18 @@ stat, exprimé en points d'AD ?** — pour écrire des objets qui se valent.
 
 ---
 
+> ⚠️ **Mis à jour le 2026-09-12 : la constante de mitigation est passée de 120 à 100**
+> (`MITIGATION_K`, `game-logic.js`) — la formule de League of Legends. Chaque point d'armure et de
+> résistance magique vaut donc **~16 % de plus** qu'avant, et c'est la seule ligne du barème qui
+> bouge. Motif, mesures et effets de bord : [journal du 2026-09-12](journal/2026-09-12.md).
+
 ## Le barème
 
 | Stat | base (n2) | supérieur (n10) | légendaire (n18) |
 |---|---|---|---|
 | **1 AD** / **1 AP** | 1,00 | 1,00 | 1,00 |
 | **1 PV** | 0,33 | 0,33 | 0,33 |
-| **1 Armure** / **1 Rés. Mag** | 0,64 | **1,44** | 2,39 |
+| **1 Armure** / **1 Rés. Mag** | 0,75 | **1,68** | 2,74 |
 | **1 % Crit** | 0,80 | **1,96** | 3,39 |
 | **1 % Dégâts Crit** ⚠️ | 0,08 | **0,20** | 0,34 |
 | **1 % Vol de vie** / **Sapience** | 0,32 | **0,72** | 1,13 |
@@ -22,7 +27,7 @@ stat, exprimé en points d'AD ?** — pour écrire des objets qui se valent.
 
 Réciproque, au palier supérieur :
 
-> `1 AD = 3 PV = 0,7 Armure = 0,5 %Crit = 5,1 %DégCrit = 1,4 %VolDeVie = 1,1 %Omnivamp = 2,1 %RésCrit`
+> `1 AD = 3 PV = 0,6 Armure = 0,5 %Crit = 5,1 %DégCrit = 1,4 %VolDeVie = 1,1 %Omnivamp = 2,1 %RésCrit`
 
 **Mode d'emploi.** Une colonne par palier d'équipement : `base` ≈ niveau 2-5, `supérieur` ≈ niveau
 10, `légendaire` ≈ niveau 18. Additionner la valeur de chaque `mods` d'un objet donne son budget
@@ -34,7 +39,7 @@ total en AD, comparable à celui d'un autre objet du même palier.
 
 **1. Seuls les PV ont une valeur stable.** Toutes les autres lignes triplent ou quadruplent du
 niveau 2 au 18, parce que ce sont des **multiplicateurs** : la valeur d'un point d'armure est
-`PV/(AR+120)`, celle d'un point de crit est proportionnelle à l'AD — donc elles croissent avec le
+`PV/(AR+100)`, celle d'un point de crit est proportionnelle à l'AD — donc elles croissent avec le
 porteur. Les PV, eux, croissent au même rythme que l'AD (le ratio PV/AD du bruiser vaut 3,04 / 3,13
 / 3,09 / 3,25 aux niveaux 2/5/10/18), d'où le raccord fixe à 3.
 
@@ -63,7 +68,7 @@ toujours l'accompagner de %Crit dans le même objet.
 | **Raccord offense ↔ défense** | **1 AD = 3 PV** — mesuré, médiane du roster. ⚠️ **Pas** dérivé du mana : le mana est situationnel et ne sert pas de pivot (décision MJ) |
 | **Dégâts subis** | mix **50 % physique / 50 % magique**. En 100 % physique, l'armure vaut le double (2,73 AD au palier supérieur au lieu de 1,44) |
 | **Armure / Rés. Mag** | traitées comme **identiques** — le moteur est symétrique, l'asymétrie d'un porteur donné est un artefact de son build |
-| **Chaîne de résolution** | `affiché × crit × 0,625 (d20) × (1 − AR/(AR+120))` |
+| **Chaîne de résolution** | `affiché × crit × 0,625 (d20) × (1 − AR/(AR+100))` — ⚠️ K passé de 120 à 100 le 2026-09-12 |
 | **Patch +5 AR/RM** | inclus (`BASE_AR_RM`, `computeStats`) |
 
 ---
@@ -111,16 +116,18 @@ de **contrôle**, pas de source. Normalisé en points d'AD :
 
 | Stat | LoL | ici | verdict |
 |---|---|---|---|
-| Armure = ? PV | 7,5 → **6,4** après correction de constante | 4,3 (mix) / 8,7 (phys. pur) | **concorde** |
+| Armure = ? PV | **7,5** | 5,0 (mix 50/50) / 10,1 (phys. pur) | **concorde** |
 | 1 AD = ? PV | 13,1 | **3** | **inapplicable** |
 | AD vs AP | 1,75 | **1,00** | AD = AP chez nous |
 | 1 PV = ? Mana | 2,67 | hors barème | le mana est situationnel |
 
-**Le bloc défensif de LoL est transposable.** À condition de corriger la constante : LoL utilise
-`AR/(AR+100)`, nous `AR/(AR+120)`, et comme la valeur d'un point d'armure vaut `PV/(AR+K)`, le
-rapport entre les deux systèmes est `(AR+100)/(AR+120)` — soit **−14 %** sur notre plage d'armure
-réelle. Les 7,5 PV de LoL deviennent **6,4**, ce qui tombe exactement sur le §7.2 de la spec MJ
-(6,0 à 7,1 selon la classe), écrit sans aucune référence à LoL.
+**Le bloc défensif de LoL est DIRECTEMENT transposable depuis le 2026-09-12** : nous utilisons
+désormais sa constante (`AR/(AR+100)`), donc la correction de −14 % qui figurait ici — et qui
+compensait notre ancien 120 — n'a plus lieu d'être. Les 7,5 PV de LoL tombent entre nos deux bornes
+(5,0 en mix 50/50, 10,1 contre du physique pur), ce qui situe son mix implicite autour de 75 % de
+dégâts physiques — plausible pour un système où l'on achète ses résistances en fonction de
+l'adversaire. Et ils restent cohérents avec le §7.2 de la spec MJ (6,0 à 7,1 selon la classe),
+écrit sans aucune référence à LoL.
 
 **Le raccord offense ↔ défense ne l'est pas**, d'un facteur 6. Deux raisons structurelles : LoL a
 la **vitesse d'attaque**, qui démultiplie chaque point d'AD (d'où 35 or) — nous avons une attaque
@@ -142,4 +149,4 @@ Source : <https://wiki.leagueoflegends.com/en-us/Gold_efficiency>
 - **Potions** — le catalogue est 2 à 3× sous le guide d'économie §7.1, et c'est le catalogue qui
   s'applique en jeu (`parseConsumableEffect` lit le `sub`).
 - **Léthalité physique / magique** — jamais tarifées. Elles ne sont pas linéaires (elles rongent
-  `AR/(AR+120)` par le bas), leur valeur dépend donc de l'armure de la cible, pas du porteur.
+  `AR/(AR+100)` par le bas), leur valeur dépend donc de l'armure de la cible, pas du porteur.
