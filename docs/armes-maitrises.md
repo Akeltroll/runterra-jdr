@@ -243,14 +243,15 @@ automatique au champ manuel du MJ rendrait impossible de savoir qui a écrit quo
 ## Ce que le tableau dit, et ce qu'il ne dit pas
 
 **Ce qu'il dit.** L'étendue s'est resserrée de 162 points (avant les décisions du 2026-09-12) à
-**114**. Le bâton magique, qui culminait à +127 %, est redescendu à +56 %. Le marteau de guerre, qui
+**94**. Le bâton magique, qui culminait à +127 %, est redescendu à +56 %. Le marteau de guerre, qui
 sortait 2ᵉ à +68 %, est revenu dans le rang à +26 % une fois Frappe entravante harmonisée. Les armes
 à distance, qui sortaient absurdement en bas de tableau faute de chiffrage de la portée, sont
-remontées à leur place.
+remontées à leur place. Et le haut du classement est devenu **plat** : cinq armes entre +48 % et
++58 %, contre une arme isolée 22 points devant les autres avant la révision de Parade/Riposte.
 
 **Ce qu'il ne dit pas.**
 
-- ⚠️ **Les stats de base ne peuvent pas équilibrer les armes.** L'écart résiduel fait 114 points
+- ⚠️ **Les stats de base ne peuvent pas équilibrer les armes.** L'écart résiduel fait 94 points
   quand le bonus de stat d'une arme entière en pèse 9. **La correction doit venir des propriétés**,
   pas des `mods` du catalogue.
 - **Les propriétés non chiffrables** portent une valeur de catégorie (5 / 20 / 45), pas une mesure.
@@ -262,9 +263,18 @@ remontées à leur place.
 - **Deux valeurs sont provisoires** : **Déchiffrage** (+30 %) attend l'inventaire des sorts de
   parchemin, et **Focalisation** (+30 %) suppose un mana limitant, ce qu'il n'est pas encore.
 
-## Le point qui reste en tête de classement
+## Le haut du classement
 
-**Épée longue, +78 %.** Parade/Riposte est la maîtrise la plus forte du document (+50 %), et l'arme
-est Poly, donc elle cumule les +16 % de la tenue à deux mains. Après la seconde passe de révisions,
-c'est la seule arme qui reste nettement au-dessus du peloton — le deuxième, le bâton magique, est
-22 points derrière. À surveiller, ou à nerfer comme l'ont été Canalisation et Frappe entravante.
+**Cinq armes se tiennent entre +48 % et +58 %** : épée longue (+58), bâton magique (+56), hache
+double (+53), rapière (+50), puis cimeterre, pistolet hextech et revolver lourd à +48. Aucune ne
+décroche, ce qui est l'état recherché.
+
+L'épée longue reste première pour une raison qui n'est pas sa maîtrise : **elle est Poly**, donc
+elle cumule les +16 % de la tenue à deux mains par-dessus Parade/Riposte (+33 %). Le bâton magique
+en profite d'ailleurs autant — c'est la tenue, pas la propriété, qui fait la tête de classement.
+
+⚠️ **Trois des quatre maîtrises à +45/+50 % ne sont pas chiffrées mais catégorisées** (Danse
+martiale, Iaido, Invocation — toutes « hors modèle ») ; les deux qui le sont, Décimation et la
+Rapière (Duel + Repositionnement), tiennent sur une valeur de catégorie pour leur seconde propriété.
+Le haut du classement repose donc en partie sur des estimations, pas sur des mesures — à revoir si
+l'une d'elles se révèle mal calibrée à la table.
