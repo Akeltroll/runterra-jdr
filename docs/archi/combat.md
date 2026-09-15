@@ -23,7 +23,8 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   `mini+mini`/`main+mini` ; `twoHanded` ; `issues`), `basicAttackProfile(loadout, masteries, eff, choice)`
   (stat/type selon le MODE d'arme, ratio 0,6 mini seule / 1 mini+mini, ×0,75 sans maîtrise hors mini,
   propriétés utilisables et perdues), `sumWeaponPropMods` (branché DANS `sumItemMods`, qui prend désormais
-  `masteries, level` et ignore les armes rangées en accessoire), `equipSlotCheck` (2H = autre main vide,
+  `masteries, level`, ignore les armes rangées en accessoire **et les stats de la mini-arme de soutien d'une
+  paire `main+mini`** — elles ne comptent qu'en paire mini + mini, décision MJ du 2026-09-15), `equipSlotCheck` (2H = autre main vide,
   deux armes non mini interdites, seules les mini-armes en accessoire).
   ⚠️ **Une arme sans `weaponCat` est NEUTRE** (une main, maîtrisée, sans propriété) : c'est le comportement
   d'avant la livraison, gardé exprès pour les objets uniques.

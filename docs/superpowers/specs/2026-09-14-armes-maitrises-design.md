@@ -56,7 +56,7 @@ emplacements, accessoires compris.
 | 2 | Arme hybride | **Le joueur choisit** AD ou AP dans l'onglet Combat, dès qu'une arme hybride est en arme principale **ou** secondaire. |
 | 3 | Type de dégâts | Suit le type de l'arme (physique → dégâts physiques, magique → magiques) ; pour une hybride, **le mode choisi**. Dague = attaque physique, bâton magique = attaque magique. |
 | 4 | Mini-arme non maîtrisée | **Garde sa propriété.** Avec l'absence de malus de −25 % (validée le 2026-09-12), une mini-arme **ignore totalement la maîtrise**. |
-| 5a | Poly + mini-arme | La mini-arme en secondaire apporte **son bonus de stat et sa propriété**, mais **pas d'attaque de base** : l'attaque vient de l'arme principale. |
+| 5a | Poly + mini-arme | La mini-arme en secondaire apporte **sa propriété**, mais **ni attaque de base ni stats** : l'attaque vient de l'arme principale. ⚠️ **Révisé le 2026-09-15** : ses stats ne comptent **qu'en paire mini + mini** (la première version lui donnait aussi son bonus de stat). |
 | 5a' | Cumul des propriétés | **Jamais deux propriétés dans le même tour.** Avec deux armes utilisables, le joueur **choisit** à chaque tour laquelle il lance (propriété de l'arme principale si elle est maîtrisée, ou celle de la mini-arme). |
 | 5a'' | Deux armes non mini | **Interdit** pour l'instant. Un effet de milieu ou de fin de partie pourrait l'ouvrir plus tard. |
 | 5b | Échange de mains | Passer une mini-arme de secondaire à principale est quasi instantané : **permissif**, sans contrainte. |
@@ -156,7 +156,7 @@ carte du MJ doit dire avec quelle arme et quelle propriété le coup est parti.
 | 1H seule (non mini) | oui | 100 % | arme | arme |
 | Mini seule | oui | **60 %** | arme | arme |
 | Mini + mini | oui | **60 % + 40 % = 100 %** | les deux | **une seule à la fois**, au choix (`weaponChoice.prop`) |
-| Poly ou 1H + mini | oui | 100 % **de l'arme non mini**, tenue à une main | les deux | **une seule par tour**, au choix : celle de l'arme principale (si maîtrisée) ou celle de la mini-arme |
+| Poly ou 1H + mini | oui | 100 % **de l'arme non mini**, tenue à une main | **l'arme non mini seulement** (MJ, 2026-09-15) | **une seule par tour**, au choix : celle de l'arme principale (si maîtrisée) ou celle de la mini-arme |
 | Non mini + non mini | **refusé** (5a'') | | | |
 | Mini-arme en accessoire | oui | — | **aucune** | **aucune** |
 | Autre arme en accessoire | **refusé** | | | |
@@ -314,7 +314,7 @@ Les mini-armes sont inscrites **quand même** : ça ne coûte rien et ça reste 
 
 - **+5 de stat par arme** (+10 → +15) ; les hybrides passent de +5/+5 à **+10/+10**.
 - **Elias et Jett perdent 10 AD** : la dague en accessoire ne compte plus.
-- Elias attaque à l'arbalète tenue **à une main** (pas de +2 au jet), avec la Hachette en soutien.
+- Elias attaque à l'arbalète tenue **à une main** (pas de +2 au jet), avec la Hachette en soutien : sa propriété, **pas ses stats** (2026-09-15).
 - Jett : mode **cellules** par défaut, l'attaque ne fait plus de dégâts (conforme à son passif) ; le mode arc court reste disponible.
 - Smith passe en dual wield à 60 % + 40 % : dégâts inchangés, **une seule** Fourberie active.
 - La non-maîtrise (−25 %, perte des propriétés) existe désormais pour toute nouvelle arme ;

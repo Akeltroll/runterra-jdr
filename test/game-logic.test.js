@@ -2255,3 +2255,16 @@ test('armes — equipSlotCheck : 2H, deux non mini, accessoires', () => {
   assert.equal(L.equipSlotCheck({}, items, 'r', 'accessoire1', 'accessory', ACC).ok, true);
   assert.equal(L.equipSlotCheck({}, items, 'r', 'armePrincipale', 'accessory', H).ok, false);
 });
+
+test('armes — mini-arme de soutien avec une arme non mini : propriété oui, stats non (MJ 2026-09-15)', () => {
+  const items = { a: W('a', 'arbalete_legere', { mods: { ad: 15 } }), h: W('h', 'hachette', { mods: { ad: 15 } }),
+    h2: W('h2', 'hachette', { mods: { ad: 15 } }) };
+  const m = { arbalete_legere: true };
+  // quel que soit l'emplacement de la mini-arme
+  assert.deepEqual(L.sumItemMods({ armePrincipale: 'a', armeSecondaire: 'h' }, items, m, 2), { ad: 15 });
+  assert.deepEqual(L.sumItemMods({ armePrincipale: 'h', armeSecondaire: 'a' }, items, m, 2), { ad: 15 });
+  const p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'a', armeSecondaire: 'h' }, items), m, { ad: 100 }, {});
+  assert.deepEqual(p.props.map(x => x.id), ['brisage']);
+  // deux mini-armes : les deux comptent
+  assert.deepEqual(L.sumItemMods({ armePrincipale: 'h', armeSecondaire: 'h2' }, items, {}, 2), { ad: 30 });
+});

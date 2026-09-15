@@ -73,12 +73,16 @@
     equipment = equipment || {};
     itemsById = itemsById || {};
     const out = sumWeaponPropMods(equipment, itemsById, masteries, level);
+    // ⚠️ Mini-arme tenue AVEC une arme non mini : sa propriété reste utilisable, mais ses stats ne
+    // comptent PAS (décision MJ du 2026-09-15). Ses stats ne s'ajoutent qu'en paire mini + mini.
+    const support = mutedSupport(equipment, itemsById);
     for (const slot of Object.keys(equipment)) {
       const id = equipment[slot];
       if (!id) continue;
       const it = itemsById[id];
       if (!it || !it.mods) continue;
       if (isAccessorySlot(slot) && isWeaponItem(it)) continue;
+      if (support && it === support) continue;
       for (const k of Object.keys(it.mods)) {
         const v = Number(it.mods[k]) || 0;
         if (v) out[k] = (out[k] || 0) + v;
@@ -716,12 +720,18 @@
 
   /* Stats d'arme débloquées par la maîtrise (Canalisation, Plénitude), des armes TENUES EN
      MAIN. Une même propriété ne compte qu'une fois. */
+  /* La mini-arme de soutien d'une paire « arme non mini + mini-arme » : ses stats sont muettes. */
+  function mutedSupport(equipment, itemsById) {
+    var lo = weaponLoadout(equipment, itemsById);
+    return lo.pair === 'main+mini' ? lo.support : null;
+  }
   function sumWeaponPropMods(equipment, itemsById, masteries, level) {
     equipment = equipment || {}; itemsById = itemsById || {};
     var out = {}, seen = {};
+    var support = mutedSupport(equipment, itemsById);
     HAND_SLOTS.forEach(function (slot) {
       var it = itemsById[equipment[slot]];
-      if (!isWeaponItem(it) || !weaponMastered(it, masteries)) return;
+      if (!isWeaponItem(it) || !weaponMastered(it, masteries) || it === support) return;
       var c = weaponCategory(it.weaponCat);
       (c ? c.props : []).forEach(function (pid) {
         var p = WEAPON_PROPERTIES[pid];

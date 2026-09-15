@@ -189,7 +189,7 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
 
 ## Comment tester (dev)
 ```bash
-node --test test/game-logic.test.js          # logique pure (267 tests au 2026-09-15)
+node --test test/game-logic.test.js          # logique pure (268 tests au 2026-09-15)
 node --test test/auth.test.js                 # helpers d'auth (11 tests)
 python -m http.server 5050 --bind 127.0.0.1  # servir le site (autre terminal)
 SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées + compte attribué)
@@ -251,7 +251,7 @@ sujet, lire son entrée** : c'est là que sont les ⚠️, les « ne pas faire �
 **Nouvelle livraison = nouveau fichier `docs/journal/<date>.md`** + une ligne dans l'index ci-dessous,
 jamais une nouvelle section ici.
 
-**Dernier état** : cache `20260915-1`, **278 tests verts** (game-logic 267 + auth 11). Règles RTDB
+**Dernier état** : cache `20260915-2`, **279 tests verts** (game-logic 268 + auth 11). Règles RTDB
 en ligne == dépôt (règle `masteries` publiée et relue le 2026-09-15).
 **Armes et maîtrises, livraison 1** (2026-09-15) : l'arme en main pilote l'attaque de base
 (`basicAttackProfile`), maîtrises par perso, catalogue d'armes recalé. ⚠️ **`WEAPONS` n'existe plus** :
@@ -269,7 +269,8 @@ les ids générés n'entrent jamais en collision, donc rien ne signale un doublo
 - **constante de mitigation 120 → 100** : tout le monde encaisse un peu mieux, **les monstres armurés
   nettement mieux** (un boss à 200 d'armure gagne +12 %) → 2026-09-12.
 - **armes et maîtrises (livraison 1)** : +5 par arme, dagues en accessoire sans stats, cellules de Jett
-  sans dégâts, dual wield de Smith à 60 % + 40 % → 2026-09-15 (§4 du journal).
+  sans dégâts, dual wield de Smith à 60 % + 40 %, **hachette d'Elias sans stats** (une mini-arme de
+  soutien ne compte qu'en paire mini + mini) → 2026-09-15 (§4 et suite du journal).
 ⚠️ Ces trois-là sont **en ligne depuis le 2026-09-12** (push de 11 commits, cache `20260912-1`) : les
 joueurs les subissent déjà, annoncés ou non.
 
