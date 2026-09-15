@@ -152,7 +152,8 @@ function useSharedTurn() {
       // Max de base SANS skillBuffs (les buffs BUFFS n'affectent pas les PV max).
       const baseMax = computeEffective(cbase, st.modifiers, [],
         mergeMods(mergeMods(itemMods, runeMods), passiveMods));
-      const patch = { counters: null, cooldowns: null, skillBuffs: null };
+      // weaponCombat = cibles désignées par Duel / Concentration : elles ne survivent pas au combat.
+      const patch = { counters: null, cooldowns: null, skillBuffs: null, weaponCombat: null };
       if (st.hpCur != null) patch.hpCur = Math.min(st.hpCur, baseMax.hp);
       patch.shield = Math.min(st.shield || 0, c.shieldMax || 0);
       window.RTDB.updatePath(p, patch);
@@ -398,6 +399,12 @@ async function applyStatusToCharacter(charId, skillId, payload) {
     const cur = Math.max(0, st.hpCur | 0);
     patch.hpCur = Math.min(cur + Math.max(0, payload.hpGain | 0), Math.max(cur, payload.hpMax | 0));
   }
+  if (payload.manaGain) {
+    // Focalisation / Plénitude (armes, livraison 2) : même contrat que hpGain, plafonné au
+    // mana max snapshoté au cast.
+    const cur = Math.max(0, Number(st.manaCur) || 0);
+    patch.manaCur = Math.min(cur + Math.max(0, payload.manaGain | 0), Math.max(cur, payload.manaMax | 0));
+  }
   if (payload.counters) Object.keys(payload.counters).forEach((k) => {
     patch[`counters/${k}`] = Math.max(0, payload.counters[k] | 0) || null;
   });
@@ -421,8 +428,9 @@ async function refundCast(plan) {
   const next = refundManaValue(cur, plan.mana, plan.manaMax);
   const patch = {};
   if (next !== cur) patch.manaCur = next;
-  if (plan.restoreCd && plan.skillId && plan.skillId !== 'basic') {
-    patch[`cooldowns/${plan.skillId}`] = plan.cdPrev != null ? plan.cdPrev : null;
+  const cdKey = plan.cdKey || plan.skillId;
+  if (plan.restoreCd && cdKey && cdKey !== 'basic') {
+    patch[`cooldowns/${cdKey}`] = plan.cdPrev != null ? plan.cdPrev : null;
   }
   if (Object.keys(patch).length) await window.RTDB.updatePath(p, patch);
   return { mana: next - cur, manaCur: next, cd: !!plan.restoreCd };

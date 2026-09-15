@@ -471,6 +471,74 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
   );
 }
 
+/* Options des propriétés d'arme automatisées pour le prochain coup (livraison armes 2).
+   Rien n'est écrit ici : les cases alimentent `buildWeaponAttack` au clic sur « Attaquer ». */
+function WeaponPropOptions({ profile, sources, activeSource, activeProps, onSource, toggles, onToggle,
+  ready, eff, wCombat, targetName, damage, onFocalisation }) {
+  const has = (id) => activeProps.indexOf(id) !== -1;
+  const nameOfSource = (src) => {
+    const p = profile.props.find(x => x.source === src);
+    return p ? p.itemName : src;
+  };
+  const propsOfSource = (src) => profile.props.filter(x => x.source === src)
+    .map(x => (WEAPON_PROPERTIES[x.id] || {}).name || x.id).join(', ');
+  const box = (key, label, disabled, title) => (
+    <label key={key} className="row gap-1" title={title || ''}
+      style={{ alignItems: 'center', fontSize: 12.5, opacity: disabled ? 0.5 : 1, cursor: disabled ? 'default' : 'pointer' }}>
+      <input type="checkbox" checked={!!toggles[key] && !disabled} disabled={disabled} onChange={() => onToggle(key)} />
+      {label}
+    </label>
+  );
+  const info = (txt, color) => <span style={{ fontSize: 12, color: color || 'var(--ink-soft)' }}>{txt}</span>;
+  const spend = Math.round((eff.mana || 0) * 0.05);
+  const items = [];
+  if (damage) {
+    if (has('fourberie')) items.push(box('backstab', 'Dans le dos (+2 au jet, +10 % crit, +20 % dégâts crit)'));
+    if (has('attaque_double')) items.push(box('double', 'Attaque double (2 × 65 %)'));
+    if (has('balayage')) items.push(box('sweep', ready('balayage') ? 'Balayage (jusqu’à 3 cibles à 80 %)' : 'Balayage (pas deux tours d’affilée)', !ready('balayage')));
+    if (has('quitte_ou_double')) items.push(box('risky', 'Quitte ou double (50 % : 130 % · sinon 100 % et blessure de 8 % PV)'));
+    if (has('canalisation')) items.push(box('channel', `Canaliser ${spend} mana (+${spend * 2} bruts)`));
+    if (has('decimation')) items.push(box('decimation', ready('decimation') ? 'Décimation (1×/combat : 50 % à chaque cible + soin)' : 'Décimation (déjà utilisée ce combat)', !ready('decimation')));
+    if (has('purge')) {
+      items.push(box('purgeHasBuff', 'La cible a un bouclier ou un buff (Purge le retire)', !ready('purge'), ready('purge') ? '' : 'Purge en rechargement'));
+      if (!toggles.purgeHasBuff) items.push(info(ready('purge') ? 'Purge prête : sans rien à retirer, l’arme frappe à 110 %' : 'Purge en rechargement : 100 %'));
+    }
+    if (has('duel')) items.push(info(wCombat.duelTarget ? `Duel : 125 % contre ${targetName(wCombat.duelTarget)} (viser ailleurs perd le duel)` : 'Duel : la prochaine cible est désignée (125 %)'));
+    if (has('concentration')) items.push(info(wCombat.concTarget ? `Concentration sur ${targetName(wCombat.concTarget)} : critique doublé`
+      : (ready('concentration') ? 'Concentration : la prochaine cible est désignée (critique doublé)' : 'Concentration perdue : rechargement jusqu’au tour suivant')));
+    if (has('combo')) items.push(info('Combo : 25 % de relance, roulé automatiquement'));
+    if (has('connexion_astrale')) items.push(info('Connexion astrale : d6 roulé automatiquement (choisis 2 cibles pour un éventuel 6)'));
+    if (has('plenitude')) items.push(info('Plénitude : un critique rend 5 % du mana max'));
+  }
+  const focal = has('focalisation');
+  if (!items.length && !focal && sources.length < 2) return null;
+  return (
+    <div className="col gap-1" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+      {sources.length > 1 && (
+        <div className="row gap-2 wrap" style={{ alignItems: 'center', marginBottom: 4 }}>
+          <span className="overline">Propriété du tour</span>
+          {sources.map(src => (
+            <button key={src} className={'btn btn-sm ' + (activeSource === src ? 'btn-gold' : 'btn-ghost')}
+              onClick={() => onSource(src)} title="Jamais deux propriétés dans le même tour">
+              {nameOfSource(src)} : {propsOfSource(src)}
+            </button>
+          ))}
+        </div>
+      )}
+      {items}
+      {focal && (
+        <div className="row gap-2" style={{ alignItems: 'center', marginTop: 4 }}>
+          <button className="btn btn-sm btn-mana" onClick={onFocalisation} disabled={!ready('focalisation')}
+            title={ready('focalisation') ? 'Action à part, sans attaque' : 'Rechargement 2 tours'}>
+            ✦ Focalisation (+{Math.round((eff.mana || 0) * 0.15)} mana)
+          </button>
+          {!ready('focalisation') && info('en rechargement')}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CompetencesBody({ char, staff }) {
   const toast = useToast();
   // ⚠️ `setSkillBuff` n'est PLUS pris ici : depuis la refonte du 2026-09-06, un buff de
@@ -495,6 +563,9 @@ function CompetencesBody({ char, staff }) {
   // Cible(s) de l'attaque de base : même bloc de ciblage que les compétences (décision
   // MJ du 2026-09-06), simplement borné à une cible.
   const [basicSel, setBasicSel] = useState({});
+  // Options de propriété d'arme pour CE coup (dans le dos, balayage, canalisation…) : état
+  // LOCAL, remis à zéro après chaque attaque, comme la sélection de cibles.
+  const [wToggles, setWToggles] = useState({});
   if (!state) return <div className="panel" style={{ margin: 20, padding: 20 }}>Chargement…</div>;
 
   const kit = SKILLS[char.id];
@@ -627,6 +698,23 @@ function CompetencesBody({ char, staff }) {
      `max: 1` est la seule constante à changer le jour où les règles prévoient un
      balayage d'arme lourde (décision MJ du 2026-09-06). */
   const BASIC_TARGETING = { damage: { camp: 'any', min: 1, max: 1 } };
+  /* Propriétés d'arme automatisées (livraison armes 2, spec §5 lot 2). Elles ne jouent qu'en
+     attaque PLEINE (décision MJ 9), et une seule arme fournit ses propriétés par tour (5a'). */
+  const propSources = weaponPropSources(profile);
+  const activeSource = weaponActiveSource(profile, weaponChoice.propSource);
+  const activeProps = weaponActiveProps(profile, weaponChoice.propSource);
+  const hasProp = (id) => activeProps.indexOf(id) !== -1;
+  const propReady = (id) => cooldownReady(cooldowns[weaponCdKey(id)], turn);
+  const wCombat = state.weaponCombat || {};
+  const fullAttack = profile.damage && mode.id === 'normal';
+  const basicTargeting = fullAttack ? weaponAttackTargeting(activeProps, wToggles, cooldowns, turn) : BASIC_TARGETING;
+  const toggle = (k) => setWToggles(t => ({ ...t, [k]: !t[k] }));
+  const isKo = (id) => {
+    const en = enemies.find(e => e.id === id);
+    if (en) return (en.hpCur || 0) <= 0;
+    return allHp[id] != null && allHp[id] <= 0;
+  };
+  const setPropSource = (src) => setField('weaponChoice', { ...weaponChoice, propSource: src });
   const weaponMeta = { weaponCat: (profile.cat && profile.cat.id) || '', weaponName: profile.name,
     mastered: profile.mastered };
   /* Mode sans dégâts (cellules nano-hextech de Jett) : une action NARRATIVE, sans cible,
@@ -641,8 +729,45 @@ function CompetencesBody({ char, staff }) {
     pushLog(`<b>${char.name}</b> — ${label} — en attente MJ`, 'gold');
     toast(`<b>${char.name}</b> — ${label} envoyé au MJ`, 'buff');
   }
+  /* Attaque PLEINE avec les propriétés du tour : le plan pur (`buildWeaponAttack`) dit quoi
+     payer (mana de Canalisation, rechargement) et quelles instances déposer. Comme pour une
+     compétence, seul le COÛT est écrit ici — plus la cible désignée par Duel/Concentration,
+     qui est un état de l'arme et non un effet. */
+  function weaponAttack() {
+    const plan = buildWeaponAttack(profile, eff, { turn, selfId: char.id, targets: basicSel.damage || [],
+      active: activeProps, toggles: wToggles, weaponCombat: wCombat, cooldowns, isKo,
+      manaCur: state.manaCur || 0 });
+    if (!plan.ok) { toast(`<b>${char.name}</b> — ${plan.reason}`, 'gold'); return; }
+    if (plan.cost.mana) setField('manaCur', (state.manaCur || 0) - plan.cost.mana);
+    if (plan.cooldown) setCooldown(plan.cooldown.key, plan.cooldown.readyAt);
+    if ((plan.combat.duelTarget || null) !== (wCombat.duelTarget || null)
+      || (plan.combat.concTarget || null) !== (wCombat.concTarget || null)) {
+      setField('weaponCombat', { duelTarget: plan.combat.duelTarget || null, concTarget: plan.combat.concTarget || null });
+    }
+    const label = 'Attaque de base' + (plan.label ? ' · ' + plan.label : '');
+    addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
+      source: 'basic', round: turn, cost: plan.cost }, weaponMeta), plan.instances);
+    const sum = instanceSummary(plan.instances, targetName);
+    const crit = plan.instances.some(i => i.didCrit);
+    const notes = plan.notes.length ? ` (${plan.notes.join(' ; ')})` : '';
+    pushLog(`<b>${char.name}</b> — <b>${label}</b>${sum ? ' — ' + sum : ''}${notes} — en attente MJ`, crit ? 'buff' : 'gold');
+    toast(`<b>${char.name}</b> — ${label}${crit ? ' — CRITIQUE !' : ''} envoyé au MJ`, 'buff');
+    setBasicSel({});
+    setWToggles({});
+  }
+  /* Focalisation (masse d'armes) : action à part, sans attaque, rechargement 2 tours. */
+  function focalisation() {
+    const plan = buildFocalisation(eff, { turn, selfId: char.id, cooldowns });
+    if (!plan.ok) { toast(`<b>${char.name}</b> — ${plan.reason}`, 'gold'); return; }
+    setCooldown(plan.cooldown.key, plan.cooldown.readyAt);
+    addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: 'Focalisation',
+      source: 'basic', round: turn, cost: plan.cost }, weaponMeta), plan.instances);
+    pushLog(`<b>${char.name}</b> — <b>Focalisation</b> — ${plan.instances[0].label} — en attente MJ`, 'gold');
+    toast(`<b>${char.name}</b> — Focalisation envoyée au MJ`, 'buff');
+  }
   function basicAttack() {
     if (!profile.damage) { narrativeAttack(); return; }
+    if (fullAttack) { weaponAttack(); return; }
     const check = castSelectionValid(BASIC_TARGETING, basicSel);
     if (!check.ok) { toast(`<b>${char.name}</b> — ${check.reason}`, 'gold'); return; }
     const label = mode.id === 'normal' ? 'Attaque de base'
@@ -784,7 +909,7 @@ function CompetencesBody({ char, staff }) {
           {/* Même bloc de ciblage que les compétences, borné à une cible. */}
           <div style={{ marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--line)' }}>
             <div className="overline" style={{ marginBottom: 6 }}>Cible</div>
-            <TargetRow effKey="damage" spec={BASIC_TARGETING.damage} pool={pools.any}
+            <TargetRow effKey="damage" spec={basicTargeting.damage} pool={pools.any}
               selected={basicSel.damage || []}
               onChange={(next) => setBasicSel({ damage: next })} />
           </div>
@@ -812,7 +937,13 @@ function CompetencesBody({ char, staff }) {
             </button>
           </div>
           {/* Décision MJ 9 : les propriétés ne jouent qu'en attaque pleine. */}
-          {(!profile.damage || mode.id === 'normal') && <WeaponPropsList profile={profile} />}
+          {(!profile.damage || mode.id === 'normal') && (
+            <WeaponPropOptions profile={profile} sources={propSources} activeSource={activeSource}
+              activeProps={activeProps} onSource={setPropSource} toggles={wToggles} onToggle={toggle}
+              ready={propReady} eff={eff} wCombat={wCombat} targetName={targetName}
+              damage={profile.damage} onFocalisation={focalisation} />
+          )}
+          {(!profile.damage || mode.id === 'normal') && <WeaponPropsList profile={profile} active={activeProps} />}
         </div>
       </div>
       <PassiveCard kit={kitWithId} eff={eff} base={base} counters={counters} level={level} color={color} setCounter={setCounter} />

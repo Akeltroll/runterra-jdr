@@ -43,10 +43,17 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
                      ne rend donc PAS la respec
     masteries:   { [weaponCat]: true }   ← maîtrises d'armes (2026-09-15) ; écriture STAFF (`.validate`), via setMastery ;
                      ABSENT = aucune maîtrise → −25 % et aucune propriété sur toute arme non mini catégorisée
-    weaponChoice: { mode }   ← mode d'arme choisi par le joueur (hybride 'ad'|'ap', arc hextech 'cellules'|'ad') ;
+    weaponChoice: { mode, propSource }   ← mode d'arme choisi par le joueur (hybride 'ad'|'ap', arc hextech 'cellules'|'ad') ;
                      ABSENT = mode par défaut de la catégorie (1er de `modes`)
+                     propSource ∈ 'attacker'|'support' = l'arme dont les propriétés jouent ce tour (deux armes en main) ;
+                     ABSENT = l'arme d'attaque si elle a une propriété, sinon la mini-arme (weaponActiveSource)
+    weaponCombat: { duelTarget, concTarget }   ← cibles désignées par Duel / Concentration (armes, livraison 2) ;
+                     écrit par le JOUEUR au cast (état de l'arme, pas un effet) ; effacé par « ⟲ Combat » ;
+                     ⚠️ n'est PAS remboursé si le MJ annule l'attaque (assumé : la désignation a eu lieu)
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
+                     + clés `w_<propriété>` pour les propriétés d'arme (w_balayage, w_purge, w_decimation,
+                     w_concentration, w_focalisation) — même contrat, même purge par « ⟲ Combat »
     skillBuffs: { [skillId]: { mods:{ [stat]: n }, until:<n° de tour>|null } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; until = tour de fin (auto-expiration via sumSkillBuffs(buffs,turn), ex. Mur de Givre 1/2 tours), null = permanent ; ancienne forme plate { [stat]:n } encore lue (compat) ; effacés par « ⟲ Combat »
 /campaign/runeterra/sharedInventory/{itemId}/   ← inventaire COMMUN partagé (R/W tout participant)
     { id, cat, name, sub, qty, ic, img, type, mods, weight, carry, carryGroup }
@@ -62,7 +69,8 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
 /campaign/runeterra/combat/pendingActions/{actionId}/   ← ACTIONS proposées par les joueurs (remplace pendingHits depuis 2026-09-06)
     attackerId, attackerName, skillId, skillName, source:'skill'|'basic', round, ts
     weaponCat, weaponName, mastered   ← attaque de base seulement (2026-09-15) : l'arme du coup et son malus éventuel
-    cost: { mana, manaPer, manaMax, cdPrev }   ← le coût appartient à l'ACTION, pas à l'instance : N cibles = un seul mana et un seul cooldown
+    cost: { mana, manaPer, manaMax, cdPrev, cdKey }   ← le coût appartient à l'ACTION, pas à l'instance : N cibles = un seul mana et un seul cooldown
+                                                  cdKey = clé du cooldown à rendre quand elle n'est pas `skillId` (propriété d'arme : `w_balayage`…)
                                                   cdPrev = cooldown d'AVANT le cast (absent = la comp était prête, Firebase efface les null)
                                                   manaPer = mana facturé PAR CIBLE (0 partout aujourd'hui ; c'est la seule raison de rembourser une instance isolée)
     appliedCount: 0   ← SEUL champ muté après création ; dès qu'il dépasse 0 plus RIEN n'est jamais remboursé (la comp a eu lieu)
@@ -70,7 +78,8 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
         targetId = un PNJ (`combat/enemies`) OU un PJ (`charId`) ; pour un `status` c'est le lanceur lui-même
         kind 'damage' : computedDmg, critDmg, didCrit, critMult, type, letha, lethaMag, crit, dcrit, vol, sapience, omni, hpMax, modeId
         kind 'heal'   : amount
-        kind 'status' : mods, until, shield, counters, transformUntil, hpGain, hpMax — ou narrative:true (effet en table, « Valider » n'écrit rien)
+        kind 'status' : mods, until, shield, counters, transformUntil, hpGain, hpMax, manaGain, manaMax — ou narrative:true (effet en table, « Valider » n'écrit rien)
+        label (toute instance, optionnel) : ce que l'instance représente (« Balayage 80 % », « d6 = 4 : améliorée 150 % »), affiché sur la carte du MJ
                                               modeId = mode d'attaque de base (`BASIC_MODES`) quand `skillId === 'basic'` ; absent = attaque pleine
                                               letha/lethaMag = les DEUX léthalités snapshotées au cast ; le champ MJ affiché suit le type choisi (physique→letha, magique→lethaMag, brut→0)
 /campaign/runeterra/economyLog/{id}   ← journal d'ÉCONOMIE { id, ts, text, kind:'gold'(transfert)|'buff'(gain)|'debuff'(retrait) }

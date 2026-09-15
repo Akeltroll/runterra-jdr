@@ -2268,3 +2268,161 @@ test('armes — mini-arme de soutien avec une arme non mini : propriété oui, s
   // deux mini-armes : les deux comptent
   assert.deepEqual(L.sumItemMods({ armePrincipale: 'h', armeSecondaire: 'h2' }, items, {}, 2), { ad: 30 });
 });
+
+/* ============================================================
+   ARMES — LIVRAISON 2 : propriétés automatisées
+   ⚠️ rng : chaque instance de dégâts qui roule le crit consomme UN tirage (crit 0 → jamais de crit).
+   ============================================================ */
+const rngSeq = (...v) => { let i = 0; return () => v[Math.min(i++, v.length - 1)]; };
+const prof = (cat, masteries, power, extraItems) => {
+  const items = Object.assign({ w: W('w', cat) }, extraItems || {});
+  const eq = { armePrincipale: 'w' };
+  if (extraItems && extraItems.s) eq.armeSecondaire = 's';
+  return L.basicAttackProfile(L.weaponLoadout(eq, items), masteries || { [cat]: true }, { ad: power || 100, ap: power || 100 }, {});
+};
+const WEFF = { ad: 100, ap: 100, hp: 1000, mana: 400, crit: 0, dcrit: 150 };
+const atk = (p, input) => L.buildWeaponAttack(p, WEFF, Object.assign({ turn: 3, selfId: 'me', rng: rngSeq(0.99),
+  active: L.weaponActiveProps(p) }, input));
+
+test('armes L2 — une seule source de propriétés par tour ; défaut = arme d attaque', () => {
+  const items = { e: W('e', 'epee_longue'), d: W('d', 'dague') };
+  const p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'e', armeSecondaire: 'd' }, items), { epee_longue: true }, WEFF, {});
+  assert.deepEqual(L.weaponPropSources(p), ['attacker', 'support']);
+  assert.deepEqual(L.weaponActiveProps(p), ['parade_riposte']);
+  assert.deepEqual(L.weaponActiveProps(p, 'support'), ['fourberie']);
+  // arme d'attaque sans propriété (arbalète) : la mini-arme joue par défaut
+  const it2 = { a: W('a', 'arbalete_legere'), h: W('h', 'hachette') };
+  const p2 = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'a', armeSecondaire: 'h' }, it2), { arbalete_legere: true }, WEFF, {});
+  assert.deepEqual(L.weaponActiveProps(p2), ['brisage']);
+});
+
+test('armes L2 — Balayage : 3 cibles à 80 %, pas deux tours d affilée', () => {
+  const p = prof('claymore');
+  assert.equal(L.weaponAttackTargeting(['balayage'], { sweep: true }, {}, 3).damage.max, 3);
+  const r = atk(p, { targets: ['a', 'b', 'c'], toggles: { sweep: true }, rng: rngSeq(0.99, 0.99, 0.99) });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.instances.map(i => i.computedDmg), [80, 80, 80]);
+  assert.deepEqual(r.cooldown, { key: 'w_balayage', readyAt: 5 });
+  assert.equal(r.cost.cdKey, 'w_balayage');
+  const again = atk(p, { targets: ['a'], toggles: { sweep: true }, cooldowns: { w_balayage: 5 }, turn: 4 });
+  assert.equal(again.ok, false);
+  assert.equal(atk(p, { targets: ['a', 'b'], toggles: {} }).ok, false);   // sans Balayage : une cible
+});
+
+test('armes L2 — Attaque double : 2 × 65 %, une cible reçoit les deux', () => {
+  const p = prof('epee_courte', {});
+  const r = atk(p, { targets: ['a'], toggles: { double: true }, rng: rngSeq(0.99, 0.99) });
+  assert.deepEqual(r.instances.map(i => [i.targetId, i.computedDmg]), [['a', 39], ['a', 39]]);   // 100 × 60 % × 65 %
+  assert.equal(r.cooldown, null);
+});
+
+test('armes L2 — Duel : 125 % sur la cible désignée, perdu en changeant de cible, re-désigné si elle tombe', () => {
+  const p = prof('rapiere');
+  let r = atk(p, { targets: ['a'] });
+  assert.equal(r.instances[0].computedDmg, 125); assert.equal(r.combat.duelTarget, 'a');
+  r = atk(p, { targets: ['b'], weaponCombat: { duelTarget: 'a' } });
+  assert.equal(r.instances[0].computedDmg, 100); assert.equal(r.combat.duelTarget, null);
+  r = atk(p, { targets: ['b'], weaponCombat: { duelTarget: 'a' }, isKo: id => id === 'a' });
+  assert.equal(r.instances[0].computedDmg, 125); assert.equal(r.combat.duelTarget, 'b');
+});
+
+test('armes L2 — Concentration : crit doublé sur la cible ; changer de cible = 1 tour de rechargement', () => {
+  const p = prof('arc_court');
+  const eff = Object.assign({}, WEFF, { crit: 20 });
+  let r = L.buildWeaponAttack(p, eff, { turn: 3, selfId: 'me', targets: ['a'], active: ['concentration'], rng: rngSeq(0.99) });
+  assert.equal(r.instances[0].crit, 40); assert.equal(r.combat.concTarget, 'a');
+  r = L.buildWeaponAttack(p, eff, { turn: 3, selfId: 'me', targets: ['b'], active: ['concentration'], weaponCombat: { concTarget: 'a' }, rng: rngSeq(0.99) });
+  assert.equal(r.instances[0].crit, 20); assert.equal(r.combat.concTarget, null);
+  assert.deepEqual(r.cooldown, { key: 'w_concentration', readyAt: 4 });
+  r = L.buildWeaponAttack(p, eff, { turn: 3, selfId: 'me', targets: ['b'], active: ['concentration'], cooldowns: { w_concentration: 4 }, rng: rngSeq(0.99) });
+  assert.equal(r.instances[0].crit, 20); assert.equal(r.combat.concTarget, null);   // en rechargement : pas de désignation
+});
+
+test('armes L2 — Combo : 25 % de relance, cumulable', () => {
+  const p = prof('gantelet');
+  // crit(0.99) · relance(0.1) · crit(0.99) · relance(0.2) · crit(0.99) · stop(0.5)
+  const r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.1, 0.99, 0.2, 0.99, 0.5) });
+  assert.equal(r.instances.length, 3);
+  assert.equal(r.label, 'Combo ×3');
+});
+
+test('armes L2 — Quitte ou double : 130 % ou 100 % + 8 % PV max en bruts sur soi', () => {
+  const p = prof('nunchaku');
+  let r = atk(p, { targets: ['a'], toggles: { risky: true }, rng: rngSeq(0.2, 0.99) });
+  assert.deepEqual(r.instances.map(i => i.computedDmg), [130]);
+  r = atk(p, { targets: ['a'], toggles: { risky: true }, rng: rngSeq(0.7, 0.99) });
+  assert.equal(r.instances.length, 2);
+  assert.deepEqual([r.instances[1].targetId, r.instances[1].type, r.instances[1].computedDmg, r.instances[1].crit], ['me', 'brut', 80, 0]);
+});
+
+test('armes L2 — Canalisation : 5 % du mana payé au cast, ×2 en bruts', () => {
+  const p = prof('baton_magique');
+  const r = atk(p, { targets: ['a'], toggles: { channel: true }, manaCur: 300 });
+  assert.equal(r.cost.mana, 20);
+  assert.deepEqual([r.instances[1].type, r.instances[1].computedDmg], ['brut', 40]);
+  assert.equal(atk(p, { targets: ['a'], toggles: { channel: true }, manaCur: 10 }).ok, false);
+});
+
+test('armes L2 — Fourberie dans le dos : +10 % crit et +20 % dégâts crit', () => {
+  const p = prof('dague', {});
+  const r = atk(p, { targets: ['a'], toggles: { backstab: true } });
+  assert.deepEqual([r.instances[0].crit, r.instances[0].dcrit], [10, 170]);
+});
+
+test('armes L2 — Plénitude : un crit rend 5 % du mana max', () => {
+  const p = prof('orbe');
+  const eff = Object.assign({}, WEFF, { crit: 50 });
+  const r = L.buildWeaponAttack(p, eff, { turn: 1, selfId: 'me', targets: ['a'], active: ['plenitude'], rng: rngSeq(0.1) });
+  const st = r.instances.find(i => i.kind === 'status');
+  assert.deepEqual([st.targetId, st.manaGain, st.manaMax], ['me', 20, 400]);
+  const miss = L.buildWeaponAttack(p, eff, { turn: 1, selfId: 'me', targets: ['a'], active: ['plenitude'], rng: rngSeq(0.9) });
+  assert.equal(miss.instances.some(i => i.kind === 'status'), false);
+});
+
+test('armes L2 — Connexion astrale : d6 = 1 renvoyée, 4 à 150 %, 5 critique, 6 double', () => {
+  const p = prof('relique');
+  let r = atk(p, { targets: ['a'], rng: rngSeq(0.0, 0.99) });
+  assert.equal(r.instances[0].targetId, 'me');
+  r = atk(p, { targets: ['a'], rng: rngSeq(0.55, 0.99) });                 // floor(3,3)+1 = 4
+  assert.equal(r.instances[0].computedDmg, 150);
+  r = atk(p, { targets: ['a'], rng: rngSeq(0.7, 0.99) });                  // 5 : crit garanti
+  assert.equal(r.instances[0].didCrit, true);
+  r = atk(p, { targets: ['a', 'b'], rng: rngSeq(0.99, 0.99, 0.99) });       // 6
+  assert.deepEqual(r.instances.map(i => i.targetId), ['a', 'b']);
+});
+
+test('armes L2 — Purge : retrait (CD 2) ; sinon 110 % si prête ; 100 % en rechargement', () => {
+  const p = prof('tronconneuse_hextech');
+  let r = atk(p, { targets: ['a'], toggles: { purgeHasBuff: true } });
+  assert.equal(r.instances[0].narrative, true); assert.equal(r.instances[0].targetId, 'a');
+  assert.deepEqual(r.cooldown, { key: 'w_purge', readyAt: 5 });
+  r = atk(p, { targets: ['a'] });
+  assert.equal(r.instances[0].computedDmg, 110);
+  r = atk(p, { targets: ['a'], cooldowns: { w_purge: 5 } });
+  assert.equal(r.instances[0].computedDmg, 100);
+});
+
+test('armes L2 — Décimation : 50 % sur toutes les cibles, soin égal, 1×/combat', () => {
+  const p = prof('hache_double');
+  assert.equal(L.weaponAttackTargeting(['decimation'], { decimation: true }, {}, 1).damage.max, null);
+  const r = atk(p, { targets: ['a', 'b', 'c'], toggles: { decimation: true }, rng: rngSeq(0.99, 0.99, 0.99) });
+  assert.deepEqual(r.instances.map(i => i.kind), ['damage', 'damage', 'damage', 'heal']);
+  assert.equal(r.instances[3].amount, 150);
+  assert.equal(r.cooldown.readyAt, 999999);
+  assert.equal(atk(p, { targets: ['a'], toggles: { decimation: true }, cooldowns: { w_decimation: 999999 } }).ok, false);
+});
+
+test('armes L2 — Focalisation : +15 % du mana max, rechargement 2 tours', () => {
+  const r = L.buildFocalisation(WEFF, { turn: 2, selfId: 'me' });
+  assert.equal(r.instances[0].manaGain, 60);
+  assert.deepEqual(r.cooldown, { key: 'w_focalisation', readyAt: 4 });
+  assert.equal(L.buildFocalisation(WEFF, { turn: 3, selfId: 'me', cooldowns: { w_focalisation: 4 } }).ok, false);
+});
+
+test('armes L2 — remboursement : le rechargement d une propriété revient via cost.cdKey', () => {
+  const action = { attackerId: 'me', skillId: 'basic', source: 'basic', appliedCount: 0,
+    cost: { mana: 0, manaMax: 400, cdPrev: null, cdKey: 'w_balayage' }, instances: { i1: {}, i2: {} } };
+  const plan = L.actionRefundPlan(action, 'cancel');
+  assert.equal(plan.cdKey, 'w_balayage'); assert.equal(plan.restoreCd, true); assert.equal(plan.cdPrev, null);
+  assert.equal(L.actionRefundPlan({ attackerId: 'me', skillId: 'basic', source: 'basic', cost: { mana: 0 } }, 'cancel'), null);
+});

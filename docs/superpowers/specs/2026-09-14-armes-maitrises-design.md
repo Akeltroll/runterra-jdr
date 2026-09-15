@@ -338,7 +338,7 @@ Les mini-armes sont inscrites **quand même** : ça ne coûte rien et ça reste 
 9. Banc d'essai de la page Combat (vraie couche d'état sur faux RTDB), smoke, `esbuild`, jeton de cache.
 10. Docs : `docs/archi/combat.md`, `modele-donnees.md`, `inventaire-poids-monnaie.md`, journal, CLAUDE.md.
 
-**Livraison 2 — propriétés automatisées** (lot 2, §5) : `weaponChoice.prop`, `weaponCombat`,
+**Livraison 2 — propriétés automatisées** — ✅ **codée le 2026-09-15** (journal du jour, section « Livraison 2 ») (lot 2, §5) : `weaponChoice.prop`, `weaponCombat`,
 cooldowns `w_*`, `manaGain` dans `applyStatusToCharacter`, `resetCombat` étendu. Tests par propriété
 avec `rng` injecté.
 

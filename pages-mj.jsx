@@ -843,6 +843,7 @@ function DamageInstanceRow({ inst, target, onApply, onReject, head }) {
             {target ? target.name : '— cible disparue —'}
           </b>
           {target && target.kind === 'pj' && <span className="faint" style={{ fontSize: 11 }}> (joueur)</span>}
+          {inst.label && <span className="faint" style={{ fontSize: 11.5 }}> · {inst.label}</span>}
         </span>
         {inst.didCrit
           ? <span className="mono" style={{ fontSize: 11, color: 'var(--skillbuff)' }}>
@@ -895,6 +896,7 @@ function HealInstanceRow({ inst, target, onApply, onReject, head }) {
         <b style={{ color: target && target.kind === 'pj' ? 'var(--gold-pale)' : undefined }}>
           {target ? target.name : '— cible disparue —'}
         </b>
+        {inst.label && <span className="faint" style={{ fontSize: 11.5 }}> · {inst.label}</span>}
       </span>
       <input style={{ ...ENEMY_FLD, width: 80 }} value={amount} onChange={e => setAmount(e.target.value)} title="Soin (ajustable)" />
       <button className="btn btn-sm btn-gold" disabled={!ready}

@@ -28,8 +28,17 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   deux armes non mini interdites, seules les mini-armes en accessoire).
   ⚠️ **Une arme sans `weaponCat` est NEUTRE** (une main, maîtrisée, sans propriété) : c'est le comportement
   d'avant la livraison, gardé exprès pour les objets uniques.
-  ⚠️ **Livraison 1 seulement** : les propriétés sont AFFICHÉES (rappels), aucune n'est automatisée.
-  Les lots 2 et 3 sont décrits au §5 de la spec.
+  **Livraison 2 (2026-09-15) — propriétés automatisées** : `weaponActiveSource`/`weaponActiveProps` (une
+  seule ARME fournit ses propriétés par tour ; les propriétés d'une même arme jouent ensemble),
+  `weaponAttackTargeting` (max 2 Attaque double / Connexion astrale, 3 Balayage, illimité Décimation),
+  **`buildWeaponAttack(profile, eff, input)`** (plan pur d'une attaque PLEINE : Duel, Concentration, Décimation,
+  Balayage, Attaque double, Connexion astrale, Quitte ou double, Purge, Canalisation, Combo, Fourberie,
+  Plénitude → `{instances, cost, cooldown, combat, notes, label}`, `rng` injectable) et `buildFocalisation`
+  (action à part). Les rechargements vivent sous `cooldowns/w_<propriété>` et reviennent au remboursement via
+  **`cost.cdKey`** (`actionRefundPlan` + `refundCast`). ⚠️ Chaque instance de dégâts qui roule le crit
+  consomme UN tirage de `rng` : les tests en dépendent.
+  **Restent en table (lot 3)** : Assommage, Brisage, Frappe entravante, Estropiaison, Désarmement,
+  Parade/Riposte et les rappels (§5 de la spec).
   **Modes d'attaque de base** : `BASIC_MODES` (6 gestes à ratio FIXE sur la puissance d'attaque —
   Attaque 100 % / Coup retenu 50 % / Coup de poing 25 % / Botter le cul 15 % / Bousculade 10 % /
   Gifle 5 %) + `basicMode(id)` (id inconnu → attaque pleine) + `basicModeDamage(power, id)`.
@@ -121,7 +130,10 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   barre fausse. Carte **Attaque de base** (**profil d'arme** `basicAttackProfile` depuis le 2026-09-15 :
   ligne d'état `WeaponStatusLine`, sélecteur **Mode d'arme** pour une hybride ou l'arc hextech — PERSISTÉ en
   `state/weaponChoice.mode`, contrairement au geste —, boutons **Dégainer/Rengainer** d'une mini-arme entre
-  accessoire et main libre, `WeaponPropsList` en attaque pleine seulement ; un mode sans dégâts (cellules de
+  accessoire et main libre, `WeaponPropsList` en attaque pleine seulement ; **`WeaponPropOptions`** (livraison 2 :
+  choix de l'arme dont la propriété joue ce tour, cases « dans le dos / balayage / canaliser… » en état LOCAL
+  remis à zéro après le coup, bouton Focalisation) ; en attaque pleine le clic passe par `weaponAttack()` →
+  `buildWeaponAttack`, qui paie le mana et le rechargement et écrit `weaponCombat` ; un mode sans dégâts (cellules de
   Jett) dépose une action NARRATIVE ; l'action porte `weaponCat`/`weaponName`/`mastered`, affichés sur la carte
   du MJ ; bouton « Attaquer » → attaque en attente MJ, **sans mana ni cooldown**) avec **rangée de modes**
   (`BASIC_MODES`, game-logic : gifle 5 %, botter le cul 15 %… — état **local non persisté**, c'est un

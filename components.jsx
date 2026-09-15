@@ -1167,24 +1167,29 @@ function WeaponStatusLine({ profile }) {
 
 /* Propriétés utilisables (et perdues faute de maîtrise). Livraison 1 : rappels à appliquer
    en table — rien n'est encore automatisé. */
-function WeaponPropsList({ profile }) {
+function WeaponPropsList({ profile, active }) {
   if (!profile || (!profile.props.length && !profile.lostProps.length)) return null;
-  const line = (pid, lost, from) => {
+  const auto = (window.LOT2_ATTACK_PROPS || []).concat(['focalisation']);
+  const sources = {};
+  profile.props.forEach(x => { sources[x.source] = true; });
+  const line = (pid, lost, from, idle) => {
     const p = WEAPON_PROPERTIES[pid] || { name: pid, text: '' };
+    const isAuto = auto.indexOf(pid) !== -1;
     return (
-      <div key={pid + (lost ? '-lost' : '')} style={{ fontSize:12, lineHeight:1.45, opacity: lost ? 0.5 : 1 }}>
+      <div key={pid + (lost ? '-lost' : '')} style={{ fontSize:12, lineHeight:1.45, opacity: lost || idle ? 0.5 : 1 }}>
         <b style={{ color: lost ? 'var(--faint)' : (p.malus ? 'var(--hp)' : 'var(--gold-pale)'), textDecoration: lost ? 'line-through' : 'none' }}>{p.name}</b>
         {from ? <span className="faint"> ({from})</span> : null}
+        {!lost && <span className="faint" style={{ fontSize:10.5 }}> · {isAuto ? 'automatisée' : 'en table'}</span>}
+        {idle && <span className="faint" style={{ fontSize:10.5 }}> · pas ce tour</span>}
         <span className="dim"> — {p.text}</span>
       </div>
     );
   };
   return (
     <div className="col gap-1" style={{ marginTop:8 }}>
-      <span className="overline">Propriétés{profile.props.length > 1 ? ' · une seule lancée par tour' : ''}</span>
-      {profile.props.map(x => line(x.id, false, profile.pair ? x.itemName : ''))}
+      <span className="overline">Propriétés{Object.keys(sources).length > 1 ? ' · une seule arme par tour' : ''}</span>
+      {profile.props.map(x => line(x.id, false, profile.pair ? x.itemName : '', !!active && active.indexOf(x.id) === -1))}
       {profile.lostProps.map(pid => line(pid, true, ''))}
-      <span className="faint" style={{ fontSize:11 }}>À appliquer en table pour l'instant.</span>
     </div>
   );
 }

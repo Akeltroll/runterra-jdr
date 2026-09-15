@@ -782,6 +782,226 @@
     };
   }
 
+  /* ============================================================
+     ARMES — LIVRAISON 2 : propriétés automatisées (spec §5, lot 2)
+     Le joueur PROPOSE, le MJ RÉSOUT : le plan ne fait que construire des instances
+     (dégâts / soin / statut) et dire ce qui se paie au cast (mana, rechargement,
+     cible marquée). Rien d'autre n'est écrit côté joueur.
+     ============================================================ */
+  var WEAPON_CD_LOCKED = 999999;   // même sentinelle « 1×/combat » que les compétences
+  /* Propriétés du lot 2 qui modifient l'attaque de base (Focalisation est une action à part). */
+  var LOT2_ATTACK_PROPS = ['duel', 'attaque_double', 'balayage', 'combo', 'quitte_ou_double', 'canalisation',
+    'fourberie', 'plenitude', 'concentration', 'connexion_astrale', 'purge', 'decimation'];
+  function weaponCdKey(propId) { return 'w_' + propId; }
+
+  /* Sources de propriétés tenues en main : 'attacker' et/ou 'support'. */
+  function weaponPropSources(profile) {
+    var out = [];
+    (profile && profile.props || []).forEach(function (p) { if (out.indexOf(p.source) === -1) out.push(p.source); });
+    return out;
+  }
+  /* « Jamais deux propriétés dans le même tour » (décision MJ 5a') : avec deux armes, le
+     joueur choisit la SOURCE (l'arme) dont les propriétés jouent ce tour. Une arme porte
+     parfois deux propriétés (marteau : Assommage + Frappe entravante) : elles jouent
+     ensemble, le chiffrage du 2026-09-12 les compose ainsi.
+     Défaut : l'arme d'attaque si elle a une propriété, sinon la mini-arme de soutien. */
+  function weaponActiveSource(profile, wanted) {
+    var srcs = weaponPropSources(profile);
+    if (wanted && srcs.indexOf(wanted) !== -1) return wanted;
+    return srcs.indexOf('attacker') !== -1 ? 'attacker' : (srcs[0] || null);
+  }
+  function weaponActiveProps(profile, wanted) {
+    var src = weaponActiveSource(profile, wanted);
+    return (profile && profile.props || []).filter(function (p) { return p.source === src; })
+      .map(function (p) { return p.id; });
+  }
+
+  /* Ciblage de l'attaque selon les options cochées. `camp:'any'` : on peut toujours viser
+     un camarade (règle du 2026-09-06). */
+  function weaponAttackTargeting(active, toggles, cooldowns, turn) {
+    active = active || []; toggles = toggles || {};
+    var has = function (id) { return active.indexOf(id) !== -1; };
+    var ready = function (id) { return cooldownReady((cooldowns || {})[weaponCdKey(id)], turn); };
+    var max = 1;
+    if (has('attaque_double') && toggles.double) max = 2;
+    if (has('connexion_astrale')) max = 2;
+    if (has('balayage') && toggles.sweep && ready('balayage')) max = 3;
+    if (has('decimation') && toggles.decimation && ready('decimation')) max = null;
+    return { damage: { camp: 'any', min: 1, max: max } };
+  }
+
+  /* Plan d'une attaque de base PLEINE avec les propriétés du tour.
+     input = { turn, selfId, targets:[ids], active:[propIds], toggles:{ double, sweep, risky,
+       channel, backstab, purgeHasBuff, decimation }, weaponCombat:{ duelTarget, concTarget },
+       cooldowns, isKo(id), manaCur, rng }
+     → { ok, reason, label, instances, cost:{ mana, manaPer, manaMax, cdPrev, cdKey },
+         cooldown:{ key, readyAt }|null, combat:{ duelTarget, concTarget }, notes:[] } */
+  function buildWeaponAttack(profile, eff, input) {
+    eff = eff || {}; input = input || {};
+    var rng = input.rng || Math.random;
+    var turn = input.turn || 1;
+    var active = input.active || [];
+    var tg = input.toggles || {};
+    var cds = input.cooldowns || {};
+    var wc = input.weaponCombat || {};
+    var isKo = input.isKo || function () { return false; };
+    var has = function (id) { return active.indexOf(id) !== -1; };
+    var ready = function (id) { return cooldownReady(cds[weaponCdKey(id)], turn); };
+    var targets = (input.targets || []).slice();
+    var notes = [];
+    var combat = { duelTarget: wc.duelTarget || null, concTarget: wc.concTarget || null };
+    var fail = function (reason) { return { ok: false, reason: reason, instances: [], cost: null, cooldown: null, combat: combat, notes: notes, label: '' }; };
+    if (!targets.length) return fail('Choisis une cible');
+    var spec = weaponAttackTargeting(active, tg, cds, turn).damage;
+    if (spec.max != null && targets.length > spec.max) return fail(spec.max + ' cible' + (spec.max > 1 ? 's' : '') + ' au maximum');
+
+    var power = profile.power || 0;
+    var type = profile.dmgType || 'physique';
+    var crit0 = eff.crit || 0, dcrit0 = eff.dcrit || 0;
+    var labels = [];
+    if (has('fourberie') && tg.backstab) { crit0 += 10; dcrit0 += 20; labels.push('Fourberie (dans le dos, +2 au jet)'); }
+    var cost = { mana: 0, manaPer: 0, manaMax: Math.max(0, eff.mana | 0), cdPrev: null, cdKey: null };
+    var cooldown = null;
+    var setCd = function (id, readyAt) {
+      var key = weaponCdKey(id);
+      cooldown = { key: key, readyAt: readyAt };
+      cost.cdKey = key; cost.cdPrev = cds[key] != null ? cds[key] : null;
+    };
+    var instances = [], seq = 0;
+    var dmgInst = function (tid, mult, label, opts) {
+      opts = opts || {};
+      var computed = Math.max(0, Math.round(power * mult));
+      var critPct = opts.critPct != null ? opts.critPct : crit0;
+      var cr = opts.noCrit ? { didCrit: false, multiplier: 1 } : rollCrit(critPct, dcrit0, rng);
+      var inst = { seq: ++seq, kind: 'damage', targetId: tid, computedDmg: computed,
+        critDmg: Math.round(computed * cr.multiplier), didCrit: cr.didCrit, critMult: cr.multiplier,
+        type: opts.type || type, letha: eff.letha || 0, lethaMag: eff.lethaMag || 0,
+        crit: opts.noCrit ? 0 : critPct, dcrit: dcrit0, vol: eff.vol || 0, sapience: eff.sapience || 0,
+        omni: eff.omni || 0, hpMax: eff.hp || 0, modeId: 'normal' };
+      if (label) inst.label = label;
+      if (opts.raw != null) { inst.computedDmg = opts.raw; inst.critDmg = opts.raw; }
+      instances.push(inst);
+      return inst;
+    };
+
+    /* --- Duel : 125 % contre la cible désignée ; attaquer ailleurs perd la désignation --- */
+    var duelMult = function (tid) { return 1; };
+    if (has('duel')) {
+      var cur = combat.duelTarget && !isKo(combat.duelTarget) ? combat.duelTarget : null;
+      var t0 = targets[0];
+      if (!cur || cur === t0) { combat.duelTarget = t0; duelMult = function (tid) { return tid === t0 ? 1.25 : 1; }; labels.push('Duel'); }
+      else { combat.duelTarget = null; notes.push('duel perdu (autre cible)'); }
+    }
+    /* --- Concentration : crit doublé contre la cible désignée ; changer de cible = 1 tour de rechargement --- */
+    var concCrit = function (tid) { return crit0; };
+    if (has('concentration')) {
+      var cc = combat.concTarget && !isKo(combat.concTarget) ? combat.concTarget : null;
+      var t1 = targets[0];
+      if (cc && cc !== t1) { combat.concTarget = null; setCd('concentration', turn + 1); notes.push('concentration perdue (1 tour de rechargement)'); }
+      else if (cc === t1 || ready('concentration')) {
+        combat.concTarget = t1; concCrit = function (tid) { return tid === t1 ? crit0 * 2 : crit0; }; labels.push('Concentration');
+      }
+    }
+    var mainMult = function (tid) { return duelMult(tid); };
+    var critFor = function (tid) { return concCrit(tid); };
+
+    if (has('decimation') && tg.decimation) {
+      if (!ready('decimation')) return fail('Décimation déjà utilisée ce combat');
+      var total = 0;
+      targets.forEach(function (tid) { total += dmgInst(tid, 0.5 * mainMult(tid), 'Décimation 50 %', { critPct: critFor(tid) }).computedDmg; });
+      instances.push({ seq: ++seq, kind: 'heal', targetId: input.selfId, amount: total,
+        label: 'Décimation : soin égal aux dégâts infligés (ajuster après mitigation)' });
+      setCd('decimation', WEAPON_CD_LOCKED);
+      labels.push('Décimation');
+    } else if (has('balayage') && tg.sweep) {
+      if (!ready('balayage')) return fail('Balayage : pas deux tours d\'affilée');
+      targets.forEach(function (tid) { dmgInst(tid, 0.8 * mainMult(tid), 'Balayage 80 %', { critPct: critFor(tid) }); });
+      setCd('balayage', turn + 2);
+      labels.push('Balayage');
+    } else if (has('attaque_double') && tg.double) {
+      var a = targets[0], b = targets[1] || targets[0];
+      dmgInst(a, 0.65 * mainMult(a), 'Attaque double 1/2 · 65 %', { critPct: critFor(a) });
+      dmgInst(b, 0.65 * mainMult(b), 'Attaque double 2/2 · 65 %', { critPct: critFor(b) });
+      labels.push('Attaque double');
+    } else if (has('connexion_astrale')) {
+      var d6 = Math.min(6, 1 + Math.floor(rng() * 6));
+      var t = targets[0];
+      labels.push('Connexion astrale ' + d6);
+      if (d6 === 1) dmgInst(input.selfId, mainMult(t), 'd6 = 1 : attaque renvoyée sur le lanceur', { critPct: critFor(t) });
+      else if (d6 === 2) dmgInst(t, mainMult(t), 'd6 = 2 : presciente — à appliquer au tour ' + (turn + 1), { critPct: critFor(t) });
+      else if (d6 === 3) dmgInst(t, mainMult(t), 'd6 = 3 : attaque classique', { critPct: critFor(t) });
+      else if (d6 === 4) dmgInst(t, 1.5 * mainMult(t), 'd6 = 4 : améliorée 150 %', { critPct: critFor(t) });
+      else if (d6 === 5) dmgInst(t, mainMult(t), 'd6 = 5 : critique', { critPct: Math.max(100, critFor(t)) });
+      else {
+        var t2 = targets[1] || t;
+        dmgInst(t, mainMult(t), 'd6 = 6 : double attaque 1/2', { critPct: critFor(t) });
+        dmgInst(t2, mainMult(t2), 'd6 = 6 : double attaque 2/2', { critPct: critFor(t2) });
+      }
+      if (d6 !== 6 && targets.length > 1) notes.push('2ᵉ cible ignorée (d6 ≠ 6)');
+    } else if (has('quitte_ou_double') && tg.risky) {
+      var t3 = targets[0];
+      if (rng() < 0.5) { dmgInst(t3, 1.3 * mainMult(t3), 'Quitte ou double : réussi · 130 %', { critPct: critFor(t3) }); labels.push('Quitte ou double réussi'); }
+      else {
+        dmgInst(t3, mainMult(t3), 'Quitte ou double : raté · 100 %', { critPct: critFor(t3) });
+        var selfDmg = Math.round((eff.hp || 0) * 0.08);
+        dmgInst(input.selfId, 1, 'Quitte ou double : blessure, 8 % des PV max en bruts', { type: 'brut', noCrit: true, raw: selfDmg });
+        labels.push('Quitte ou double raté');
+      }
+    } else {
+      var t4 = targets[0];
+      var mult = mainMult(t4);
+      if (has('purge')) {
+        if (tg.purgeHasBuff) {
+          if (!ready('purge')) return fail('Purge en rechargement');
+          instances.push({ seq: ++seq, kind: 'status', targetId: t4, narrative: true,
+            label: 'Purge : retirer le bouclier, sinon un buff de statistiques, sinon un autre buff' });
+          setCd('purge', turn + 2);
+          labels.push('Purge');
+        } else if (ready('purge')) { mult *= 1.1; labels.push('Purge 110 %'); }
+      }
+      dmgInst(t4, mult, null, { critPct: critFor(t4) });
+    }
+
+    /* --- Canalisation : 5 % du mana max en bruts ×2, payé au cast --- */
+    if (has('canalisation') && tg.channel) {
+      var spend = Math.round((eff.mana || 0) * 0.05);
+      if ((input.manaCur || 0) < spend) return fail('Pas assez de mana pour canaliser (' + spend + ')');
+      cost.mana = spend;
+      dmgInst(targets[0], 1, 'Canalisation : ' + spend + ' mana ×2 en bruts', { type: 'brut', noCrit: true, raw: spend * 2 });
+      labels.push('Canalisation');
+    }
+    /* --- Combo : 25 % de relance, cumulable (plafond de sécurité 10) --- */
+    if (has('combo')) {
+      var extra = 0;
+      while (extra < 10 && rng() < 0.25) {
+        extra++;
+        dmgInst(targets[0], mainMult(targets[0]), 'Combo : relance ' + extra, { critPct: critFor(targets[0]) });
+      }
+      if (extra) labels.push('Combo ×' + (extra + 1));
+    }
+    /* --- Plénitude : un crit rend 5 % du mana max --- */
+    if (has('plenitude') && instances.some(function (i) { return i.kind === 'damage' && i.didCrit && i.targetId !== input.selfId; })) {
+      var gain = Math.round((eff.mana || 0) * 0.05);
+      instances.push({ seq: ++seq, kind: 'status', targetId: input.selfId, manaGain: gain, manaMax: eff.mana || 0,
+        label: 'Plénitude : +' + gain + ' mana (critique)' });
+    }
+    return { ok: true, reason: '', label: labels.join(' · '), instances: instances, cost: cost,
+      cooldown: cooldown, combat: combat, notes: notes };
+  }
+
+  /* Focalisation (masse d'armes) : action à part, sans attaque. +15 % du mana max, CD 2. */
+  function buildFocalisation(eff, input) {
+    eff = eff || {}; input = input || {};
+    var turn = input.turn || 1, cds = input.cooldowns || {}, key = weaponCdKey('focalisation');
+    if (!cooldownReady(cds[key], turn)) return { ok: false, reason: 'Focalisation en rechargement' };
+    var gain = Math.round((eff.mana || 0) * 0.15);
+    return { ok: true, reason: '',
+      instances: [{ seq: 1, kind: 'status', targetId: input.selfId, manaGain: gain, manaMax: eff.mana || 0,
+        label: 'Focalisation : +' + gain + ' mana' }],
+      cost: { mana: 0, manaPer: 0, manaMax: Math.max(0, eff.mana | 0), cdPrev: cds[key] != null ? cds[key] : null, cdKey: key },
+      cooldown: { key: key, readyAt: turn + 2 } };
+  }
+
   /* Un objet peut-il aller dans cet emplacement ? `type` = `equipTypeForItem(item)`,
      `accepts` = `EQUIP_SLOTS[slot].accepts` (pages-equip.jsx).
      Règles d'arme (spec §3.4) : une arme 2H exige l'autre main vide ; deux armes non mini
@@ -1543,7 +1763,10 @@
     var full = { attackerId: action.attackerId, attackerName: action.attackerName || '',
       skillId: action.skillId, skillName: action.skillName || action.skillId,
       mana: Math.max(0, cost.mana | 0), manaMax: Math.max(0, cost.manaMax | 0),
-      cdPrev: cost.cdPrev != null ? cost.cdPrev : null, restoreCd: true };
+      cdPrev: cost.cdPrev != null ? cost.cdPrev : null, restoreCd: true,
+      // Rechargement d'une PROPRIÉTÉ D'ARME (Balayage, Purge, Décimation…) : sa clé n'est pas
+      // l'id de l'action (`basic`), elle est portée par le coût (livraison armes 2).
+      cdKey: cost.cdKey || null };
     if (!full.attackerId) return null;
     if (applied > 0) return null;
     if (mode === 'instance' && remaining > 1) {
@@ -1551,7 +1774,7 @@
       if (!per) return null;
       return Object.assign({}, full, { mana: per, restoreCd: false });
     }
-    if (!full.mana && full.cdPrev == null && !cost.mana) {
+    if (!full.mana && full.cdPrev == null && !cost.mana && !cost.cdKey) {
       // Attaque de base : ni mana ni cooldown, rien à rendre.
       if (action.source === 'basic') return null;
     }
@@ -2235,6 +2458,8 @@
     HANDS_LABEL, WEAPON_KIND_LABEL, HAND_SLOTS, weaponCategory, isWeaponItem, isMiniWeapon,
     isAccessorySlot, weaponLoadout, weaponMastered, sumWeaponPropMods, basicAttackProfile,
     equipSlotCheck, weaponCatLabel,
+    LOT2_ATTACK_PROPS, weaponCdKey, weaponPropSources, weaponActiveSource, weaponActiveProps,
+    weaponAttackTargeting, buildWeaponAttack, buildFocalisation,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
