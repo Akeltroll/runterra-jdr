@@ -61,7 +61,7 @@ Carte courte. **Le détail (fonctions, props, et surtout les ⚠️ « ne pas fa
 - `auth.js` — helpers d'auth purs (`usernameToEmail`, `ROLES`, `isStaff`, `pagesForRole`, `defaultRoute`…).
 - `firebase-config.js` — init du SDK côté navigateur + `window.RTDB` (`subscribePath`, `updatePath`,
   `setPath`, `getSnapshot`…). Ne déploie rien.
-- `data.jsx` — règles immuables : `CHARACTERS`, `BUFFS`, `WEAPONS`, `LEVELS`, `CREATION_BONUS`, `ATTRIBUTES`,
+- `data.jsx` — règles immuables : `CHARACTERS`, `BUFFS`, `LEVELS`, `CREATION_BONUS`, `ATTRIBUTES`,
   `JOURNAL`, `RUNES`, `SKILLS`, `ITEM_CATALOG`, `PORTRAITS`, `MEMORIAL`.
   ⚠️ **`ITEM_CATALOG` n'est qu'un filet d'amorçage** : depuis que `catalogInit` est vrai, le catalogue en
   jeu est lu dans **Firebase** (`campaign/runeterra/catalog`). Ajouter un objet = écrire en base (page Admin
@@ -103,10 +103,11 @@ Les droits de lecture/écriture : `docs/archi/firebase.md`.
 /campaign/runeterra/characters/{charId}/state/
     hpCur, manaCur, shield (ABSOLUS), fatigue, eau (0-5), xp (dans le niveau), level
     buffs {buffId:true} · modifiers {hp,mana,ad,ap,armure,resmag,crit,dcrit,rescrit,letha,lethaMag,sapience,vol,omni}
-    inventory {itemId:{id,cat,name,sub,qty,ic,img,type,mods,weight,carry,carryGroup,order}} · equipment {slotKey:itemId}
+    inventory {itemId:{id,cat,name,sub,qty,ic,img,type,mods,weight,carry,carryGroup,armorClass,weaponCat,order}} · equipment {slotKey:itemId}
     coins {plat,or,arg,cuiv} · runes {selected,choices} · runeBonus
     attrs {force,hab,mental,magie} · habSplit {ad,ap,mana} · mentalSplit {hp,mana} · forceSplit {ad,armure} · magieSplit {ap,resmag}
     attrsLocked · attrsOpen · habSplitOpen · mentalSplitOpen · forceSplitOpen · magieSplitOpen   (drapeaux MJ)
+    masteries {weaponCat:true} (STAFF) · weaponChoice {mode}
     counters {key:n} · cooldowns {skillId:readyAtTurn} · skillBuffs {skillId:{mods,until}}
     invInit · armureInit · coinsInit (marqueurs de migration) · habAd (legacy)
 /campaign/runeterra/sharedInventory/{itemId} · sharedCoins {plat,or,arg,cuiv} · sharedTransport {slotKey:itemId}
@@ -188,7 +189,7 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
 
 ## Comment tester (dev)
 ```bash
-node --test test/game-logic.test.js          # logique pure (255 tests au 2026-09-06)
+node --test test/game-logic.test.js          # logique pure (267 tests au 2026-09-15)
 node --test test/auth.test.js                 # helpers d'auth (11 tests)
 python -m http.server 5050 --bind 127.0.0.1  # servir le site (autre terminal)
 SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées + compte attribué)
@@ -250,8 +251,11 @@ sujet, lire son entrée** : c'est là que sont les ⚠️, les « ne pas faire �
 **Nouvelle livraison = nouveau fichier `docs/journal/<date>.md`** + une ligne dans l'index ci-dessous,
 jamais une nouvelle section ici.
 
-**Dernier état** : cache `20260913-3`, **266 tests verts** (game-logic 255 + auth 11). Règles RTDB
-en ligne == dépôt (relecture du 2026-09-06). Les 18 armures de base sont **en base** (Firebase),
+**Dernier état** : cache `20260915-1`, **278 tests verts** (game-logic 267 + auth 11). Règles RTDB
+en ligne == dépôt au 2026-09-15 AVANT la règle `masteries` (voir le journal du jour pour sa publication).
+**Armes et maîtrises, livraison 1** (2026-09-15) : l'arme en main pilote l'attaque de base
+(`basicAttackProfile`), maîtrises par perso, catalogue d'armes recalé. ⚠️ **`WEAPONS` n'existe plus** :
+la catégorie d'une arme est `item.weaponCat`. Les 18 armures de base sont **en base** (Firebase),
 dédoublonnées et imagées ; Butin et Consommables aux icônes du MJ, catalogue ET inventaires (2026-09-13).
 ⚠️ **La mitigation est passée en `AR/(AR+100)`** (`MITIGATION_K`, 2026-09-12) — c'était 120.
 ⚠️ **Le catalogue en base contient du contenu créé par le MJ à la page Admin** : avant toute
@@ -264,6 +268,8 @@ les ids générés n'entrent jamais en collision, donc rien ne signale un doublo
 - **3 patchs** : +5 AR/RM de socle, omnivamp cumulative, armures légères 7 → 10 → 2026-09-09 ;
 - **constante de mitigation 120 → 100** : tout le monde encaisse un peu mieux, **les monstres armurés
   nettement mieux** (un boss à 200 d'armure gagne +12 %) → 2026-09-12.
+- **armes et maîtrises (livraison 1)** : +5 par arme, dagues en accessoire sans stats, cellules de Jett
+  sans dégâts, dual wield de Smith à 60 % + 40 % → 2026-09-15 (§4 du journal).
 ⚠️ Ces trois-là sont **en ligne depuis le 2026-09-12** (push de 11 commits, cache `20260912-1`) : les
 joueurs les subissent déjà, annoncés ou non.
 
@@ -271,19 +277,17 @@ joueurs les subissent déjà, annoncés ou non.
 un buff n'apparaît qu'après le clic du MJ (2026-09-06) ; encaissement des profils offensifs à bas
 niveau (2026-09-06).
 
-**Suivant** : les **armes**. Le chiffrage des maîtrises et de la portée est FAIT et les propriétés
-ont été rerèglées en deux passes (`docs/armes-maitrises.md`, 41 catégories, étendue ramenée de 162 à
-**94 points**). Restent à écrire les `mods` du catalogue (§7.1 : +15/+30/+70 AD ou AP, +10/+10
-hybride). ⚠️ **Mais les `mods` ne suffiront pas** : ils pèsent 9 points quand l'écart de puissance
-entre armes en fait 94 — la correction vient des **propriétés**, pas des stats.
-⚠️ **Engagement à honorer** : le **bâton magique doit porter du mana bonus**, sinon Canalisation
-(5 % du mana ×2) redevient un mauvais échange.
+**Suivant** : **armes, livraisons 2 et 3** — automatiser les propriétés, qui portent l'essentiel de
+l'équilibrage (les `mods` pèsent 9 points quand l'écart entre armes en fait 94, `docs/armes-maitrises.md`).
+Plan et décisions : §5 et §7 de `docs/superpowers/specs/2026-09-14-armes-maitrises-design.md`.
+✅ Engagement du bâton magique honoré : Canalisation maîtrisée = +50 Mana + 10/niveau.
 Puis le **rééquilibrage des compétences** (voir backlog).
 **Laissé ouvert exprès, ne pas rouvrir comme un bug** : le profil PV domine le profil résistance en
 début de campagne (2026-09-09).
 
 | Entrée | Sujets |
 |---|---|
+| [2026-09-15](docs/journal/2026-09-15.md) | **Armes et maîtrises, livraison 1** : catégories (`weaponCat`), maîtrises staff (`masteries` + règle `.validate`), profil d'attaque de base (mini-armes, dual wield, −25 %, mode hybride, cellules de Jett), armes en accessoire sans stats, règles d'emplacement ; catalogue +15/+10-10, explosifs en consommables, retrait de `WEAPONS` |
 | [2026-09-13](docs/journal/2026-09-13.md) | Dédoublonnage des 18 armures du catalogue (les valeurs du 2026-09-09 l'emportent) ; images du MJ converties en fichiers `ATH/Armures/` ; recalage des copies déjà distribuées ; icônes Butin/Consommables du MJ jusque dans les inventaires, Butin de monstre → Cuir de brackern ; renommages « du capitaine », Coffret de terrain, encyclopédie, pierre à usage unique ; Dague simple (accessoire) pour Jett et Elias |
 | [2026-09-12](docs/journal/2026-09-12.md) | **`MITIGATION_K` 120 → 100** ; chiffrage des maîtrises d'armes et de la portée (41 armes) ; nerfs Attaque double / Canalisation / Adaptation ; dual wield de mini-armes |
 | [2026-09-09](docs/journal/2026-09-09.md) | Barème de valeur des stats (équivalent AD) ; patchs `BASE_AR_RM`, omnivamp cumulative, armures légères |

@@ -2111,3 +2111,147 @@ test('refundManaValue : plafonne au max, ne baisse jamais le courant', () => {
   assert.equal(L.refundManaValue(100, 40, 0), 140);     // plafond inconnu : somme brute
   assert.equal(L.refundManaValue(0, 0, 300), 0);
 });
+
+/* ============================================================
+   ARMES ET MAÎTRISES (livraison 1, spec 2026-09-14)
+   ============================================================ */
+const W = (id, weaponCat, extra) => L.makeItem(Object.assign({ id, name: id, cat: 'Équipement', type: 'weapon', weaponCat }, extra || {}));
+
+test('armes — référentiel : 38 catégories, toutes les propriétés existent, explosifs absents', () => {
+  assert.equal(L.WEAPON_CATEGORIES.length, 38);
+  L.WEAPON_CATEGORIES.forEach(c => c.props.forEach(p => assert.ok(L.WEAPON_PROPERTIES[p], c.id + ' → ' + p)));
+  assert.equal(L.WEAPON_CATEGORIES.filter(c => /xplosif/.test(c.name)).length, 0);
+  assert.deepEqual(L.WEAPON_CATEGORIES.filter(c => c.mini).map(c => c.id).sort(),
+    ['dague', 'epee_courte', 'hachette', 'masse_armes', 'sarbacane']);
+  assert.equal(L.weaponCategory('orbe').mini, false);   // décision MJ 8b
+  assert.deepEqual(L.WEAPON_TIER_MODS.base, { phys: { ad: 15 }, mag: { ap: 15 }, hyb: { ad: 10, ap: 10 } });
+});
+
+test('armes — weaponCat traverse makeItem, la fusion, le transfert et l amorçage du catalogue', () => {
+  assert.equal(L.makeItem({}).weaponCat, '');
+  const src = { a: W('a', 'dague', { qty: 2 }) };
+  const { dstPatch } = L.planItemTransfer(src, {}, 'a', 1);
+  assert.equal(Object.values(dstPatch)[0].weaponCat, 'dague');
+  // même nom, même type, catégorie différente : pas de fusion
+  const dst = { x: W('x', 'epee_courte', { name: 'a', qty: 1 }) };
+  const p2 = L.fillStacks(dst, src.a, 1);
+  assert.equal(Object.keys(p2).includes('x'), false);
+  const seed = L.buildCatalogSeed([{ name: 'Dague', type: 'weapon', weaponCat: 'dague' }]);
+  assert.equal(Object.values(seed)[0].weaponCat, 'dague');
+});
+
+test('armes — loadout : 2H, poly à deux mains, 1H, mains nues', () => {
+  const items = { c: W('c', 'claymore'), e: W('e', 'epee_longue'), g: W('g', 'gantelet'), s: L.makeItem({ id: 's', type: 'shield' }) };
+  let lo = L.weaponLoadout({ armePrincipale: 'c' }, items);
+  assert.equal(lo.attacker.id, 'c'); assert.equal(lo.twoHanded, true); assert.deepEqual(lo.issues, []);
+  lo = L.weaponLoadout({ armePrincipale: 'e' }, items);
+  assert.equal(lo.twoHanded, true);                              // poly, main libre
+  lo = L.weaponLoadout({ armePrincipale: 'e', armeSecondaire: 's' }, items);
+  assert.equal(lo.twoHanded, false);                             // poly + bouclier
+  lo = L.weaponLoadout({ armePrincipale: 'c', armeSecondaire: 's' }, items);
+  assert.deepEqual(lo.issues, ['two_handed_blocked']);
+  lo = L.weaponLoadout({ armePrincipale: 'g' }, items);
+  assert.equal(lo.twoHanded, false);
+  lo = L.weaponLoadout({}, items);
+  assert.equal(lo.attacker, null);
+});
+
+test('armes — loadout : mini + mini, poly + mini (l arme non mini attaque), deux non mini', () => {
+  const items = { d1: W('d1', 'dague'), d2: W('d2', 'dague'), a: W('a', 'arbalete_legere'), h: W('h', 'hachette'), g: W('g', 'gantelet') };
+  let lo = L.weaponLoadout({ armePrincipale: 'd1', armeSecondaire: 'd2' }, items);
+  assert.equal(lo.pair, 'mini+mini'); assert.equal(lo.attacker.id, 'd1');
+  lo = L.weaponLoadout({ armePrincipale: 'h', armeSecondaire: 'a' }, items);
+  assert.equal(lo.pair, 'main+mini'); assert.equal(lo.attacker.id, 'a'); assert.equal(lo.support.id, 'h');
+  assert.equal(lo.twoHanded, false);                             // l'arbalète poly est tenue à une main
+  lo = L.weaponLoadout({ armePrincipale: 'a', armeSecondaire: 'g' }, items);
+  assert.deepEqual(lo.issues, ['two_non_mini']);
+});
+
+test('armes — profil : −25 % sans maîtrise, et les propriétés perdues', () => {
+  const items = { c: W('c', 'claymore') };
+  const lo = L.weaponLoadout({ armePrincipale: 'c' }, items);
+  const eff = { ad: 400, ap: 100 };
+  let p = L.basicAttackProfile(lo, { claymore: true }, eff, {});
+  assert.equal(p.power, 400); assert.equal(p.mastered, true); assert.deepEqual(p.props.map(x => x.id), ['balayage']);
+  p = L.basicAttackProfile(lo, {}, eff, {});
+  assert.equal(p.power, 300); assert.equal(p.malusPct, 25); assert.deepEqual(p.props, []);
+  assert.deepEqual(p.lostProps, ['balayage']);
+  assert.equal(p.dmgType, 'physique'); assert.equal(p.wType, 'Physique');
+});
+
+test('armes — profil : mini-arme seule 60 %, non maîtrisée elle garde tout ; deux mini-armes 100 %', () => {
+  const items = { d1: W('d1', 'dague'), d2: W('d2', 'dague') };
+  const eff = { ad: 500 };
+  let p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'd1' }, items), {}, eff, {});
+  assert.equal(p.power, 300); assert.equal(p.mastered, true); assert.deepEqual(p.props.map(x => x.id), ['fourberie']);
+  p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'd1', armeSecondaire: 'd2' }, items), {}, eff, {});
+  assert.equal(p.power, 500);
+  assert.deepEqual(p.props.map(x => x.id), ['fourberie']);       // même propriété : une seule fois
+});
+
+test('armes — profil : poly + mini offre les deux propriétés ; celle de l arme non maîtrisée disparaît', () => {
+  const items = { e: W('e', 'epee_longue'), d: W('d', 'dague') };
+  const lo = L.weaponLoadout({ armePrincipale: 'e', armeSecondaire: 'd' }, items);
+  let p = L.basicAttackProfile(lo, { epee_longue: true }, { ad: 100 }, {});
+  assert.deepEqual(p.props.map(x => x.id + ':' + x.source), ['parade_riposte:attacker', 'fourberie:support']);
+  assert.equal(p.power, 100);
+  p = L.basicAttackProfile(lo, {}, { ad: 100 }, {});
+  assert.deepEqual(p.props.map(x => x.id), ['fourberie']);
+  assert.equal(p.power, 75);
+});
+
+test('armes — profil : le choix hybride bascule la stat ET le type ; arc hextech en cellules sans dégâts', () => {
+  const items = { p: W('p', 'pistolet_hextech'), a: W('a', 'arc_hextech') };
+  const eff = { ad: 200, ap: 300 };
+  const m = { pistolet_hextech: true, arc_hextech: true };
+  let p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'p' }, items), m, eff, {});
+  assert.equal(p.stat, 'ad'); assert.equal(p.power, 200);
+  p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'p' }, items), m, eff, { mode: 'ap' });
+  assert.equal(p.stat, 'ap'); assert.equal(p.dmgType, 'magique'); assert.equal(p.wType, 'Magique'); assert.equal(p.power, 300);
+  p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'a' }, items), m, eff, {});
+  assert.equal(p.mode.id, 'cellules'); assert.equal(p.damage, false);
+  p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'a' }, items), m, eff, { mode: 'ad' });
+  assert.equal(p.damage, true); assert.equal(p.dmgType, 'physique'); assert.equal(p.power, 200);
+  p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'p' }, items), m, eff, { mode: 'inconnu' });
+  assert.equal(p.mode.id, 'ad');                                 // mode inconnu : mode par défaut
+});
+
+test('armes — une arme sans catégorie reste neutre (comportement d avant la livraison)', () => {
+  const items = { x: L.makeItem({ id: 'x', type: 'weapon', name: 'Épée + Bouclier' }) };
+  const p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'x' }, items), {}, { ad: 80 }, {});
+  assert.equal(p.power, 80); assert.equal(p.mastered, true); assert.deepEqual(p.issues, []);
+  const bare = L.basicAttackProfile(L.weaponLoadout({}, items), {}, { ad: 80 }, {});
+  assert.equal(bare.name, 'Mains nues'); assert.equal(bare.power, 80);
+});
+
+test('armes — sumItemMods : une arme en accessoire ne donne rien, un accessoire normal si', () => {
+  const items = { d: W('d', 'dague', { mods: { ad: 15 } }), r: L.makeItem({ id: 'r', type: 'accessory', mods: { crit: 5 } }) };
+  assert.deepEqual(L.sumItemMods({ accessoire1: 'd', accessoire2: 'r' }, items), { crit: 5 });
+  assert.deepEqual(L.sumItemMods({ armeSecondaire: 'd' }, items), { ad: 15 });
+});
+
+test('armes — Canalisation : +50 +10/niveau seulement maîtrisée et en main ; Plénitude +5 crit +10 dcrit', () => {
+  const items = { b: W('b', 'baton_magique', { mods: { ap: 15 } }), o: W('o', 'orbe') };
+  assert.deepEqual(L.sumItemMods({ armePrincipale: 'b' }, items, { baton_magique: true }, 2), { mana: 70, ap: 15 });
+  assert.deepEqual(L.sumItemMods({ armePrincipale: 'b' }, items, { baton_magique: true }, 18), { mana: 230, ap: 15 });
+  assert.deepEqual(L.sumItemMods({ armePrincipale: 'b' }, items, {}, 18), { ap: 15 });
+  assert.deepEqual(L.sumWeaponPropMods({ armePrincipale: 'o' }, items, { orbe: true }, 5), { crit: 5, dcrit: 10 });
+  assert.deepEqual(L.sumWeaponPropMods({ accessoire1: 'o' }, items, { orbe: true }, 5), {});
+});
+
+test('armes — equipSlotCheck : 2H, deux non mini, accessoires', () => {
+  const items = { c: W('c', 'claymore'), e: W('e', 'epee_longue'), g: W('g', 'gantelet'), d: W('d', 'dague'),
+    s: L.makeItem({ id: 's', type: 'shield' }), r: L.makeItem({ id: 'r', type: 'accessory' }) };
+  const H = ['weapon'], OFF = ['offhand', 'shield', 'weapon'], ACC = ['accessory'];
+  assert.equal(L.equipSlotCheck({ armeSecondaire: 's' }, items, 'c', 'armePrincipale', 'weapon', H).ok, false);
+  assert.equal(L.equipSlotCheck({ armePrincipale: 'c' }, items, 's', 'armeSecondaire', 'shield', OFF).ok, false);
+  assert.equal(L.equipSlotCheck({ armePrincipale: 'e' }, items, 'g', 'armeSecondaire', 'weapon', OFF).ok, false);
+  assert.equal(L.equipSlotCheck({ armePrincipale: 'e' }, items, 'd', 'armeSecondaire', 'weapon', OFF).ok, true);
+  assert.equal(L.equipSlotCheck({ armePrincipale: 'e' }, items, 's', 'armeSecondaire', 'shield', OFF).ok, true);
+  // l'objet change de main : l'autre main se libère, pas de faux conflit
+  assert.equal(L.equipSlotCheck({ armePrincipale: 'c' }, items, 'c', 'armeSecondaire', 'weapon', OFF).ok, true);
+  assert.equal(L.equipSlotCheck({}, items, 'd', 'accessoire1', 'weapon', ACC).ok, true);
+  assert.equal(L.equipSlotCheck({}, items, 'g', 'accessoire1', 'weapon', ACC).ok, false);
+  assert.equal(L.equipSlotCheck({}, items, 'r', 'accessoire1', 'accessory', ACC).ok, true);
+  assert.equal(L.equipSlotCheck({}, items, 'r', 'armePrincipale', 'accessory', H).ok, false);
+});

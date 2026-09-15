@@ -499,6 +499,7 @@ function ItemTooltip({ item, x, y, effWeight }) {
   const armorLabel = item.armorClass
     ? ((window.ARMOR_CLASSES || []).find(c => c.value === item.armorClass) || {}).label || item.armorClass
     : null;
+  const wCat = item.weaponCat ? weaponCategory(item.weaponCat) : null;
   const sep = <div style={{ height:1, background:'rgba(160,128,72,0.22)', margin:'8px 0' }} />;
   return (
     <div style={{ position:'fixed', left:Math.min(x + 16, window.innerWidth - 255) + 'px',
@@ -513,6 +514,16 @@ function ItemTooltip({ item, x, y, effWeight }) {
       {armorLabel && (
         <div style={{ fontSize:11.5, color:'#c8a35a', marginTop:3, fontFamily:"'Cinzel',serif", letterSpacing:'0.3px' }}>
           Armure {armorLabel}
+        </div>
+      )}
+      {wCat && (
+        <div style={{ fontSize:11.5, color:'#c8a35a', marginTop:3, fontFamily:"'Cinzel',serif", letterSpacing:'0.3px' }}>
+          {weaponCatLabel(wCat)}
+          {wCat.props.length > 0 && (
+            <div style={{ fontFamily:"'EB Garamond',serif", color:'#9a8b76', letterSpacing:0, marginTop:1 }}>
+              {wCat.props.map(pid => (WEAPON_PROPERTIES[pid] || {}).name || pid).join(' · ')}
+            </div>
+          )}
         </div>
       )}
       {modRows.length > 0 && (
@@ -906,6 +917,26 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
             {EQUIP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         )}
+        {d.cat === 'Équipement' && d.type === 'weapon' && (
+          <div className="row gap-2" style={{ alignItems:'center' }}>
+            <select style={fld} value={d.weaponCat || ''} onChange={e => setD({ ...d, weaponCat: e.target.value })}>
+              <option value="">— Catégorie d'arme —</option>
+              {WEAPON_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}{c.mini ? ' (mini)' : ''}</option>)}
+            </select>
+            {d.weaponCat && (
+              <select style={{ ...fld, width:'auto' }} value="" title="Remplace AD/AP par le bonus du palier (SPECIFICATION §7.1)"
+                onChange={e => {
+                  const c = weaponCategory(d.weaponCat); const tier = WEAPON_TIER_MODS[e.target.value];
+                  if (!c || !tier) return;
+                  const mods = { ...(d.mods || {}) }; delete mods.ad; delete mods.ap;
+                  setD({ ...d, mods: { ...mods, ...tier[c.kind] } });
+                }}>
+                <option value="">Palier…</option>
+                {WEAPON_TIERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            )}
+          </div>
+        )}
         {d.cat === 'Équipement' && d.type === 'armor' && (
           <select style={fld} value={d.armorClass || ''} onChange={e => {
             const ac = e.target.value;
@@ -973,7 +1004,7 @@ function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {
           : <input style={fld} value={d.img || ''} placeholder="ou chemin/URL (ex. ATH/Items/xxx.webp)" onChange={e => setD({ ...d, img: e.target.value })} />}
         <div className="row gap-2" style={{ justifyContent:'flex-end' }}>
           <button className="btn btn-sm btn-ghost" onClick={() => { setD(item); setEdit(false); }}>Annuler</button>
-          <button className="btn btn-sm btn-gold" onClick={() => { const isEq = d.cat === 'Équipement'; onSave({ ...d, type: isEq ? (d.type || '') : '', mods: isEq ? (d.mods || {}) : {}, weight: Math.max(0, Number(d.weight) || 0), carry: isEq ? (Math.max(0, Number(d.carry) || 0)) : 0, carryGroup: Math.max(0, Number(d.carryGroup) || 0), armorClass: (isEq && d.type === 'armor') ? (d.armorClass || '') : '' }); setEdit(false); }}>Enregistrer</button>
+          <button className="btn btn-sm btn-gold" onClick={() => { const isEq = d.cat === 'Équipement'; onSave({ ...d, type: isEq ? (d.type || '') : '', mods: isEq ? (d.mods || {}) : {}, weight: Math.max(0, Number(d.weight) || 0), carry: isEq ? (Math.max(0, Number(d.carry) || 0)) : 0, carryGroup: Math.max(0, Number(d.carryGroup) || 0), armorClass: (isEq && d.type === 'armor') ? (d.armorClass || '') : '', weaponCat: (isEq && d.type === 'weapon') ? (d.weaponCat || '') : '' }); setEdit(false); }}>Enregistrer</button>
         </div>
       </div>
     );
@@ -1108,7 +1139,87 @@ function ItemCatalogPicker({ initialFilter, onPick, onCustom, onClose, staff }) 
   );
 }
 
+/* ============================================================
+   ARMES — blocs partagés fiche / onglet Combat (spec armes 2026-09-14)
+   ============================================================ */
+/* Une ligne d'état : maîtrise, tenue, dual wield, conflits d'emplacement. */
+function WeaponStatusLine({ profile }) {
+  if (!profile || !profile.weapon) return null;
+  const chip = (txt, color, title) => (
+    <span className="badge" title={title || ''} style={{ background:'var(--bg-inset)', color, border:'1px solid var(--line)' }}>{txt}</span>
+  );
+  const cat = profile.cat;
+  return (
+    <div className="row gap-2 wrap" style={{ alignItems:'center' }}>
+      {!cat ? null
+        : cat.mini ? chip('Mini-arme · maîtrise non requise', 'var(--gold-pale)', 'Une mini-arme garde tout, maîtrisée ou non')
+        : profile.mastered ? chip('✓ Maîtrisée', 'var(--buff-bright)')
+        : chip('✗ Non maîtrisée · −25 % et sans propriété', 'var(--hp)', "La formation coûte 120 ar (guide d'économie)")}
+      {cat && cat.mini && profile.pair !== 'mini+mini' && chip('60 % de la puissance', 'var(--ink-soft)')}
+      {profile.pair === 'mini+mini' && chip('Deux mini-armes · 60 % + 40 %', 'var(--gold-pale)')}
+      {profile.pair === 'main+mini' && chip('Mini-arme en soutien · une propriété par tour', 'var(--gold-pale)')}
+      {profile.twoHanded && cat && cat.hands === 'poly' && chip('Tenue à deux mains · +2 au jet', 'var(--gold-pale)', 'Rappel : le jet se fait en table')}
+      {profile.issues.indexOf('two_handed_blocked') !== -1 && chip("⚠ Arme à deux mains : l'autre main doit être libre", 'var(--hp)')}
+      {profile.issues.indexOf('two_non_mini') !== -1 && chip('⚠ Deux armes non mini : interdit', 'var(--hp)')}
+    </div>
+  );
+}
+
+/* Propriétés utilisables (et perdues faute de maîtrise). Livraison 1 : rappels à appliquer
+   en table — rien n'est encore automatisé. */
+function WeaponPropsList({ profile }) {
+  if (!profile || (!profile.props.length && !profile.lostProps.length)) return null;
+  const line = (pid, lost, from) => {
+    const p = WEAPON_PROPERTIES[pid] || { name: pid, text: '' };
+    return (
+      <div key={pid + (lost ? '-lost' : '')} style={{ fontSize:12, lineHeight:1.45, opacity: lost ? 0.5 : 1 }}>
+        <b style={{ color: lost ? 'var(--faint)' : (p.malus ? 'var(--hp)' : 'var(--gold-pale)'), textDecoration: lost ? 'line-through' : 'none' }}>{p.name}</b>
+        {from ? <span className="faint"> ({from})</span> : null}
+        <span className="dim"> — {p.text}</span>
+      </div>
+    );
+  };
+  return (
+    <div className="col gap-1" style={{ marginTop:8 }}>
+      <span className="overline">Propriétés{profile.props.length > 1 ? ' · une seule lancée par tour' : ''}</span>
+      {profile.props.map(x => line(x.id, false, profile.pair ? x.itemName : ''))}
+      {profile.lostProps.map(pid => line(pid, true, ''))}
+      <span className="faint" style={{ fontSize:11 }}>À appliquer en table pour l'instant.</span>
+    </div>
+  );
+}
+
+/* Maîtrises d'armes d'un personnage. Staff : ajout par liste + retrait ✕ ; joueur : lecture.
+   Les mini-armes n'ont pas besoin de maîtrise : elles ne sont pas proposées à l'ajout. */
+function MasteryEditor({ masteries, canEdit, setMastery }) {
+  const owned = WEAPON_CATEGORIES.filter(c => masteries && masteries[c.id]);
+  const rest = WEAPON_CATEGORIES.filter(c => !(masteries && masteries[c.id]) && !c.mini);
+  const fld = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'4px 8px', fontSize:12 };
+  return (
+    <div className="col gap-1" style={{ marginTop:12, paddingTop:10, borderTop:'1px solid var(--line)' }}>
+      <span className="overline">Maîtrises d'armes</span>
+      <div className="row gap-1 wrap" style={{ alignItems:'center' }}>
+        {owned.length === 0 && <span className="faint" style={{ fontSize:12 }}>Aucune</span>}
+        {owned.map(c => (
+          <span key={c.id} className="badge" style={{ background:'var(--bg-inset)', color:'var(--buff-bright)', border:'1px solid var(--line)' }}>
+            {c.name}
+            {canEdit && <button className="btn btn-sm btn-ghost" style={{ padding:'0 4px', marginLeft:4, fontSize:11 }}
+              title="Retirer la maîtrise" onClick={() => setMastery(c.id, false)}>✕</button>}
+          </span>
+        ))}
+        {canEdit && (
+          <select style={fld} value="" onChange={e => { if (e.target.value) setMastery(e.target.value, true); }}>
+            <option value="">+ Ajouter…</option>
+            {rest.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
+      </div>
+    </div>
+  );
+}
+
 Object.assign(window, {
+  WeaponStatusLine, WeaponPropsList, MasteryEditor,
   Avatar, ResourceBar, StatChip, BuffBadge, InvItem, InvItemRow, InventoryPanel, Coins,
   ToastProvider, useToast, AnnoPin, STAT_GLYPH, STAT_LABEL, STAT_LABEL_SHORT, STAT_FAMILY, statFamily,
   LoginScreen, PendingScreen, SignOutButton, NumberStepper, ExportImportPanel,

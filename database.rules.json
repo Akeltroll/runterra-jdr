@@ -118,6 +118,11 @@
                 "$coin": {
                   ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0"
                 }
+              },
+              "masteries": {
+                "$cat": {
+                  ".validate": "newData.isBoolean() && newData.val() === true && (data.val() === true || root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')"
+                }
               }
             }
           }

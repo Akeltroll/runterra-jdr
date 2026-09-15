@@ -53,9 +53,9 @@ bruiser 1.3 / 2.2 ; tank 0.8 / 1.6 ; utilitaire 1.0 / 2.5. Moyenne ~1,5 pour les
 - **Mana non limitant** : les coûts sont dérisoires face aux pools (Jett a 782 de mana pour des
   sorts à 40-50). À remonter une fois les compétences réparées — arbitrage MJ : « le mana doit être
   un minimum limitant sinon il perd de son intérêt ».
-- **Jett, incohérence à trancher** : son passif dit que son attaque de base ne fait plus de dégâts
-  (elle crée des cellules), mais la carte « Attaque de base » lui affiche `eff.ap` et le bouton
-  « Attaquer » fonctionne.
+- ✅ **Jett, incohérence tranchée le 2026-09-14** : son arc hextech a deux modes ; en mode
+  **cellules** (par défaut) l'attaque ne fait aucun dégât et part en action narrative, en mode
+  **arc court** elle frappe en physique (livré le 2026-09-15).
 
 **❓ LA question non tranchée par le MJ** : **scaling numérique par niveau OU upgrades de
 compétences au choix du joueur à chaque montée** — le MJ veut **l'un ou l'autre, pas les deux**
@@ -82,7 +82,10 @@ prédéfinies par compétence, ou pool de points libre ?).
   session » + code `VX-7K2` factices, invisible des joueurs — par un vrai tableau de bord : roster du groupe
   PV/mana live, séance en cours, dernier récap, état du combat) ; **D — Passe
   d'animations** transversale (transitions d'onglets, level-up, etc.). Ordre suggéré : C puis D en continu.
-- **Nouveau système d'attaque de base** (brainstorm en pause à la demande du MJ) : catégories d'armes
+- **Armes et maîtrises — LIVRAISON 1 FAITE le 2026-09-15** (`docs/journal/2026-09-15.md`). Restent les
+  **livraisons 2** (13 propriétés automatisées) **et 3** (débuffs assistés, rappels, retrait des derniers
+  restes) : §5 et §7 de `docs/superpowers/specs/2026-09-14-armes-maitrises-design.md`.
+- ~~**Nouveau système d'attaque de base**~~ (historique, remplacé par la ligne ci-dessus) : catégories d'armes
   (`info-mj/Nouveau système de gestion des attaques de base (2).md`) + **maîtrise par perso×arme** (−25 % +
   perte des propriétés si non maîtrisée), idée de **maîtrise qui progresse à l'usage**. À reprendre.
 - **Inventaire + Équipement : clos côté code** (perso + commun, transferts, catalogue, plafond 99,

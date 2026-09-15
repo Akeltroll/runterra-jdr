@@ -12,11 +12,11 @@ const ENEMY_FLD = { background:'var(--bg-inset)', color:'var(--ink)', border:'1p
 /* Fusionne la définition du perso (règles) avec son état live (Firebase). */
 function mjLive(c, st, turn) {
   const buffs = st ? Object.keys(st.buffs || {}) : (c.buffs || []);
-  const itemMods = st ? sumItemMods(st.equipment, st.inventory) : {};
+  const effLevel = (st && st.level != null ? st.level : c.level) || 1;
+  const itemMods = st ? sumItemMods(st.equipment, st.inventory, st.masteries, effLevel) : {};
   const runesSt  = (st && st.runes) || {};
   const runeMods = st ? sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES)) : {};
-  const effLevel = (st && st.level != null ? st.level : c.level) || 1;
   const base = charBaseStats(c, st);
   const passiveMods = st ? sumPassiveMods(c.id, st.counters || {}, effLevel, base) : {};
   const skillBuffMods = st ? sumSkillBuffs(st.skillBuffs || {}, turn) : {};
@@ -942,6 +942,14 @@ function PendingActionCard({ action, resolveTarget, color, onApply, onRejectInst
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 6 }}>
         <span style={{ fontSize: 13.5 }}>
           <b className="gold">{action.attackerName}</b> · <b>{action.skillName}</b>
+          {/* Attaque de base : avec quelle arme, et sous malus de maîtrise ou non (spec armes §3.3). */}
+          {action.source === 'basic' && action.weaponName ? (
+            <span className="faint" style={{ fontSize: 11.5 }}>
+              {' · '}{action.weaponName}
+              {action.mastered === false
+                ? <span style={{ color: 'var(--hp)' }}> · non maîtrisée −25 %</span> : null}
+            </span>
+          ) : null}
         </span>
         <span className="row gap-2" style={{ alignItems: 'center' }}>
           {cost.mana > 0 && <span className="mono faint" style={{ fontSize: 11 }}>{cost.mana} mana</span>}

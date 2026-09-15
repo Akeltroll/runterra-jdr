@@ -13,7 +13,8 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
                ↑ liste unique `MOD_STATS` (components.jsx), partagée éditeur d'item + panneau Modificateurs MJ
                letha = léthalité PHYSIQUE (réduit l'armure) ; lethaMag = léthalité MAGIQUE (réduit la rés. mag.)
                sapience/vol/omni sont des POURCENTAGES (cf. lifestealHeal), pas des valeurs plates
-    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods, weight, carry, carryGroup, order } }   ← perso, éditable (order = rangement manuel, cf. planReorder)
+    inventory: { [itemId]: { id, cat, name, sub, qty, ic, img, type, mods, weight, carry, carryGroup, armorClass, weaponCat, order } }
+               ↑ weaponCat = id de WEAPON_CATEGORIES (game-logic) ; '' / absent = pas une arme OU arme neutre   ← perso, éditable (order = rangement manuel, cf. planReorder)
     invInit:   true   ← marqueur de migration (amorçage unique de l'inventaire)
     equipment: { [slotKey]: itemId }   ← paperdoll (page Équipement), temps réel ; slotKey ∈ EQUIP_SLOTS (12 slots, armure fusionnée + ceinture)
     armureInit: true   ← marqueur de migration (fusion des 4 slots d'armure → slot « armure » unique)
@@ -40,6 +41,10 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
                      automatiquement à la confirmation suivante. ⚠️ NE PAS confondre avec attrsLocked, qui est l'inverse et
                      plus dur : attrsLocked gèle TOUTE la page, attrsOpen ne lève que le plancher — décocher « Verrouillé »
                      ne rend donc PAS la respec
+    masteries:   { [weaponCat]: true }   ← maîtrises d'armes (2026-09-15) ; écriture STAFF (`.validate`), via setMastery ;
+                     ABSENT = aucune maîtrise → −25 % et aucune propriété sur toute arme non mini catégorisée
+    weaponChoice: { mode }   ← mode d'arme choisi par le joueur (hybride 'ad'|'ap', arc hextech 'cellules'|'ad') ;
+                     ABSENT = mode par défaut de la catégorie (1er de `modes`)
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
     cooldowns: { [skillId]: readyAtTurn }   ← cooldown = n° de tour de disponibilité (999999 = 1×/combat)
     skillBuffs: { [skillId]: { mods:{ [stat]: n }, until:<n° de tour>|null } }   ← buffs sur soi (mods PLATS snapshotés au cast, ex. Urskaar C4 +30% PV/AD/Armure de base) ; until = tour de fin (auto-expiration via sumSkillBuffs(buffs,turn), ex. Mur de Givre 1/2 tours), null = permanent ; ancienne forme plate { [stat]:n } encore lue (compat) ; effacés par « ⟲ Combat »
@@ -56,6 +61,7 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
                                               reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
 /campaign/runeterra/combat/pendingActions/{actionId}/   ← ACTIONS proposées par les joueurs (remplace pendingHits depuis 2026-09-06)
     attackerId, attackerName, skillId, skillName, source:'skill'|'basic', round, ts
+    weaponCat, weaponName, mastered   ← attaque de base seulement (2026-09-15) : l'arme du coup et son malus éventuel
     cost: { mana, manaPer, manaMax, cdPrev }   ← le coût appartient à l'ACTION, pas à l'instance : N cibles = un seul mana et un seul cooldown
                                                   cdPrev = cooldown d'AVANT le cast (absent = la comp était prête, Firebase efface les null)
                                                   manaPer = mana facturé PAR CIBLE (0 partout aujourd'hui ; c'est la seule raison de rembourser une instance isolée)

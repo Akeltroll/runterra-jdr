@@ -65,9 +65,12 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
 ## `data.jsx` — règles immuables et `ITEM_CATALOG`
 
 - `data.jsx` — règles immuables : `CHARACTERS` (avec `inv`
-  par défaut + images `ATH/`), `BUFFS`, `WEAPONS`, `LEVELS` (caps §3, cap PJ 20), `ATTRIBUTES`, `RUNE`, `JOURNAL`,
+  par défaut + images `ATH/`), `BUFFS`, `LEVELS` (caps §3, cap PJ 20), `ATTRIBUTES`, `RUNE`, `JOURNAL`,
   `ITEM_CATALOG` (catalogue d'items pré-enregistrés pour l'ajout staff : `{cat,name,sub,ic,img,type}`
-  + `armorClass`/`weight`/`mods` sur les **18 armures de base** ajoutées le 2026-09-07).
+  + `armorClass`/`weight`/`mods` sur les **18 armures de base** ajoutées le 2026-09-07, et `weaponCat` sur
+  les armes depuis le 2026-09-15). ⚠️ **`WEAPONS` a été RETIRÉ le 2026-09-15** (avec `char.weaponId`/`weaponIds`) :
+  la catégorie d'une arme est son champ `item.weaponCat`, référentiel `WEAPON_CATEGORIES` dans `game-logic.js`
+  (voir `docs/archi/combat.md`). Ne pas réintroduire de rapprochement par NOM.
   ⚠️ **`ITEM_CATALOG` n'est qu'un FILET D'AMORÇAGE, pas la source de vérité du catalogue en jeu** :
   `useItemCatalog` fait `catalogArray(map, !!inited, ITEM_CATALOG)` — dès que `campaign/runeterra/catalogInit`
   est vrai (c'est le cas depuis longtemps), le tableau de `data.jsx` **n'est plus jamais lu**. Ajouter un objet
@@ -172,9 +175,10 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   effectif`], décrémente/supprime à 0 ; **plus de potion → bouton masqué** ; fini les boutons potion infinis en dur).
   **Outils d'ajustement libres réservés au MJ** (`isStaff` : Soigner/Dégâts/Mana/Bouclier d'un montant + ↺ max ;
   les joueurs ne peuvent plus tricher). Jauge **bouclier à max dynamique** (`max(shieldMax, bouclier)`).
-  Inventaire perso temps réel (migration unique `invInit`). **Arme affichée = celle équipée**
-  (slot `armePrincipale` de `state.equipment`, reliée à `WEAPONS` par nom ; repli `char.weaponId`) ; le panneau
-  « Arme équipée » est en info seule (l'action d'attaque est dans l'onglet Combat). Bourse **live** (dans le pied
+  Inventaire perso temps réel (migration unique `invInit`). **Panneau « Arme équipée »** (2026-09-15) = le
+  PROFIL d'attaque de base (`basicAttackProfile` sur `weaponLoadout`, même calcul que l'onglet Combat) : arme en
+  main, catégorie, maîtrise, dégâts estimés, propriétés, et le bloc **Maîtrises d'armes** (`MasteryEditor`,
+  éditable par le staff seulement → `setMastery`). Bourse **live** (dans le pied
   de `InventoryGrid`). **HealPanel plafonne sur les stats EFFECTIVES** (`eff.hp`/`eff.mana`).
 
 ## `pages-admin.jsx` — page Admin
