@@ -41,6 +41,7 @@ const EQUIP_GRID_AREAS =
 function equipTypeForItem(it) {
   if (!it) return null;
   if (it.type) return it.type;
+  if (it.weaponCat) return 'weapon';   // arme catégorisée sans type : c'est une arme
   const dague = /dague/i.test(it.img || '') || /dague/i.test(it.name || '');
   if (dague) return 'accessory';
   if (it.img && it.img.indexOf('/Armes/') !== -1) return 'weapon';
@@ -124,10 +125,18 @@ function EquipBody({ char }) {
   const equippedIds = new Set(Object.values(equipment).filter(id => id && itemsById[id]));
   const equippedItems = Object.values(equipment).map(id => itemsById[id]).filter(Boolean);
 
-  /* --- Équiper / déséquiper (temps réel Firebase) --- */
+  /* --- Équiper / déséquiper (temps réel Firebase) ---
+     Règles d'arme (spec armes §3.4, `equipSlotCheck`) : une arme 2H exige l'autre main vide,
+     deux armes non mini sont interdites, seules les mini-armes vont en accessoire. */
+  const slotCheck = (id, key) => {
+    const item = itemsById[id];
+    return equipSlotCheck(equipment, itemsById, id, key, equipTypeForItem(item), EQUIP_SLOTS[key].accepts);
+  };
   const tryEquip = (id, key) => {
     const item = itemsById[id];
-    if (!item || !EQUIP_SLOTS[key].accepts.includes(equipTypeForItem(item))) return;
+    if (!item) return;
+    const check = slotCheck(id, key);
+    if (!check.ok) { toast(`<b>${item.name}</b> — ${check.reason}`, 'gold'); return; }
     const patch = { [key]: id };                        // l'item déjà dans `key` repart à l'inventaire
     const prev = slotOfItem(id);
     if (prev && prev !== key) patch[prev] = null;        // libère l'ancien slot de l'item
@@ -137,10 +146,11 @@ function EquipBody({ char }) {
   const autoEquip = (id) => {
     const item = itemsById[id]; if (!item) return;
     const t = equipTypeForItem(item); if (!t) return;
-    const keys = Object.keys(EQUIP_SLOTS);
-    const empty = keys.find(k => EQUIP_SLOTS[k].accepts.includes(t) && !equipment[k]);
-    const any   = keys.find(k => EQUIP_SLOTS[k].accepts.includes(t));
-    const target = empty || any;
+    const keys = Object.keys(EQUIP_SLOTS).filter(k => EQUIP_SLOTS[k].accepts.includes(t));
+    // D'abord un emplacement vide ET permis, puis un emplacement permis ; sinon on tente le
+    // premier pour que le joueur lise la raison du refus.
+    const target = keys.find(k => !equipment[k] && slotCheck(id, k).ok)
+      || keys.find(k => slotCheck(id, k).ok) || keys[0];
     if (target) tryEquip(id, target);
   };
 
@@ -158,7 +168,7 @@ function EquipBody({ char }) {
   const effLevel = (state.level != null ? state.level : char.level) || 1;
   const equipBase = charBaseStats(char, state);
   const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel, equipBase);
-  const bonuses = mergeMods(mergeMods(sumItemMods(equipment, itemsById), runeMods), passiveMods);  // items + runes + passif -> vert
+  const bonuses = mergeMods(mergeMods(sumItemMods(equipment, itemsById, state.masteries, effLevel), runeMods), passiveMods);  // items + runes + passif -> vert
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);  // buffs de compétence -> orange
   const eff = computeEffective(equipBase, state.modifiers, activeBuffs, mergeMods(bonuses, skillBuffMods));
   const carryForce = (state.attrs && state.attrs.force != null ? state.attrs.force : (char.attrs ? char.attrs.force : 0)) || 0;
@@ -333,7 +343,7 @@ function EquipBody({ char }) {
                 const hov = hoverSlot === key;
                 return (
                   <div key={key}
-                    onDragOver={(e) => { e.preventDefault(); const d = itemsById[draggingId]; const v = !!(d && def.accepts.includes(equipTypeForItem(d))); if (hoverSlot !== key || hoverValid !== v) { setHoverSlot(key); setHoverValid(v); } }}
+                    onDragOver={(e) => { e.preventDefault(); const d = itemsById[draggingId]; const v = !!(d && slotCheck(draggingId, key).ok); if (hoverSlot !== key || hoverValid !== v) { setHoverSlot(key); setHoverValid(v); } }}
                     onDragLeave={() => { if (hoverSlot === key) setHoverSlot(null); }}
                     onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text') || draggingId; if (id) tryEquip(id, key); setHoverSlot(null); setDraggingId(null); }}
                     style={{ position:'relative', gridArea:def.area, borderRadius:3,
@@ -530,4 +540,4 @@ function EquipPage({ lockedCharId }) {
   );
 }
 
-Object.assign(window, { EquipPage, EquipBody });
+Object.assign(window, { EquipPage, EquipBody, EQUIP_SLOTS });

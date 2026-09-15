@@ -80,14 +80,6 @@ function TargetRow({ effKey, spec, pool, selected, onChange, detail }) {
   );
 }
 
-/* Type de dégâts de l'arme équipée (slot armePrincipale) → 'Physique'|'Magique'|'Hybride'. */
-function weaponTypeOf(state, char) {
-  const eqId = state.equipment && state.equipment.armePrincipale;
-  const item = (eqId && state.inventory) ? state.inventory[eqId] : null;
-  const w = (item && WEAPONS.find(x => x.name === item.name)) || WEAPONS.find(x => x.id === char.weaponId);
-  return (w && w.cat) || 'Physique';
-}
-
 /* Mods de runes (miroir des autres pages). */
 function runeModsOf(state) {
   const rs = state.runes || {};
@@ -483,7 +475,7 @@ function CompetencesBody({ char, staff }) {
   const toast = useToast();
   // ⚠️ `setSkillBuff` n'est PLUS pris ici : depuis la refonte du 2026-09-06, un buff de
   // compétence est écrit par le MJ à la résolution (`applyStatusToCharacter`), jamais au cast.
-  const { state, setField, setCounter, setCooldown, setInvItem, removeInvItem } = useCharState(char.id);
+  const { state, setField, setCounter, setCooldown, setInvItem, removeInvItem, setEquipment } = useCharState(char.id);
   const { turn } = useSharedTurn();
   const { enemies } = useMJEnemies();
   const { enemies: foes, allies } = splitCombatants(enemies);
@@ -521,7 +513,7 @@ function CompetencesBody({ char, staff }) {
   }
   if (!kit) return <div className="panel" style={{ margin: 20, padding: 20 }}>Aucune compétence définie.</div>;
 
-  const itemMods = sumItemMods(state.equipment, state.inventory);
+  const itemMods = sumItemMods(state.equipment, state.inventory, state.masteries, level);
   const base = charBaseStats(char, state);
   const passiveMods = sumPassiveMods(char.id, counters, level, base);
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);
@@ -531,7 +523,13 @@ function CompetencesBody({ char, staff }) {
   // (fiche, MJ, Équipement) les passent déjà ; cette page était la seule à passer [].
   const activeBuffs = Object.keys(state.buffs || {});
   const eff = computeEffective(base, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods), skillBuffMods));
-  const wType = weaponTypeOf(state, char);
+  /* Arme en main → profil d'attaque de base (spec armes §4) : stat, type de dégâts, ratio
+     mini-arme, malus de maîtrise, propriétés. `wType` en dérive, et avec lui le type des
+     compétences qui frappent « avec l'arme » (Elias C1, Smith C1). */
+  const weaponChoice = state.weaponChoice || {};
+  const profile = basicAttackProfile(weaponLoadout(state.equipment, state.inventory),
+    state.masteries, eff, weaponChoice);
+  const wType = profile.wType;
   const baseCtx = { counters, level, wType, hpMax: base.hp };
   // Setters de ressources : même contrat que la fiche (valeur ou updater), pour que
   // ConsumablesRow soit branchable des deux côtés sans variante.
@@ -597,13 +595,24 @@ function CompetencesBody({ char, staff }) {
 
   // Attaque de base : même flux que les compétences (elle passe par la file du MJ),
   // sans mana ni cooldown.
-  const eqWeaponName = (() => {
-    const eqId = state.equipment && state.equipment.armePrincipale;
-    const it = (eqId && state.inventory) ? state.inventory[eqId] : null;
-    return (it && it.name) || (WEAPONS.find(w => w.id === char.weaponId) || {}).name || 'Arme';
-  })();
-  // Puissance PLEINE de l'attaque de base ; le mode n'en prend qu'une fraction.
-  const basicPower = (wType === 'Magique' ? (eff.ap || 0) : (eff.ad || 0));
+  // Puissance PLEINE de l'attaque de base (ratio mini-arme et malus de maîtrise inclus) ;
+  // le geste n'en prend qu'une fraction.
+  const basicPower = profile.power;
+  // Choix du mode d'arme (hybride : physique/magique ; arc hextech : arc/cellules). PERSISTÉ,
+  // contrairement au geste : c'est une façon de tenir son arme, pas un choix par coup.
+  const setWeaponMode = (id) => setField('weaponChoice', { ...weaponChoice, mode: id });
+  /* Mini-armes à portée de main (accessoires) et mains libres : dégainer/rengainer est
+     permissif (décision MJ 5b/5c), aucune contrainte de tour. */
+  const eqNow = state.equipment || {};
+  const invNow = state.inventory || {};
+  const SLOTS = window.EQUIP_SLOTS || {};
+  const handFor = (id) => HAND_SLOTS.find(h => !eqNow[h] && SLOTS[h]
+    && equipSlotCheck(eqNow, invNow, id, h, 'weapon', SLOTS[h].accepts).ok);
+  const drawable = Object.keys(eqNow).filter(k => isAccessorySlot(k) && isWeaponItem(invNow[eqNow[k]]))
+    .map(k => ({ slot: k, item: invNow[eqNow[k]], hand: handFor(eqNow[k]) })).filter(x => x.hand);
+  const freeAcc = ['accessoire1', 'accessoire2', 'accessoire3'].find(k => !eqNow[k]);
+  const sheathable = freeAcc ? HAND_SLOTS.filter(h => isMiniWeapon(invNow[eqNow[h]]))
+    .map(h => ({ slot: h, item: invNow[eqNow[h]] })) : [];
   const mode = basicMode(atkMode);
   const basicDmg = basicModeDamage(basicPower, atkMode);
   /* Nom d'un combattant, PNJ ou PJ (les deux camps passent par la même file). */
@@ -618,7 +627,22 @@ function CompetencesBody({ char, staff }) {
      `max: 1` est la seule constante à changer le jour où les règles prévoient un
      balayage d'arme lourde (décision MJ du 2026-09-06). */
   const BASIC_TARGETING = { damage: { camp: 'any', min: 1, max: 1 } };
+  const weaponMeta = { weaponCat: (profile.cat && profile.cat.id) || '', weaponName: profile.name,
+    mastered: profile.mastered };
+  /* Mode sans dégâts (cellules nano-hextech de Jett) : une action NARRATIVE, sans cible,
+     que le MJ valide — le joueur ne l'écrit pas lui-même, comme n'importe quel effet. */
+  function narrativeAttack() {
+    const label = profile.mode.label;
+    const fake = { id: 'basic', name: label, mana: 0, dmg: () => null };
+    const plan = buildCastPlan(fake, eff, baseCtx, {},
+      { turn, base, selfId: char.id, wType, cdPrev: null, narrative: `${label} (${profile.name})` });
+    addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
+      source: 'basic', round: turn, cost: plan.cost }, weaponMeta), plan.instances);
+    pushLog(`<b>${char.name}</b> — ${label} — en attente MJ`, 'gold');
+    toast(`<b>${char.name}</b> — ${label} envoyé au MJ`, 'buff');
+  }
   function basicAttack() {
+    if (!profile.damage) { narrativeAttack(); return; }
     const check = castSelectionValid(BASIC_TARGETING, basicSel);
     if (!check.ok) { toast(`<b>${char.name}</b> — ${check.reason}`, 'gold'); return; }
     const label = mode.id === 'normal' ? 'Attaque de base'
@@ -630,8 +654,8 @@ function CompetencesBody({ char, staff }) {
     const plan = buildCastPlan(fake, eff, baseCtx, basicSel,
       { turn, base, selfId: char.id, wType, cdPrev: null, noCrit: !mode.crit });
     plan.instances.forEach(i => { if (i.kind === 'damage') i.modeId = mode.id; });
-    addAction({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
-      source: 'basic', round: turn, cost: plan.cost }, plan.instances);
+    addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
+      source: 'basic', round: turn, cost: plan.cost }, weaponMeta), plan.instances);
     const hit = plan.instances[0] || {};
     const shown = hit.didCrit ? `${hit.critDmg} — CRITIQUE !` : `${basicDmg}`;
     const verb = mode.id === 'normal' ? 'attaque' : `${mode.label.toLowerCase()} →`;
@@ -709,11 +733,44 @@ function CompetencesBody({ char, staff }) {
       <div className="panel" style={{ borderLeft: '3px solid var(--gold)' }}>
         <div className="panel-head">
           <h3>⚔ Attaque de base</h3>
-          <span className="overline">{eqWeaponName} · {wType === 'Magique' ? 'AP' : 'AD'}</span>
+          <span className="overline">{profile.name} · {profile.mode.label}{profile.damage ? ` · ${profile.stat.toUpperCase()}` : ''}</span>
         </div>
         <div style={{ padding: '10px 14px' }}>
+          <div style={{ marginBottom: 10 }}><WeaponStatusLine profile={profile} /></div>
+          {(drawable.length > 0 || sheathable.length > 0) && (
+            <div className="row gap-2 wrap" style={{ marginBottom: 10 }}>
+              {drawable.map(x => (
+                <button key={x.slot} className="btn btn-sm btn-ghost"
+                  title="Passe la mini-arme de l'accessoire à une main libre"
+                  onClick={() => setEquipment({ [x.hand]: x.item.id, [x.slot]: null })}>
+                  🗡 Dégainer {x.item.name}
+                </button>
+              ))}
+              {sheathable.map(x => (
+                <button key={x.slot} className="btn btn-sm btn-ghost"
+                  title="Range la mini-arme en accessoire (elle ne donne alors plus rien)"
+                  onClick={() => setEquipment({ [freeAcc]: x.item.id, [x.slot]: null })}>
+                  ↩ Rengainer {x.item.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Mode d'arme : hybride (physique/magique) ou arc hextech (arc/cellules). */}
+          {profile.modes.length > 1 && (
+            <div className="row gap-2 wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
+              <span className="overline">Mode d'arme</span>
+              {profile.modes.map(m => (
+                <button key={m.id} className={'btn btn-sm ' + (profile.mode.id === m.id ? 'btn-gold' : 'btn-ghost')}
+                  onClick={() => setWeaponMode(m.id)}
+                  title={m.damage === false ? 'Aucun dégât' : `Dégâts ${m.dmgType}s, calculés sur l'${m.stat.toUpperCase()}`}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
           {/* Modes : un geste par bouton, ratio fixe sur la puissance d'attaque. Choix par
               COUP (état local) — ce n'est pas une posture qu'on garde pour le tour. */}
+          {profile.damage && (<React.Fragment>
           <div className="row gap-2 wrap" style={{ marginBottom: 10 }}>
             {BASIC_MODES.map(m => (
               <button key={m.id}
@@ -731,7 +788,11 @@ function CompetencesBody({ char, staff }) {
               selected={basicSel.damage || []}
               onChange={(next) => setBasicSel({ damage: next })} />
           </div>
+          </React.Fragment>)}
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            {!profile.damage ? (
+              <span className="faint" style={{ fontSize: 12.5 }}>Aucun dégât : l'action part au MJ, qui la valide en table.</span>
+            ) : (
             <div className="col" style={{ gap: 2 }}>
               <span className="mono" style={{ fontSize: 22, color: 'var(--hp)', fontWeight: 700 }}>
                 {basicDmg}<span style={{ fontSize: 12, color: 'var(--faint)' }}> dégâts</span>
@@ -740,15 +801,18 @@ function CompetencesBody({ char, staff }) {
                 )}
               </span>
               {!mode.crit && (
-                <span className="faint" style={{ fontSize: 11.5 }}>Coup retenu : pas de jet de critique.</span>
+                <span className="faint" style={{ fontSize: 11.5 }}>Coup retenu : pas de jet de critique, aucune propriété d'arme.</span>
               )}
             </div>
+            )}
             <button className="btn btn-gold" onClick={basicAttack}
-              disabled={!(basicSel.damage || []).length}
-              title={(basicSel.damage || []).length ? '' : 'Choisis une cible d’abord'}>
-              {mode.id === 'normal' ? 'Attaquer' : mode.label}
+              disabled={profile.damage && !(basicSel.damage || []).length}
+              title={!profile.damage || (basicSel.damage || []).length ? '' : 'Choisis une cible d’abord'}>
+              {!profile.damage ? profile.mode.label : (mode.id === 'normal' ? 'Attaquer' : mode.label)}
             </button>
           </div>
+          {/* Décision MJ 9 : les propriétés ne jouent qu'en attaque pleine. */}
+          {(!profile.damage || mode.id === 'normal') && <WeaponPropsList profile={profile} />}
         </div>
       </div>
       <PassiveCard kit={kitWithId} eff={eff} base={base} counters={counters} level={level} color={color} setCounter={setCounter} />

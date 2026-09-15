@@ -29,6 +29,9 @@ function useCharState(charId) {
   // Équipement (paperdoll) : map { [slotKey]: itemId }. Le patch permet une mise à
   // jour atomique multi-slots (déséquiper l'ancien slot d'un item en l'équipant ailleurs).
   const setEquipment  = useCallback((patch)    => window.RTDB.updatePath(`${charPath(charId)}/equipment`, patch), [charId]);
+  // Maîtrises d'armes { [weaponCat]: true } — écriture STAFF seulement (règle `.validate`
+  // de database.rules.json : un joueur ne peut ni en ajouter ni en changer, seulement en retirer).
+  const setMastery    = useCallback((cat, on)  => window.RTDB.updatePath(`${charPath(charId)}/masteries`, { [cat]: on ? true : null }), [charId]);
   const setRuneSelected = useCallback((nodeId, on) =>
     window.RTDB.updatePath(`${charPath(charId)}/runes/selected`, { [nodeId]: on ? true : null }), [charId]);
   const setRuneChoice = useCallback((nodeId, choice) =>
@@ -116,7 +119,7 @@ function useCharState(charId) {
     window.RTDB.updatePath(charPath(charId), { attrsOpen: open ? true : null }), [charId]);
   const setAttrsLocked = useCallback((locked) =>
     window.RTDB.updatePath(charPath(charId), { attrsLocked: locked ? true : null }), [charId]);
-  return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment,
+  return { state, setField, setBuff, setMod, setInvItem, removeInvItem, setEquipment, setMastery,
     setRuneSelected, setRuneChoice, resetRunes, setCounter, setCooldown, setSkillBuff, setAttrs, setAttrsLocked, setAttrsOpen, setHabSplitOpen, setMentalSplitOpen,
     setForceSplitOpen, setMagieSplitOpen };
 }
@@ -138,12 +141,12 @@ function useSharedTurn() {
     for (const c of CHARACTERS) {
       const p = charPath(c.id);
       const st = (await window.RTDB.getSnapshot(p)) || {};
-      const itemMods = sumItemMods(st.equipment, st.inventory);
+      const lvl = (st.level != null ? st.level : c.level) || 1;
+      const itemMods = sumItemMods(st.equipment, st.inventory, st.masteries, lvl);
       const runesSt = st.runes || {};
       const runeMods = sumRuneMods(
         Object.keys(runesSt.selected || {}).filter((id) => runesSt.selected[id]),
         runesSt.choices || {}, buildRuneIndex(RUNES));
-      const lvl = (st.level != null ? st.level : c.level) || 1;
       const cbase = charBaseStats(c, st);
       const passiveMods = sumPassiveMods(c.id, st.counters || {}, lvl, cbase);
       // Max de base SANS skillBuffs (les buffs BUFFS n'affectent pas les PV max).

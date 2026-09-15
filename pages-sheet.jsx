@@ -95,29 +95,47 @@ function SecondaryStats({ breakdown }) {
   );
 }
 
-/* ---- Panneau arme équipée (info, lecture seule) ---- */
-function WeaponPanel({ weapon, eff }) {
-  const estimate = weapon.stat === 'ap' ? eff.ap : eff.ad;
+/* ---- Panneau arme équipée + maîtrises ----
+   Lit le PROFIL d'attaque de base (`basicAttackProfile`, game-logic) : c'est le même calcul
+   que l'onglet Combat, donc les dégâts estimés ici sont ceux que le joueur enverra.
+   Maîtrises : lecture seule pour le joueur, cases éditables pour le staff (décision MJ 11). */
+function WeaponPanel({ profile, masteries, canEdit, setMastery }) {
+  const cat = profile.cat;
+  const kindLabel = cat ? WEAPON_KIND_LABEL[cat.kind] : 'Physique';
+  const magic = profile.dmgType === 'magique';
   return (
     <div className="panel">
       <div className="panel-head"><h3>Arme équipée</h3>
-        <span className={'buff ' + (weapon.cat === 'Magique' ? 'is-buff' : 'is-debuff')} style={{ cursor:'default' }}>
-          <span className="dot">{weapon.cat === 'Magique' ? '✦' : '⚔'}</span>{weapon.cat}
+        <span className={'buff ' + (magic ? 'is-buff' : 'is-debuff')} style={{ cursor:'default' }}>
+          <span className="dot">{magic ? '✦' : '⚔'}</span>{kindLabel}
         </span>
       </div>
       <div style={{ padding:'16px' }}>
-        <div className="row gap-3" style={{ marginBottom:14 }}>
-          <div style={{ width:52, height:52, flex:'none', borderRadius:10, display:'grid', placeItems:'center', fontSize:26,
-            background:'linear-gradient(135deg, var(--bg-panel-2), var(--bg-inset))', border:'1px solid var(--line-gold)' }}>{weapon.ic}</div>
-          <div>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:18, color:'var(--gold-pale)' }}>{weapon.name}</div>
-            <div className="faint" style={{ fontSize:12 }}>{weapon.cat} · {weapon.type} · base {weapon.stat.toUpperCase()}</div>
+        <div className="row gap-3" style={{ marginBottom:12 }}>
+          <div style={{ width:52, height:52, flex:'none', borderRadius:10, display:'grid', placeItems:'center', fontSize:26, overflow:'hidden',
+            background:'linear-gradient(135deg, var(--bg-panel-2), var(--bg-inset))', border:'1px solid var(--line-gold)' }}>
+            {profile.weapon && profile.weapon.img
+              ? <img src={profile.weapon.img} alt="" style={{ width:'100%', height:'100%', objectFit:'contain' }} />
+              : ((profile.weapon && profile.weapon.ic) || '⚔')}
+          </div>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontFamily:'var(--font-display)', fontSize:18, color:'var(--gold-pale)' }}>{profile.name}</div>
+            <div className="faint" style={{ fontSize:12 }}>
+              {/* Le nom de catégorie est omis quand l'objet s'appelle déjà ainsi (« Claymore · Claymore »). */}
+              {cat ? (profile.name === cat.name ? weaponCatLabel(cat).slice(cat.name.length + 3) : weaponCatLabel(cat))
+                : (profile.weapon ? 'Arme sans catégorie' : 'Aucune arme en main')}
+            </div>
           </div>
         </div>
-        <div className="row" style={{ justifyContent:'space-between', padding:'12px 14px', background:'var(--bg-inset)', borderRadius:8, border:'1px solid var(--line)' }}>
-          <span className="dim" style={{ fontSize:12 }}>Dégâts estimés</span>
-          <span className="mono" style={{ fontSize:22, fontWeight:700, color:'var(--gold-bright)' }}>{estimate}</span>
+        <WeaponStatusLine profile={profile} />
+        <div className="row" style={{ justifyContent:'space-between', padding:'12px 14px', margin:'10px 0', background:'var(--bg-inset)', borderRadius:8, border:'1px solid var(--line)' }}>
+          <span className="dim" style={{ fontSize:12 }}>Attaque de base ({profile.mode.label})</span>
+          <span className="mono" style={{ fontSize:22, fontWeight:700, color:'var(--gold-bright)' }}>
+            {profile.damage ? profile.power : '—'}
+          </span>
         </div>
+        <WeaponPropsList profile={profile} />
+        <MasteryEditor masteries={masteries} canEdit={canEdit} setMastery={setMastery} />
       </div>
     </div>
   );
@@ -318,7 +336,7 @@ function HealPanel({ char, eff, hp, setHp, mana, setMana, shield, setShield, act
 function SheetBody({ char }) {
   const { role } = useAuthIdentity();
   const canEdit = isStaff(role);   // joueur = inventaire en lecture seule ; MJ/admin = édition
-  const { state, setField, setBuff, setMod, setInvItem, removeInvItem } = useCharState(char.id);
+  const { state, setField, setBuff, setMod, setInvItem, removeInvItem, setMastery } = useCharState(char.id);
   const { turn } = useSharedTurn();
   useEffect(() => {
     // migration unique (marqueur invInit) : amorce l'inventaire si absent, une seule
@@ -336,22 +354,18 @@ function SheetBody({ char }) {
   const setMana   = (v) => setField('manaCur', typeof v === 'function' ? v(mana) : v);
   const setShield = (v) => setField('shield',  typeof v === 'function' ? v(shield) : v);
   const activeBuffs = Object.keys(state.buffs || {});
-  const itemMods = sumItemMods(state.equipment, state.inventory);
+  const effLevel = (state.level != null ? state.level : char.level) || 1;
+  const itemMods = sumItemMods(state.equipment, state.inventory, state.masteries, effLevel);
   const runesSt  = state.runes || {};
   const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
     runesSt.choices || {}, buildRuneIndex(RUNES));
-  const effLevel = (state.level != null ? state.level : char.level) || 1;
   const sheetBase = charBaseStats(char, state);
   const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel, sheetBase);
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);
   const eff = computeEffective(sheetBase, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
-  // Arme affichée = celle équipée dans le slot « Arme principale » (live), reliée à WEAPONS
-  // par son nom ; sinon item brut synthétisé ; sinon repli sur l'arme par défaut du perso.
-  const equippedId = state.equipment && state.equipment.armePrincipale;
-  const equippedItem = (equippedId && state.inventory) ? state.inventory[equippedId] : null;
-  const equippedWeapon = (equippedItem && WEAPONS.find(w => w.name === equippedItem.name))
-    || (equippedItem ? { name: equippedItem.name, ic: equippedItem.ic || '⚔', cat:'Physique', type:'—', stat:'ad' } : null)
-    || WEAPONS.find(w => w.id === char.weaponId);
+  // Profil d'attaque de base : même calcul que l'onglet Combat (arme en main, maîtrise, mode).
+  const weaponProfile = basicAttackProfile(weaponLoadout(state.equipment, state.inventory),
+    state.masteries, eff, state.weaponChoice);
   const breakdown = statBreakdown(sheetBase, state.modifiers, activeBuffs,
     mergeMods(mergeMods(mergeMods(itemMods, runeMods), passiveMods), skillBuffMods));
   const force = (state.attrs && state.attrs.force != null) ? state.attrs.force : (char.attrs ? char.attrs.force : 0);
@@ -377,7 +391,7 @@ function SheetBody({ char }) {
             <div className="panel-head"><h3>Statistiques</h3></div>
             <div style={{ padding:'16px' }}><SecondaryStats breakdown={breakdown} /></div>
           </div>
-          <WeaponPanel weapon={equippedWeapon} eff={eff} />
+          <WeaponPanel profile={weaponProfile} masteries={state.masteries} canEdit={canEdit} setMastery={setMastery} />
           <BuffsPanel char={char} activeBuffs={activeBuffs} setBuff={setBuff} />
         </div>
         {/* COLONNE 3 — INVENTAIRE (+ modificateurs MJ) */}

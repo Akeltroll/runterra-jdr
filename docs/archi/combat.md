@@ -16,6 +16,19 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   instance, `rng` injectable), **`actionRefundPlan(action, mode)`** (`'cancel'`/`'instance'`/`'fail'`)
   + `refundManaValue(cur, amount, max)` (plafonne au max snapshoté au cast, ne baisse jamais le
   mana courant).
+  **ARMES ET MAÎTRISES** (2026-09-15, spec `docs/superpowers/specs/2026-09-14-armes-maitrises-design.md`) :
+  `WEAPON_CATEGORIES` (38 : les 37 du document MJ sans les explosifs, + `arc_hextech`), `WEAPON_PROPERTIES`
+  (texte RÉVISÉ + `passiveMods(level)` pour Canalisation/Plénitude), `WEAPON_TIER_MODS` (§7.1),
+  `weaponLoadout(equipment, items)` (arme d'attaque = l'arme NON mini des deux mains ; `pair`
+  `mini+mini`/`main+mini` ; `twoHanded` ; `issues`), `basicAttackProfile(loadout, masteries, eff, choice)`
+  (stat/type selon le MODE d'arme, ratio 0,6 mini seule / 1 mini+mini, ×0,75 sans maîtrise hors mini,
+  propriétés utilisables et perdues), `sumWeaponPropMods` (branché DANS `sumItemMods`, qui prend désormais
+  `masteries, level` et ignore les armes rangées en accessoire), `equipSlotCheck` (2H = autre main vide,
+  deux armes non mini interdites, seules les mini-armes en accessoire).
+  ⚠️ **Une arme sans `weaponCat` est NEUTRE** (une main, maîtrisée, sans propriété) : c'est le comportement
+  d'avant la livraison, gardé exprès pour les objets uniques.
+  ⚠️ **Livraison 1 seulement** : les propriétés sont AFFICHÉES (rappels), aucune n'est automatisée.
+  Les lots 2 et 3 sont décrits au §5 de la spec.
   **Modes d'attaque de base** : `BASIC_MODES` (6 gestes à ratio FIXE sur la puissance d'attaque —
   Attaque 100 % / Coup retenu 50 % / Coup de poing 25 % / Botter le cul 15 % / Bousculade 10 % /
   Gifle 5 %) + `basicMode(id)` (id inconnu → attaque pleine) + `basicModeDamage(power, id)`.
@@ -104,8 +117,12 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   dans le conteneur de scroll de `CompetencesPage`) : jauges **PV / Mana / Bouclier** du lanceur + badge KO
   + `ConsumablesRow` (**potions buvables sans quitter l'onglet**). Maxima lus dans **`eff`**, la même chaîne
   que la fiche (items + runes + passif + `skillBuffs`) — jamais `base`, sinon un buff de PV afficherait une
-  barre fausse. Carte **Attaque de base** (arme équipée → `eff.ad`/`eff.ap`, bouton
-  « Attaquer » → attaque en attente MJ, **sans mana ni cooldown**) avec **rangée de modes**
+  barre fausse. Carte **Attaque de base** (**profil d'arme** `basicAttackProfile` depuis le 2026-09-15 :
+  ligne d'état `WeaponStatusLine`, sélecteur **Mode d'arme** pour une hybride ou l'arc hextech — PERSISTÉ en
+  `state/weaponChoice.mode`, contrairement au geste —, boutons **Dégainer/Rengainer** d'une mini-arme entre
+  accessoire et main libre, `WeaponPropsList` en attaque pleine seulement ; un mode sans dégâts (cellules de
+  Jett) dépose une action NARRATIVE ; l'action porte `weaponCat`/`weaponName`/`mastered`, affichés sur la carte
+  du MJ ; bouton « Attaquer » → attaque en attente MJ, **sans mana ni cooldown**) avec **rangée de modes**
   (`BASIC_MODES`, game-logic : gifle 5 %, botter le cul 15 %… — état **local non persisté**, c'est un
   choix par COUP ; le ratio s'applique à `eff.ad` **ou** `eff.ap`, une gifle de mage vaut 5 % d'AP).
   ⚠️ Un mode réduit **ne roule pas** `rollCrit` — on ne neutralise pas le résultat après coup — et

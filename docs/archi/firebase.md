@@ -46,7 +46,12 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   racine ; les `.validate` des descendants continuent de s'appliquer, et `/users` n'est pas
   concerné : un MJ ne peut toujours pas se promouvoir admin) ; **`combat/log` et `economyLog` ont un `.write` STAFF au
   niveau du NŒUD** (purger = écrire sur le nœud ; le `.write` sur `$logId` ne suffit pas — cf. bug
-  du 2026-08-21) ; **`characters/$charId/state/coins/$coin` = `.validate` entier >= 0** (le reste du sous-arbre perso n'est toujours validé nulle part) ;
+  du 2026-08-21) ; **`characters/$charId/state/coins/$coin` = `.validate` entier >= 0** ;
+  **`characters/$charId/state/masteries/$cat` = `.validate` STAFF** (2026-09-15) : `true` seulement, et une
+  valeur nouvelle ou changée exige le rôle `mj`/`admin`. ⚠️ C'est un `.validate` et non un `.write` parce que
+  le joueur a déjà `.write` sur toute sa fiche, et qu'un `.write` hérité ne se retire pas plus bas.
+  Conséquence assumée : `.validate` ne tourne pas à la suppression, un joueur peut RETIRER une de ses
+  maîtrises (il ne nuit qu'à lui). Le reste du sous-arbre perso n'est toujours validé nulle part ;
   **`characters/$charId/state/attrs` et `/level` ont un `.read` ouvert à TOUS les inscrits** (2026-08-21,
   capacité commune du coffre : elle a besoin des caracs des 5 persos ; le reste de la fiche — PV, bourse,
   modificateurs, XP, runes, inventaire — **reste cloisonné**, et aucune écriture n'est élargie) ;

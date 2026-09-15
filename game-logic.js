@@ -63,16 +63,22 @@
     return eff;
   }
 
-  /* --- Bonus de stats des items équipés : somme des item.mods --- */
-  function sumItemMods(equipment, itemsById) {
+  /* --- Bonus de stats des items équipés : somme des item.mods ---
+     + les stats d'arme que la maîtrise débloque (`sumWeaponPropMods`, Canalisation/Plénitude).
+     ⚠️ Une arme rangée en ACCESSOIRE ne donne rien (décision MJ 5c du 2026-09-14) : elle
+     signale seulement une mini-arme à portée de main.
+     ⚠️ `masteries` et `level` sont à passer par TOUS les appelants (fiche, Combat,
+     Équipement, MJ, resetCombat) : en oublier un fait diverger le mana max d'une page. */
+  function sumItemMods(equipment, itemsById, masteries, level) {
     equipment = equipment || {};
     itemsById = itemsById || {};
-    const out = {};
+    const out = sumWeaponPropMods(equipment, itemsById, masteries, level);
     for (const slot of Object.keys(equipment)) {
       const id = equipment[slot];
       if (!id) continue;
       const it = itemsById[id];
       if (!it || !it.mods) continue;
+      if (isAccessorySlot(slot) && isWeaponItem(it)) continue;
       for (const k of Object.keys(it.mods)) {
         const v = Number(it.mods[k]) || 0;
         if (v) out[k] = (out[k] || 0) + v;
@@ -112,13 +118,14 @@
       carry:  Number(p.carry) || 0,    // bonus de capacité de charge PERSONNELLE (canal 'p') — objet équipé
       carryGroup: Number(p.carryGroup) || 0,  // bonus de capacité de charge du GROUPE (canal 'g') — coffre commun
       armorClass: p.armorClass || '',  // '' | 'legere' | 'intermediaire' | 'lourde' (armures)
+      weaponCat: p.weaponCat || '',    // id de WEAPON_CATEGORIES ('' = pas une arme, ou arme neutre)
     };
   }
 
   /* --- Transfert/fusion d'items : logique pure --- */
   function _sameKind(a, b) {
     return a && b && a.name === b.name && (a.type || '') === (b.type || '') && a.cat === b.cat
-      && (a.armorClass || '') === (b.armorClass || '');
+      && (a.armorClass || '') === (b.armorClass || '') && (a.weaponCat || '') === (b.weaponCat || '');
   }
   function planItemTransfer(srcItems, dstItems, itemId, n) {
     srcItems = srcItems || {}; dstItems = dstItems || {};
@@ -135,6 +142,7 @@
       cat: src.cat, name: src.name, sub: src.sub,
       ic: src.ic, img: src.img, type: src.type, mods: src.mods,
       weight: src.weight, carry: src.carry, carryGroup: src.carryGroup, armorClass: src.armorClass,
+      weaponCat: src.weaponCat,
     }, move);
     return { srcPatch: srcPatch, dstPatch: dstPatch };
   }
@@ -166,6 +174,7 @@
         cat: entry.cat, name: entry.name, sub: entry.sub, qty: take,
         ic: entry.ic, img: entry.img, type: entry.type, mods: entry.mods,
         weight: entry.weight, carry: entry.carry, carryGroup: entry.carryGroup, armorClass: entry.armorClass,
+        weaponCat: entry.weaponCat,
       });
       patch[fresh.id] = fresh;
       remaining -= take;
@@ -523,6 +532,289 @@
     return Math.floor(w * (1 - armorWeightReduction(mental)));
   }
 
+  /* ============================================================
+     ARMES ET MAÎTRISES — référentiel + profil d'attaque de base
+     Spec : docs/superpowers/specs/2026-09-14-armes-maitrises-design.md
+     Sources : document MJ « Nouveau système de gestion des attaques de base (2) »
+     (catégories) + docs/armes-maitrises.md (valeurs RÉVISÉES des propriétés).
+     ============================================================ */
+
+  /* Modes d'une arme = stat de calcul + type de dégâts. Une arme hybride a DEUX modes,
+     choisis par le joueur dans l'onglet Combat (décision MJ du 2026-09-14) — ce n'est
+     plus la « moyenne AD/AP » du §6.1 de la SPECIFICATION. */
+  var WEAPON_MODES = {
+    phys: [ { id: 'ad', label: 'Physique', stat: 'ad', dmgType: 'physique' } ],
+    mag:  [ { id: 'ap', label: 'Magique',  stat: 'ap', dmgType: 'magique' } ],
+    hyb:  [ { id: 'ad', label: 'Physique', stat: 'ad', dmgType: 'physique' },
+            { id: 'ap', label: 'Magique',  stat: 'ap', dmgType: 'magique' } ],
+  };
+
+  /* Bonus de stat par palier (SPECIFICATION §7.1, confirmé MJ le 2026-09-14). */
+  var WEAPON_TIER_MODS = {
+    base: { phys: { ad: 15 }, mag: { ap: 15 }, hyb: { ad: 10, ap: 10 } },
+    sup:  { phys: { ad: 30 }, mag: { ap: 30 }, hyb: { ad: 20, ap: 20 } },
+    leg:  { phys: { ad: 70 }, mag: { ap: 70 }, hyb: { ad: 45, ap: 45 } },
+  };
+  var WEAPON_TIERS = [
+    { value: 'base', label: 'De base' }, { value: 'sup', label: 'Supérieure' }, { value: 'leg', label: 'Légendaire' },
+  ];
+
+  /* Propriétés. `text` = version RÉVISÉE (2026-09-12), jamais celle d'origine du document MJ.
+     `passiveMods(level)` = statistique d'arme que SEULE la maîtrise débloque (MJ, 2026-09-15) :
+     elle est donnée en permanence, quelle que soit la propriété lancée ce tour. */
+  var WEAPON_PROPERTIES = {
+    adaptation:           { name: 'Adaptation', text: 'Choix physique/magique à chaque attaque ; la vulnérabilité de la cible n\'est connue qu\'après avoir testé les deux types.' },
+    assommage:            { name: 'Assommage', text: '10 % de chances d\'étourdir la cible pour sa prochaine action.' },
+    attaque_double:       { name: 'Attaque double', text: '2 attaques de base à 65 % dans le même tour, cibles libres. Sans rechargement.' },
+    attaque_lente:        { name: 'Attaque lente', malus: true, text: 'Déplacement limité à 2 cases si le personnage attaque avec cette arme.' },
+    balayage:             { name: 'Balayage', text: 'Jusqu\'à 3 cibles à portée, 80 % des dégâts. Pas deux tours d\'affilée.' },
+    brisage:              { name: 'Brisage', text: '50 % d\'infliger Brisé (−50 % armure) pendant 2 tours. Rechargement 3 tours.' },
+    canalisation:         { name: 'Canalisation', text: 'Canalise 5 % du mana max en dégâts bruts ×2 sur l\'attaque de base. Maîtrisée : +50 Mana + 10 Mana par niveau.',
+                            passiveMods: function (level) { return { mana: 50 + 10 * (Math.max(1, level | 0)) }; } },
+    combo:                { name: 'Combo', text: 'Après une attaque de base, 25 % de chances d\'en relancer une (cumulable).' },
+    concentration:        { name: 'Concentration', text: 'Désigne une cible : chance de critique doublée (Aiguisage) tant qu\'elle reste visée. 1 tour de rechargement si la concentration est perdue.' },
+    connexion_astrale:    { name: 'Connexion astrale', text: 'd6 à chaque attaque : 1 renvoyée sur soi · 2 presciente (tour suivant) · 3 normale · 4 à 150 % · 5 critique · 6 double.' },
+    danse_martiale:       { name: 'Danse martiale', text: 'Après un déplacement de 5 cases ou plus, attaque toutes les cibles adjacentes croisées (60 %, peut critiquer), sans attaque d\'opportunité.' },
+    dechiffrage:          { name: 'Déchiffrage', text: 'Permet d\'utiliser les sorts et rituels d\'un parchemin de son école de magie sans contrainte.' },
+    decimation:           { name: 'Décimation', text: '1×/combat : attire les ennemis à 2 cases, 50 % d\'une attaque de base à tous les adjacents, soigne de 100 % des dégâts infligés.' },
+    desarmement:          { name: 'Désarmement', text: 'Au lieu de dégâts : désarmement garanti, 20 % de récupérer l\'arme. La cible peut la ramasser au tour suivant en perdant une action. Rechargement 2 tours.' },
+    duel:                 { name: 'Duel', text: 'Désigne une cible : 125 % des dégâts contre elle. Perdu si on attaque ailleurs ou si la cible tombe.' },
+    enchantement:         { name: 'Enchantement', text: 'Règle de fabrication : écrire sorts et rituels sur grimoire (statique) ou parchemin (usage limité).' },
+    estropiaison:         { name: 'Estropiaison', text: '50 % d\'infliger Saignement : 8 % des PV max physiques par tour, 5 tours max, 25 % d\'arrêt par tour.' },
+    focalisation:         { name: 'Focalisation', text: 'Confère 15 % du mana max. Rechargement 2 tours.' },
+    fourberie:            { name: 'Fourberie', text: 'Dans le dos : +2 au jet, +10 % de critique et +20 % de dégâts critiques.' },
+    frappe_entravante:    { name: 'Frappe entravante', text: '50 % si l\'attaque touche : Ralentissement ou Affaiblissement (−50 % AD) pendant 2 tours. Rechargement 3 tours.' },
+    iaido:                { name: 'Iaido', text: 'Katana au fourreau : déplacement et attaque sans attaque d\'opportunité ; attaque en réaction contre un ennemi qui finit adjacent.' },
+    invocation:           { name: 'Invocation', text: 'Invoque les échos d\'une divinité totémique, contrôlés au lieu des attaques de base.' },
+    maniement_risque:     { name: 'Maniement risqué', malus: true, text: 'Imprévus possibles : blesser le porteur ou ses alliés, perdre le contrôle de l\'arme.' },
+    parade_riposte:       { name: 'Parade/Riposte', text: 'Désigne UN candidat par tour : annule son attaque de base, 50 % de riposter s\'il est à portée. Rechargement 3 tours après activation.' },
+    plenitude:            { name: 'Plénitude', text: 'Maîtrisée : +5 % de critique et +10 % de dégâts critiques. Un coup critique rend 5 % du mana max.',
+                            passiveMods: function () { return { crit: 5, dcrit: 10 }; } },
+    projection_defensive: { name: 'Projection défensive', text: 'Repousse une cible adjacente de 2 cases ; à terre si elle heurte un obstacle.' },
+    purge:                { name: 'Purge', text: 'Retire le bouclier ou un buff de la cible (rechargement 2 tours après retrait) ; sinon, prête, l\'arme frappe à 110 %.' },
+    quitte_ou_double:     { name: 'Quitte ou double', text: 'Approche risquée : 50 % de frapper à 130 %, sinon 100 % et 8 % des PV max en dégâts bruts sur soi.' },
+    recul:                { name: 'Recul', text: 'Repousse la cible de 2 cases, +50 % de dégâts physiques contre un obstacle.' },
+    repositionnement:     { name: 'Repositionnement', text: 'Après une attaque réussie, +2 cases de déplacement sans attaque d\'opportunité.' },
+    technologie_hextech:  { name: 'Technologie hextech', text: 'Module propre à chaque arme hextech, à découvrir en jeu (pas encore implémenté).' },
+    usage_limite:         { name: 'Usage limité', malus: true, text: 'L\'arme peut être détruite après usage.' },
+  };
+
+  /* 37 catégories du document MJ (les 4 explosifs sont des CONSOMMABLES, décision MJ du
+     2026-09-14) + l'arc hextech de Jett. `mini` est un drapeau de catégorie, pas une
+     propriété : ratio 60 %, exemption de maîtrise, accessoire autorisé, dual wield. */
+  function _wc(id, name, kind, hands, range, props, extra) {
+    return Object.assign({ id: id, name: name, kind: kind, hands: hands, range: range, mini: false,
+      props: props || [], modes: WEAPON_MODES[kind] }, extra || {});
+  }
+  var WEAPON_CATEGORIES = [
+    _wc('epee_courte', 'Épée courte', 'phys', 'poly', '1', ['attaque_double'], { mini: true }),
+    _wc('dague', 'Dague', 'phys', '1H', '1', ['fourberie'], { mini: true }),
+    _wc('epee_longue', 'Épée longue', 'phys', 'poly', '1-2', ['parade_riposte']),
+    _wc('claymore', 'Claymore', 'phys', '2H', '2', ['balayage']),
+    _wc('rapiere', 'Rapière', 'phys', '1H', '1', ['duel', 'repositionnement']),
+    _wc('cimeterre', 'Cimeterre/Sabre', 'phys', '1H', '1-2', ['danse_martiale']),
+    _wc('katana', 'Katana', 'phys', '2H', '1', ['iaido']),
+    _wc('hache_guerre', 'Hache de guerre simple', 'phys', 'poly', '1-2', ['brisage']),
+    _wc('hache_double', 'Hache double', 'phys', '2H', '1-2', ['decimation']),
+    _wc('hachette', 'Hachette', 'phys', '1H', '1 / 6', ['brisage'], { mini: true }),
+    _wc('marteau_guerre', 'Marteau de guerre', 'phys', '2H', '1-2', ['assommage', 'frappe_entravante']),
+    _wc('masse_armes', 'Masse d\'armes', 'phys', '1H', '1 / 6', ['assommage', 'focalisation'], { mini: true }),
+    _wc('gantelet', 'Gantelet renforcé', 'phys', '1H', '1', ['combo']),
+    _wc('morgenstern', 'Morgenstern', 'phys', '2H', '1-2', ['estropiaison']),
+    _wc('arc_court', 'Arc court', 'phys', '2H', '6', ['concentration']),
+    _wc('arc_long', 'Arc long', 'phys', '2H', '10', ['concentration', 'attaque_lente']),
+    _wc('arbalete_legere', 'Arbalète légère', 'phys', 'poly', '5', []),
+    _wc('arbalete_lourde', 'Arbalète lourde', 'phys', '2H', '8', []),
+    _wc('sarbacane', 'Sarbacane', 'phys', '1H', '5', ['attaque_double'], { mini: true }),
+    _wc('baton_combat', 'Bâton de combat', 'phys', '2H', '1-2', ['projection_defensive']),
+    _wc('nunchaku', 'Nunchaku', 'phys', '1H', '1', ['quitte_ou_double', 'maniement_risque']),
+    _wc('tonfa', 'Tonfa', 'phys', '1H', '1', ['desarmement']),
+    _wc('baton_magique', 'Bâton magique', 'mag', 'poly', '6', ['canalisation']),
+    _wc('sceptre', 'Sceptre', 'mag', '1H', '5', ['quitte_ou_double']),
+    _wc('baguette', 'Baguette', 'mag', '1H', '4', ['duel']),
+    _wc('totem_runique', 'Totem runique', 'mag', '2H', 'N/A', ['invocation']),
+    _wc('grimoire', 'Grimoire', 'mag', '2H', '6', ['enchantement']),
+    _wc('parchemins', 'Parchemins', 'mag', '2H', '6', ['dechiffrage', 'enchantement', 'usage_limite']),
+    _wc('orbe', 'Orbe', 'mag', '1H', '5', ['plenitude']),
+    _wc('relique', 'Relique lunaire/solaire', 'mag', '2H', '6', ['connexion_astrale']),
+    _wc('pistolet_hextech', 'Pistolet hextech', 'hyb', '1H', '12', ['technologie_hextech']),
+    _wc('revolver_lourd', 'Revolver lourd', 'phys', '1H', '12', ['recul']),
+    _wc('fusil_precision', 'Fusil de précision', 'phys', '2H', '14', ['concentration', 'attaque_lente']),
+    _wc('lance_grenade_hextech', 'Lance-grenade hextech', 'hyb', '2H', '10', ['technologie_hextech']),
+    _wc('tronconneuse_hextech', 'Tronçonneuse hextech', 'hyb', '2H', '1', ['purge', 'maniement_risque']),
+    _wc('lance_flamme', 'Lance-flamme', 'mag', '2H', '2-3', ['maniement_risque']),
+    _wc('disque_energetique', 'Disque énergétique', 'hyb', '1H', '6', ['adaptation']),
+    /* Arc hextech (Jett, décision MJ du 2026-09-14) : pseudo arc court qui tire aussi des
+       cellules nano-hextech. Mode cellules = AUCUN dégât (c'est son passif) ; stats +10/+10
+       malgré tout, d'où `kind:'hyb'` pour le palier. Mode par défaut : cellules. */
+    _wc('arc_hextech', 'Arc hextech', 'hyb', '2H', '6', ['concentration'], {
+      modes: [ { id: 'cellules', label: 'Cellules nano-hextech', stat: 'ap', dmgType: 'magique', damage: false },
+               { id: 'ad', label: 'Arc court', stat: 'ad', dmgType: 'physique' } ] }),
+  ];
+  var HANDS_LABEL = { '1H': 'Une main', '2H': 'Deux mains', poly: 'Polyvalente' };
+  var WEAPON_KIND_LABEL = { phys: 'Physique', mag: 'Magique', hyb: 'Hybride' };
+  var HAND_SLOTS = ['armePrincipale', 'armeSecondaire'];
+
+  function weaponCategory(id) {
+    if (!id) return null;
+    for (var i = 0; i < WEAPON_CATEGORIES.length; i++) if (WEAPON_CATEGORIES[i].id === id) return WEAPON_CATEGORIES[i];
+    return null;
+  }
+  /* Un objet est-il une arme ? Son `type` d'emplacement OU sa catégorie suffit : une dague
+     rangée dans un accessoire reste une arme (et ne donne alors rien, décision 5c). */
+  function isWeaponItem(it) {
+    return !!(it && (it.type === 'weapon' || it.weaponCat));
+  }
+  function isMiniWeapon(it) {
+    var c = it && weaponCategory(it.weaponCat);
+    return !!(c && c.mini);
+  }
+  function isAccessorySlot(slot) {
+    return /^accessoire/.test(slot || '');
+  }
+
+  /* Ce que le personnage tient en main. Une arme sans catégorie (objet ancien ou unique)
+     est traitée en arme NEUTRE : une main, pas mini, maîtrisée, sans propriété — elle
+     garde exactement le comportement d'avant la livraison.
+     → { attacker, support, pair, twoHanded, issues[] }
+       attacker = l'arme qui porte l'attaque de base ; support = la mini-arme de l'autre main
+       pair = 'mini+mini' | 'main+mini' | null ; twoHanded = tenue à deux mains effective */
+  function weaponLoadout(equipment, itemsById) {
+    equipment = equipment || {}; itemsById = itemsById || {};
+    var main = itemsById[equipment.armePrincipale] || null;
+    var off = itemsById[equipment.armeSecondaire] || null;
+    var mainW = isWeaponItem(main) ? main : null;
+    var offW = isWeaponItem(off) ? off : null;
+    var out = { attacker: null, support: null, pair: null, twoHanded: false, issues: [] };
+    var catOf = function (it) { return it ? weaponCategory(it.weaponCat) : null; };
+    if (mainW && offW) {
+      var mm = isMiniWeapon(mainW), om = isMiniWeapon(offW);
+      if (mm && om) { out.attacker = mainW; out.support = offW; out.pair = 'mini+mini'; }
+      else if (mm !== om) {
+        out.attacker = mm ? offW : mainW; out.support = mm ? mainW : offW; out.pair = 'main+mini';
+      } else { out.attacker = mainW; out.issues.push('two_non_mini'); }
+      if ((catOf(mainW) || {}).hands === '2H' || (catOf(offW) || {}).hands === '2H') out.issues.push('two_handed_blocked');
+      return out;
+    }
+    var w = mainW || offW;
+    if (!w) return out;
+    out.attacker = w;
+    var other = mainW ? off : main;   // bouclier ou objet non-arme dans l'autre main
+    var c = catOf(w);
+    if (c && c.hands === '2H') { out.twoHanded = true; if (other) out.issues.push('two_handed_blocked'); }
+    else if (c && c.hands === 'poly' && !other) out.twoHanded = true;
+    return out;
+  }
+
+  /* Une propriété d'arme est-elle utilisable ? Maîtrise requise, SAUF mini-arme (décision 4). */
+  function weaponMastered(it, masteries) {
+    var c = it && weaponCategory(it.weaponCat);
+    if (!c) return true;          // arme neutre : aucun malus
+    if (c.mini) return true;
+    return !!(masteries && masteries[c.id]);
+  }
+
+  /* Stats d'arme débloquées par la maîtrise (Canalisation, Plénitude), des armes TENUES EN
+     MAIN. Une même propriété ne compte qu'une fois. */
+  function sumWeaponPropMods(equipment, itemsById, masteries, level) {
+    equipment = equipment || {}; itemsById = itemsById || {};
+    var out = {}, seen = {};
+    HAND_SLOTS.forEach(function (slot) {
+      var it = itemsById[equipment[slot]];
+      if (!isWeaponItem(it) || !weaponMastered(it, masteries)) return;
+      var c = weaponCategory(it.weaponCat);
+      (c ? c.props : []).forEach(function (pid) {
+        var p = WEAPON_PROPERTIES[pid];
+        if (!p || !p.passiveMods || seen[pid]) return;
+        seen[pid] = true;
+        var m = p.passiveMods(level) || {};
+        Object.keys(m).forEach(function (k) { out[k] = (out[k] || 0) + m[k]; });
+      });
+    });
+    return out;
+  }
+
+  /* Profil de l'attaque de base (livraison 1 : ratio, maîtrise, type ; les propriétés
+     sont listées, pas encore automatisées).
+     choice = { mode } (weaponChoice persisté) ; atkMode = id de BASIC_MODES.
+     Composition MULTIPLICATIVE (docs/armes-maitrises.md) : ratio mini × maîtrise × geste. */
+  function basicAttackProfile(loadout, masteries, eff, choice) {
+    loadout = loadout || {}; eff = eff || {}; choice = choice || {};
+    var w = loadout.attacker;
+    var cat = w ? weaponCategory(w.weaponCat) : null;
+    var modes = cat ? cat.modes : WEAPON_MODES.phys;
+    var mode = modes[0];
+    for (var i = 0; i < modes.length; i++) if (modes[i].id === choice.mode) mode = modes[i];
+    var mastered = weaponMastered(w, masteries);
+    var ratio = loadout.pair === 'mini+mini' ? 1 : (cat && cat.mini ? 0.6 : 1);
+    if (!mastered) ratio *= 0.75;
+    var props = [], seen = {};
+    var addProps = function (it, source) {
+      var c = it && weaponCategory(it.weaponCat);
+      if (!c || !weaponMastered(it, masteries)) return;
+      c.props.forEach(function (pid) {
+        if (seen[pid] || !WEAPON_PROPERTIES[pid]) return;
+        seen[pid] = true; props.push({ id: pid, source: source, itemName: it.name });
+      });
+    };
+    addProps(w, 'attacker');
+    addProps(loadout.support, 'support');
+    var lost = (w && cat && !mastered) ? cat.props.slice() : [];
+    return {
+      weapon: w, cat: cat, name: w ? w.name : 'Mains nues',
+      modes: modes, mode: mode, stat: mode.stat, dmgType: mode.dmgType,
+      wType: mode.dmgType === 'magique' ? 'Magique' : 'Physique',
+      damage: mode.damage !== false,
+      ratio: ratio, mastered: mastered, malusPct: mastered ? 0 : 25,
+      power: Math.round((eff[mode.stat] || 0) * ratio),
+      props: props, lostProps: lost,
+      twoHanded: !!loadout.twoHanded, pair: loadout.pair || null, issues: loadout.issues || [],
+    };
+  }
+
+  /* Un objet peut-il aller dans cet emplacement ? `type` = `equipTypeForItem(item)`,
+     `accepts` = `EQUIP_SLOTS[slot].accepts` (pages-equip.jsx).
+     Règles d'arme (spec §3.4) : une arme 2H exige l'autre main vide ; deux armes non mini
+     sont interdites ; seules les mini-armes vont en accessoire.
+     → { ok, reason } */
+  function equipSlotCheck(equipment, itemsById, itemId, slot, type, accepts) {
+    equipment = equipment || {}; itemsById = itemsById || {};
+    var it = itemsById[itemId];
+    if (!it) return { ok: false, reason: 'Objet introuvable' };
+    var weapon = isWeaponItem(it);
+    if (isAccessorySlot(slot)) {
+      if (weapon) return isMiniWeapon(it) ? { ok: true, reason: '' }
+        : { ok: false, reason: 'Seules les mini-armes se rangent en accessoire' };
+      return (accepts || []).indexOf(type) !== -1 ? { ok: true, reason: '' } : { ok: false, reason: 'Emplacement incompatible' };
+    }
+    if ((accepts || []).indexOf(type) === -1 && !(weapon && HAND_SLOTS.indexOf(slot) !== -1)) {
+      return { ok: false, reason: 'Emplacement incompatible' };
+    }
+    var hand = HAND_SLOTS.indexOf(slot);
+    if (hand === -1) return { ok: true, reason: '' };
+    var otherSlot = HAND_SLOTS[1 - hand];
+    var otherId = equipment[otherSlot];
+    if (otherId === itemId) otherId = null;            // l'objet change de main : l'autre se libère
+    var other = otherId ? itemsById[otherId] : null;
+    if (!other) return { ok: true, reason: '' };
+    var c = weapon ? weaponCategory(it.weaponCat) : null;
+    var oc = isWeaponItem(other) ? weaponCategory(other.weaponCat) : null;
+    if ((c && c.hands === '2H') || (oc && oc.hands === '2H')) {
+      return { ok: false, reason: 'Arme à deux mains : libère l\'autre main d\'abord' };
+    }
+    if (weapon && isWeaponItem(other) && !isMiniWeapon(it) && !isMiniWeapon(other)) {
+      return { ok: false, reason: 'Deux armes non mini ne se tiennent pas ensemble' };
+    }
+    return { ok: true, reason: '' };
+  }
+
+  /* Libellé court d'une catégorie : « Dague · Une main · portée 1 · Mini-arme ». */
+  function weaponCatLabel(cat) {
+    if (!cat) return '';
+    return [cat.name, WEAPON_KIND_LABEL[cat.kind], HANDS_LABEL[cat.hands] || cat.hands,
+      'portée ' + cat.range].concat(cat.mini ? ['Mini-arme'] : []).join(' · ');
+  }
+
   /* Amorçage du catalogue partagé : transforme la liste ITEM_CATALOG (sans id)
      en map { id: {id,cat,name,sub,ic,img,type,mods} } prête pour Firebase. */
   function buildCatalogSeed(entries) {
@@ -533,7 +825,8 @@
       var id = newItemId();
       out[id] = { id: id, cat: e.cat || 'Butin', name: e.name || 'Objet', sub: e.sub || '',
         ic: e.ic || '', img: e.img || '', type: e.type || '', mods: e.mods || {},
-        weight: Number(e.weight) || 0, carry: Number(e.carry) || 0, carryGroup: Number(e.carryGroup) || 0, armorClass: e.armorClass || '' };
+        weight: Number(e.weight) || 0, carry: Number(e.carry) || 0, carryGroup: Number(e.carryGroup) || 0, armorClass: e.armorClass || '',
+        weaponCat: e.weaponCat || '' };
     }
     return out;
   }
@@ -1928,6 +2221,10 @@
     EFFECT_LABEL, hasSelfEffect, skillTargeting, castSelectionValid, buildSelfEffect,
     buildCastPlan, actionRefundPlan, refundManaValue,
     BASIC_MODES, basicMode, basicModeDamage,
+    WEAPON_MODES, WEAPON_TIER_MODS, WEAPON_TIERS, WEAPON_PROPERTIES, WEAPON_CATEGORIES,
+    HANDS_LABEL, WEAPON_KIND_LABEL, HAND_SLOTS, weaponCategory, isWeaponItem, isMiniWeapon,
+    isAccessorySlot, weaponLoadout, weaponMastered, sumWeaponPropMods, basicAttackProfile,
+    equipSlotCheck, weaponCatLabel,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
