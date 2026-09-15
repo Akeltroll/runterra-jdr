@@ -475,7 +475,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
    Rien n'est écrit ici : les cases alimentent `buildWeaponAttack` au clic sur « Attaquer ». */
 function WeaponPropOptions({ profile, sources, activeSource, activeProps, onSource, toggles, onToggle,
   ready, eff, wCombat, targetName, damage, onFocalisation, onConcentrate, onEntrave, candidates, turn,
-  onDesignateParry, onParade }) {
+  onDesignateParry, onParade, onDropCombo }) {
   const has = (id) => activeProps.indexOf(id) !== -1;
   const nameOfSource = (src) => {
     const p = profile.props.find(x => x.source === src);
@@ -535,7 +535,19 @@ function WeaponPropOptions({ profile, sources, activeSource, activeProps, onSour
     if (has('assommage')) items.push(info('Assommage : 10 % d’étourdir, roulé automatiquement'));
     if (has('brisage')) items.push(info(ready('brisage') ? 'Brisage : 50 % de briser l’armure (−50 %, 2 tours), roulé automatiquement' : 'Brisage en rechargement'));
     if (has('estropiaison')) items.push(info('Estropiaison : 50 % de saignement, durée roulée automatiquement'));
-    if (has('combo')) items.push(info('Combo : 25 % de relance, roulé automatiquement'));
+    if (has('combo')) {
+      const pending = wCombat.combo && wCombat.combo.round === turn ? wCombat.combo.chain : 0;
+      items.push(pending
+        ? (
+          <div key="combo" className="row gap-2 wrap" style={{ alignItems: 'center', padding: '6px 10px', borderRadius: 6,
+            border: '1px solid var(--gold)', background: 'var(--bg-inset)' }}>
+            <b style={{ color: 'var(--gold-bright)', fontSize: 13 }}>🔁 Combo : relance n° {pending} disponible</b>
+            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>choisis une cible (la même ou une autre) et attaque</span>
+            <button className="btn btn-sm btn-ghost" onClick={onDropCombo} style={{ marginLeft: 'auto' }}>Renoncer</button>
+          </div>
+        )
+        : info('Combo : après l’attaque, 25 % de relance — tu choisis la cible de la relance'));
+    }
     if (has('connexion_astrale')) items.push(info('Connexion astrale : d6 roulé automatiquement (choisis 2 cibles pour un éventuel 6)'));
     if (has('plenitude')) items.push(info('Plénitude : un critique rend 5 % du mana max'));
   }
@@ -791,10 +803,12 @@ function CompetencesBody({ char, staff }) {
     if (!plan.ok) { toast(`<b>${char.name}</b> — ${plan.reason}`, 'gold'); return; }
     if (plan.cost.mana) setField('manaCur', (state.manaCur || 0) - plan.cost.mana);
     if (plan.cooldown) setCooldown(plan.cooldown.key, plan.cooldown.readyAt);
-    if ((plan.combat.duelTarget || null) !== (wCombat.duelTarget || null)
-      || (plan.combat.concTarget || null) !== (wCombat.concTarget || null)) {
+    const nextCombat = { ...wCombat, duelTarget: plan.combat.duelTarget || null,
+      concTarget: plan.combat.concTarget || null, combo: plan.combat.combo || null };
+    if (JSON.stringify(nextCombat) !== JSON.stringify({ ...wCombat, duelTarget: wCombat.duelTarget || null,
+      concTarget: wCombat.concTarget || null, combo: wCombat.combo || null })) {
       // ⚠️ Étaler `wCombat` : sinon le candidat de Parade du tour serait effacé.
-      setField('weaponCombat', { ...wCombat, duelTarget: plan.combat.duelTarget || null, concTarget: plan.combat.concTarget || null });
+      setField('weaponCombat', nextCombat);
     }
     const label = 'Attaque de base' + (plan.label ? ' · ' + plan.label : '');
     addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
@@ -804,6 +818,7 @@ function CompetencesBody({ char, staff }) {
     const notes = plan.notes.length ? ` (${plan.notes.join(' ; ')})` : '';
     pushLog(`<b>${char.name}</b> — <b>${label}</b>${sum ? ' — ' + sum : ''}${notes} — en attente MJ`, crit ? 'buff' : 'gold');
     toast(`<b>${char.name}</b> — ${label}${crit ? ' — CRITIQUE !' : ''} envoyé au MJ`, 'buff');
+    if (plan.combat.combo) toast(`<b>${char.name}</b> — Combo ! Relance n° ${plan.combat.combo.chain} : choisis une cible et attaque à nouveau`, 'buff');
     setBasicSel({});
     setWToggles({});
   }
@@ -1010,7 +1025,8 @@ function CompetencesBody({ char, staff }) {
               onConcentrate={(v) => setWToggles(t => ({ ...t, concentrate: v }))}
               onEntrave={(v) => setWToggles(t => ({ ...t, entrave: v }))}
               candidates={pools.any.filter(x => x.id !== char.id)} turn={turn}
-              onDesignateParry={designateParry} onParade={parade} />
+              onDesignateParry={designateParry} onParade={parade}
+              onDropCombo={() => setField('weaponCombat', { ...wCombat, combo: null })} />
           )}
           {(!profile.damage || mode.id === 'normal') && <WeaponPropsList profile={profile} active={activeProps} />}
         </div>

@@ -836,7 +836,7 @@
 
   /* Plan d'une attaque de base PLEINE avec les propriétés du tour.
      input = { turn, selfId, targets:[ids], active:[propIds], toggles:{ double, sweep, risky,
-       channel, backstab, purgeHasBuff, decimation, concentrate, disarm, entrave }, weaponCombat:{ duelTarget, concTarget },
+       channel, backstab, purgeHasBuff, decimation, concentrate, disarm, entrave }, weaponCombat:{ duelTarget, concTarget, combo },
        cooldowns, isKo(id), manaCur, rng }
      → { ok, reason, label, instances, cost:{ mana, manaPer, manaMax, cdPrev, cdKey },
          cooldown:{ key, readyAt }|null, combat:{ duelTarget, concTarget }, notes:[] } */
@@ -853,7 +853,8 @@
     var ready = function (id) { return cooldownReady(cds[weaponCdKey(id)], turn); };
     var targets = (input.targets || []).slice();
     var notes = [];
-    var combat = { duelTarget: wc.duelTarget || null, concTarget: wc.concTarget || null };
+    // `combo` : une relance en attente est CONSOMMÉE par ce coup ; le bloc Combo en rouvre une si le dé réussit.
+    var combat = { duelTarget: wc.duelTarget || null, concTarget: wc.concTarget || null, combo: null };
     var fail = function (reason) { return { ok: false, reason: reason, instances: [], cost: null, cooldown: null, combat: combat, notes: notes, label: '' }; };
     if (!targets.length) return fail('Choisis une cible');
     var spec = weaponAttackTargeting(active, tg, cds, turn).damage;
@@ -1032,14 +1033,19 @@
       dmgInst(targets[0], 1, 'Canalisation : ' + spend + ' mana ×2 en bruts', { type: 'brut', noCrit: true, raw: spend * 2 });
       labels.push('Canalisation');
     }
-    /* --- Combo : 25 % de relance, cumulable (plafond de sécurité 10) --- */
+    /* --- Combo : 25 % de relance, cumulable (plafond de sécurité 10) ---
+       ⚠️ La relance REDONNE L'ATTAQUE au joueur (décision MJ du 2026-09-15) : elle n'ajoute
+       aucune instance sur la même cible. Le plan renvoie `combat.combo = { round, chain }` ;
+       l'onglet Combat affiche « relance disponible » et le coup suivant, sur la cible de son
+       choix, est la relance n° chain — qui retente elle-même les 25 %. Une relance non jouée
+       expire avec le tour. */
     if (has('combo')) {
-      var extra = 0;
-      while (extra < 10 && rng() < 0.25) {
-        extra++;
-        dmgInst(targets[0], mainMult(targets[0]), 'Combo : relance ' + extra, { critPct: critFor(targets[0]) });
+      var chainIn = wc.combo && wc.combo.round === turn ? (wc.combo.chain | 0) : 0;
+      if (chainIn) labels.push('Combo : relance ' + chainIn);
+      if (chainIn < 10 && rng() < 0.25) {
+        combat.combo = { round: turn, chain: chainIn + 1 };
+        labels.push('Combo : nouvelle relance');
       }
-      if (extra) labels.push('Combo ×' + (extra + 1));
     }
     /* --- Plénitude : un crit rend 5 % du mana max --- */
     if (has('plenitude') && instances.some(function (i) { return i.kind === 'damage' && i.didCrit && i.targetId !== input.selfId; })) {

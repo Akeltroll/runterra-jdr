@@ -230,7 +230,7 @@ cellules sans dégâts ; le vidage des propriétés en mode réduit.
 | **Duel** | Rapière, Baguette | ×1,25 si la cible = `weaponCombat.duelTarget`. Attaquer une autre cible déplace la marque ; une cible KO la perd. |
 | **Attaque double** | Épée courte, Sarbacane | 2 instances à 65 %, cibles libres (`max:2`), sans CD. |
 | **Balayage** | Claymore | jusqu'à 3 instances à 80 % ; `w_balayage` = pas deux tours d'affilée. |
-| **Combo** | Gantelet renforcé | 25 % de relance, cumulable, roulé au cast → N instances. |
+| **Combo** | Gantelet renforcé | 25 % de relance, cumulable. ⚠️ **Révisé le 2026-09-15** : la relance **redonne l'attaque au joueur**, qui choisit sa cible (même ou autre) ; elle n'ajoute plus d'instance sur la même cible. Une relance non jouée expire avec le tour. |
 | **Quitte ou double** | Nunchaku, Sceptre | case à cocher ; 50 % → 130 % ; sinon 100 % + instance `damage` **sur soi** (8 % PV max, brut). |
 | **Canalisation** | Bâton magique | case à cocher ; coût `5 % mana max` porté par l'**action** (remboursable) ; instance brute supplémentaire = 2 × ce mana. |
 | **Focalisation** | Masse d'armes | bouton ; instance `status` +15 % du mana max ; `w_focalisation` CD 2. ⚠️ `applyStatusToCharacter` n'a qu'un `hpGain` : ajouter `manaGain`. |

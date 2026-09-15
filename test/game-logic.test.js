@@ -2352,12 +2352,26 @@ test('armes L2/L3 — Concentration : CASE À COCHER ; crit doublé sur la cible
   assert.equal(r.instances[0].crit, 20); assert.equal(r.combat.concTarget, null);
 });
 
-test('armes L2 — Combo : 25 % de relance, cumulable', () => {
+test('armes L2 — Combo : la relance redonne l attaque (cible libre), cumulable, expire avec le tour', () => {
   const p = prof('gantelet');
-  // crit(0.99) · relance(0.1) · crit(0.99) · relance(0.2) · crit(0.99) · stop(0.5)
-  const r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.1, 0.99, 0.2, 0.99, 0.5) });
-  assert.equal(r.instances.length, 3);
-  assert.equal(r.label, 'Combo ×3');
+  // crit(0.99) · relance(0.1) : un seul coup, une relance ouverte — aucune instance ajoutée
+  let r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.1) });
+  assert.equal(r.instances.length, 1);
+  assert.deepEqual(r.combat.combo, { round: 3, chain: 1 });
+  // la relance vise une AUTRE cible et relance encore
+  r = atk(p, { targets: ['b'], weaponCombat: { combo: { round: 3, chain: 1 } }, rng: rngSeq(0.99, 0.2) });
+  assert.deepEqual(r.instances.map(i => i.targetId), ['b']);
+  assert.equal(r.label, 'Combo : relance 1 · Combo : nouvelle relance');
+  assert.deepEqual(r.combat.combo, { round: 3, chain: 2 });
+  // le dé échoue : la chaîne s'arrête
+  r = atk(p, { targets: ['c'], weaponCombat: { combo: { round: 3, chain: 2 } }, rng: rngSeq(0.99, 0.5) });
+  assert.equal(r.combat.combo, null); assert.equal(r.label, 'Combo : relance 2');
+  // relance d'un tour passé : ignorée
+  r = atk(p, { targets: ['a'], weaponCombat: { combo: { round: 2, chain: 1 } }, rng: rngSeq(0.99, 0.5) });
+  assert.equal(r.label, '');
+  // plafond de sécurité
+  r = atk(p, { targets: ['a'], weaponCombat: { combo: { round: 3, chain: 10 } }, rng: rngSeq(0.99, 0.0) });
+  assert.equal(r.combat.combo, null);
 });
 
 test('armes L2 — Quitte ou double : 130 % ou 100 % + 8 % PV max en bruts sur soi', () => {

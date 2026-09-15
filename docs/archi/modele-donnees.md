@@ -47,8 +47,9 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
                      ABSENT = mode par défaut de la catégorie (1er de `modes`)
                      propSource ∈ 'attacker'|'support' = l'arme dont les propriétés jouent ce tour (deux armes en main) ;
                      ABSENT = l'arme d'attaque si elle a une propriété, sinon la mini-arme (weaponActiveSource)
-    weaponCombat: { duelTarget, concTarget, parry:{ target, round } }   ← cibles désignées par Duel / Concentration (livraison 2)
-                     et candidat de Parade du tour (livraison 3) ;
+    weaponCombat: { duelTarget, concTarget, parry:{ target, round }, combo:{ round, chain } }   ← cibles désignées par Duel /
+                     Concentration (livraison 2), candidat de Parade du tour (livraison 3), relance de Combo en attente
+                     (chain = n° de la relance à jouer ; consommée par le coup suivant ; ignorée hors de son tour) ;
                      écrit par le JOUEUR au cast (état de l'arme, pas un effet) ; effacé par « ⟲ Combat » ;
                      ⚠️ n'est PAS remboursé si le MJ annule l'attaque (assumé : la désignation a eu lieu)
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels

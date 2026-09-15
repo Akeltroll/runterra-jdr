@@ -251,7 +251,7 @@ sujet, lire son entrée** : c'est là que sont les ⚠️, les « ne pas faire �
 **Nouvelle livraison = nouveau fichier `docs/journal/<date>.md`** + une ligne dans l'index ci-dessous,
 jamais une nouvelle section ici.
 
-**Dernier état** : cache `20260915-4`, **301 tests verts** (game-logic 290 + auth 11). Règles RTDB
+**Dernier état** : cache `20260915-5`, **301 tests verts** (game-logic 290 + auth 11). Règles RTDB
 en ligne == dépôt (règle `masteries` publiée et relue le 2026-09-15).
 **Armes et maîtrises, livraison 1** (2026-09-15) : l'arme en main pilote l'attaque de base
 (`basicAttackProfile`), maîtrises par perso, catalogue d'armes recalé. ⚠️ **`WEAPONS` n'existe plus** :
@@ -288,7 +288,7 @@ début de campagne (2026-09-09).
 
 | Entrée | Sujets |
 |---|---|
-| [2026-09-15](docs/journal/2026-09-15.md) | **Armes et maîtrises, livraisons 1, 2 et 3** — L3 : débuffs assistés (Assommage, Brisage, Frappe entravante, Estropiaison), Désarmement, Parade/Riposte, Concentration en case à cocher, rechargement rendu au retrait d'un débuff ; L2 : 13 propriétés automatisées (`buildWeaponAttack`, rechargements `w_*` remboursables via `cost.cdKey`, `weaponCombat`, `manaGain`) ; stats de la mini-arme de soutien muettes hors paire mini + mini ; L1 : catégories (`weaponCat`), maîtrises staff (`masteries` + règle `.validate`), profil d'attaque de base (mini-armes, dual wield, −25 %, mode hybride, cellules de Jett), armes en accessoire sans stats, règles d'emplacement ; catalogue +15/+10-10, explosifs en consommables, retrait de `WEAPONS` |
+| [2026-09-15](docs/journal/2026-09-15.md) | **Armes et maîtrises, livraisons 1, 2 et 3** — Combo : la relance redonne l'attaque (cible libre) ; L3 : débuffs assistés (Assommage, Brisage, Frappe entravante, Estropiaison), Désarmement, Parade/Riposte, Concentration en case à cocher, rechargement rendu au retrait d'un débuff ; L2 : 13 propriétés automatisées (`buildWeaponAttack`, rechargements `w_*` remboursables via `cost.cdKey`, `weaponCombat`, `manaGain`) ; stats de la mini-arme de soutien muettes hors paire mini + mini ; L1 : catégories (`weaponCat`), maîtrises staff (`masteries` + règle `.validate`), profil d'attaque de base (mini-armes, dual wield, −25 %, mode hybride, cellules de Jett), armes en accessoire sans stats, règles d'emplacement ; catalogue +15/+10-10, explosifs en consommables, retrait de `WEAPONS` |
 | [2026-09-13](docs/journal/2026-09-13.md) | Dédoublonnage des 18 armures du catalogue (les valeurs du 2026-09-09 l'emportent) ; images du MJ converties en fichiers `ATH/Armures/` ; recalage des copies déjà distribuées ; icônes Butin/Consommables du MJ jusque dans les inventaires, Butin de monstre → Cuir de brackern ; renommages « du capitaine », Coffret de terrain, encyclopédie, pierre à usage unique ; Dague simple (accessoire) pour Jett et Elias |
 | [2026-09-12](docs/journal/2026-09-12.md) | **`MITIGATION_K` 120 → 100** ; chiffrage des maîtrises d'armes et de la portée (41 armes) ; nerfs Attaque double / Canalisation / Adaptation ; dual wield de mini-armes |
 | [2026-09-09](docs/journal/2026-09-09.md) | Barème de valeur des stats (équivalent AD) ; patchs `BASE_AR_RM`, omnivamp cumulative, armures légères |

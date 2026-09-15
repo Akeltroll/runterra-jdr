@@ -34,7 +34,9 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   **`buildWeaponAttack(profile, eff, input)`** (plan pur d'une attaque PLEINE : Duel, Concentration, Décimation,
   Balayage, Attaque double, Connexion astrale, Quitte ou double, Purge, Canalisation, Combo, Fourberie,
   Plénitude → `{instances, cost, cooldown, combat, notes, label}`, `rng` injectable) et `buildFocalisation`
-  (action à part). Les rechargements vivent sous `cooldowns/w_<propriété>` et reviennent au remboursement via
+  (action à part). ⚠️ **Combo ne crée pas d'instance** : une relance réussie renvoie `combat.combo = {round, chain}`,
+  l'onglet Combat affiche « relance disponible » et le coup suivant — sur la cible choisie par le joueur — est la
+  relance (décision MJ du 2026-09-15). Les rechargements vivent sous `cooldowns/w_<propriété>` et reviennent au remboursement via
   **`cost.cdKey`** (`actionRefundPlan` + `refundCast`). ⚠️ Chaque instance de dégâts qui roule le crit
   consomme UN tirage de `rng` : les tests en dépendent.
   **Livraison 3 (2026-09-15) — propriétés assistées** : dans `buildWeaponAttack`, Assommage (10 %), Brisage et
