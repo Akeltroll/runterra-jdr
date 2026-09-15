@@ -474,7 +474,8 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
 /* Options des propriétés d'arme automatisées pour le prochain coup (livraison armes 2).
    Rien n'est écrit ici : les cases alimentent `buildWeaponAttack` au clic sur « Attaquer ». */
 function WeaponPropOptions({ profile, sources, activeSource, activeProps, onSource, toggles, onToggle,
-  ready, eff, wCombat, targetName, damage, onFocalisation }) {
+  ready, eff, wCombat, targetName, damage, onFocalisation, onConcentrate, onEntrave, candidates, turn,
+  onDesignateParry, onParade }) {
   const has = (id) => activeProps.indexOf(id) !== -1;
   const nameOfSource = (src) => {
     const p = profile.props.find(x => x.source === src);
@@ -489,7 +490,7 @@ function WeaponPropOptions({ profile, sources, activeSource, activeProps, onSour
       {label}
     </label>
   );
-  const info = (txt, color) => <span style={{ fontSize: 12, color: color || 'var(--ink-soft)' }}>{txt}</span>;
+  const info = (txt, color) => <span key={txt} style={{ fontSize: 12, color: color || 'var(--ink-soft)' }}>{txt}</span>;
   const spend = Math.round((eff.mana || 0) * 0.05);
   const items = [];
   if (damage) {
@@ -504,14 +505,44 @@ function WeaponPropOptions({ profile, sources, activeSource, activeProps, onSour
       if (!toggles.purgeHasBuff) items.push(info(ready('purge') ? 'Purge prête : sans rien à retirer, l’arme frappe à 110 %' : 'Purge en rechargement : 100 %'));
     }
     if (has('duel')) items.push(info(wCombat.duelTarget ? `Duel : 125 % contre ${targetName(wCombat.duelTarget)} (viser ailleurs perd le duel)` : 'Duel : la prochaine cible est désignée (125 %)'));
-    if (has('concentration')) items.push(info(wCombat.concTarget ? `Concentration sur ${targetName(wCombat.concTarget)} : critique doublé`
-      : (ready('concentration') ? 'Concentration : la prochaine cible est désignée (critique doublé)' : 'Concentration perdue : rechargement jusqu’au tour suivant')));
+    if (has('concentration')) {
+      // Case à cocher (MJ 2026-09-15). Non touchée, elle reflète l'état : cochée tant qu'une
+      // concentration est en cours. La décocher la relâche (1 tour de rechargement).
+      const concOn = toggles.concentrate === undefined ? !!wCombat.concTarget : !!toggles.concentrate;
+      const concBlocked = !wCombat.concTarget && !ready('concentration');
+      items.push(
+        <label key="concentrate" className="row gap-1" style={{ alignItems: 'center', fontSize: 12.5, opacity: concBlocked ? 0.5 : 1, cursor: concBlocked ? 'default' : 'pointer' }}
+          title="Impossible sous un débuff autre qu'une réduction de stats ou de dégâts sur la durée (à vérifier en table)">
+          <input type="checkbox" checked={concOn && !concBlocked} disabled={concBlocked} onChange={() => onConcentrate(!concOn)} />
+          {wCombat.concTarget
+            ? `Concentration sur ${targetName(wCombat.concTarget)} : critique doublé (décocher ou viser ailleurs = 1 tour de rechargement)`
+            : (concBlocked ? 'Concentration (rechargement jusqu’au tour suivant)' : 'Concentration sur la cible (critique doublé)')}
+        </label>
+      );
+    }
+    if (has('desarmement')) items.push(box('disarm', ready('desarmement') ? 'Désarmer au lieu de frapper (20 % de récupérer l’arme, rechargement 2)' : 'Désarmement (rechargement)', !ready('desarmement')));
+    if (has('frappe_entravante')) items.push(
+      <label key="entrave" className="row gap-1" style={{ alignItems: 'center', fontSize: 12.5, opacity: ready('frappe_entravante') ? 1 : 0.5 }}>
+        Frappe entravante (50 %) :
+        <select value={toggles.entrave || 'affaibli'} disabled={!ready('frappe_entravante')} onChange={e => onEntrave(e.target.value)}
+          style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '2px 6px', fontSize: 12 }}>
+          <option value="affaibli">Affaiblissement (−50 % AD)</option>
+          <option value="ralenti">Ralentissement (déplacement ÷2)</option>
+        </select>
+        {!ready('frappe_entravante') && <span className="faint">rechargement</span>}
+      </label>
+    );
+    if (has('assommage')) items.push(info('Assommage : 10 % d’étourdir, roulé automatiquement'));
+    if (has('brisage')) items.push(info(ready('brisage') ? 'Brisage : 50 % de briser l’armure (−50 %, 2 tours), roulé automatiquement' : 'Brisage en rechargement'));
+    if (has('estropiaison')) items.push(info('Estropiaison : 50 % de saignement, durée roulée automatiquement'));
     if (has('combo')) items.push(info('Combo : 25 % de relance, roulé automatiquement'));
     if (has('connexion_astrale')) items.push(info('Connexion astrale : d6 roulé automatiquement (choisis 2 cibles pour un éventuel 6)'));
     if (has('plenitude')) items.push(info('Plénitude : un critique rend 5 % du mana max'));
   }
   const focal = has('focalisation');
-  if (!items.length && !focal && sources.length < 2) return null;
+  const parry = has('parade_riposte');
+  const parryNow = wCombat.parry && wCombat.parry.round === turn ? wCombat.parry.target : null;
+  if (!items.length && !focal && !parry && sources.length < 2) return null;
   return (
     <div className="col gap-1" style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
       {sources.length > 1 && (
@@ -533,6 +564,26 @@ function WeaponPropOptions({ profile, sources, activeSource, activeProps, onSour
             ✦ Focalisation (+{Math.round((eff.mana || 0) * 0.15)} mana)
           </button>
           {!ready('focalisation') && info('en rechargement')}
+        </div>
+      )}
+      {parry && (
+        <div className="row gap-2 wrap" style={{ alignItems: 'center', marginTop: 4 }}>
+          <span className="overline">Parade</span>
+          {parryNow
+            ? info(`Candidat du tour : ${targetName(parryNow)}`)
+            : (
+              <select value="" onChange={e => onDesignateParry(e.target.value)} disabled={!ready('parade_riposte')}
+                title="Un seul candidat par tour"
+                style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 6, padding: '3px 8px', fontSize: 12 }}>
+                <option value="">Désigner le candidat du tour…</option>
+                {candidates.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
+          <button className="btn btn-sm btn-shield" onClick={onParade} disabled={!parryNow || !ready('parade_riposte')}
+            title="Quand le candidat t'attaque : son attaque de base est annulée, 50 % de riposter">
+            🛡 Parade déclenchée
+          </button>
+          {!ready('parade_riposte') && info('en rechargement')}
         </div>
       )}
     </div>
@@ -742,7 +793,8 @@ function CompetencesBody({ char, staff }) {
     if (plan.cooldown) setCooldown(plan.cooldown.key, plan.cooldown.readyAt);
     if ((plan.combat.duelTarget || null) !== (wCombat.duelTarget || null)
       || (plan.combat.concTarget || null) !== (wCombat.concTarget || null)) {
-      setField('weaponCombat', { duelTarget: plan.combat.duelTarget || null, concTarget: plan.combat.concTarget || null });
+      // ⚠️ Étaler `wCombat` : sinon le candidat de Parade du tour serait effacé.
+      setField('weaponCombat', { ...wCombat, duelTarget: plan.combat.duelTarget || null, concTarget: plan.combat.concTarget || null });
     }
     const label = 'Attaque de base' + (plan.label ? ' · ' + plan.label : '');
     addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
@@ -754,6 +806,19 @@ function CompetencesBody({ char, staff }) {
     toast(`<b>${char.name}</b> — ${label}${crit ? ' — CRITIQUE !' : ''} envoyé au MJ`, 'buff');
     setBasicSel({});
     setWToggles({});
+  }
+  /* Parade/Riposte : désigner UN candidat par tour, puis déclarer la parade quand il attaque. */
+  const parryNow = wCombat.parry && wCombat.parry.round === turn ? wCombat.parry.target : null;
+  const designateParry = (id) => { if (id) setField('weaponCombat', { ...wCombat, parry: { target: id, round: turn } }); };
+  function parade() {
+    const plan = buildParade(profile, eff, { turn, selfId: char.id, candidate: parryNow, cooldowns });
+    if (!plan.ok) { toast(`<b>${char.name}</b> — ${plan.reason}`, 'gold'); return; }
+    setCooldown(plan.cooldown.key, plan.cooldown.readyAt);
+    const label = 'Parade/Riposte' + (plan.riposte ? ' · riposte' : '');
+    addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
+      source: 'basic', round: turn, cost: plan.cost }, weaponMeta), plan.instances);
+    pushLog(`<b>${char.name}</b> pare <b>${targetName(parryNow)}</b>${plan.riposte ? ' et riposte' : ' (pas de riposte)'} — en attente MJ`, 'gold');
+    toast(`<b>${char.name}</b> — ${label} envoyée au MJ`, 'buff');
   }
   /* Focalisation (masse d'armes) : action à part, sans attaque, rechargement 2 tours. */
   function focalisation() {
@@ -941,7 +1006,11 @@ function CompetencesBody({ char, staff }) {
             <WeaponPropOptions profile={profile} sources={propSources} activeSource={activeSource}
               activeProps={activeProps} onSource={setPropSource} toggles={wToggles} onToggle={toggle}
               ready={propReady} eff={eff} wCombat={wCombat} targetName={targetName}
-              damage={profile.damage} onFocalisation={focalisation} />
+              damage={profile.damage} onFocalisation={focalisation}
+              onConcentrate={(v) => setWToggles(t => ({ ...t, concentrate: v }))}
+              onEntrave={(v) => setWToggles(t => ({ ...t, entrave: v }))}
+              candidates={pools.any.filter(x => x.id !== char.id)} turn={turn}
+              onDesignateParry={designateParry} onParade={parade} />
           )}
           {(!profile.damage || mode.id === 'normal') && <WeaponPropsList profile={profile} active={activeProps} />}
         </div>

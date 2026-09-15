@@ -236,7 +236,7 @@ cellules sans dégâts ; le vidage des propriétés en mode réduit.
 | **Focalisation** | Masse d'armes | bouton ; instance `status` +15 % du mana max ; `w_focalisation` CD 2. ⚠️ `applyStatusToCharacter` n'a qu'un `hpGain` : ajouter `manaGain`. |
 | **Fourberie** | Dague | case « dans le dos » : +10 % crit et +20 % dégâts crit pour ce jet ; rappel +2 au jet. |
 | **Plénitude** | Orbe | passif +5 % crit, +10 % dégâts crit (tant que la propriété est active) ; un crit ajoute une instance `manaGain` de 5 % du mana max. |
-| **Concentration** | Arc court, Arc long, Fusil de précision, Arc hextech | désignation de `concTarget` → crit doublé (règle Aiguisage) contre cette cible ; changer de cible = 1 tour de rechargement. |
+| **Concentration** | Arc court, Arc long, Fusil de précision, Arc hextech | **case à cocher** (MJ, 2026-09-15 — d'abord automatique en livraison 2) : désignation de `concTarget` → crit doublé (règle Aiguisage) contre cette cible ; décocher ou changer de cible = 1 tour de rechargement. |
 | **Connexion astrale** | Relique | d6 roulé au cast : 1 instance sur soi · 2 narratif « presciente au prochain tour » · 3 normal · 4 ×1,5 · 5 crit forcé · 6 deux instances. |
 | **Purge** | Tronçonneuse hextech | case « la cible a un bouclier/buff » → instance narrative de retrait + `w_purge` CD 2 (10a) ; sinon, Purge prête → 110 %. |
 | **Décimation** | Hache double | 1×/combat (`CD_LOCKED`) ; N instances à 50 % + une instance `heal` sur soi pré-remplie à la somme, que le MJ ajuste après mitigation. |
@@ -342,7 +342,7 @@ Les mini-armes sont inscrites **quand même** : ça ne coûte rien et ça reste 
 cooldowns `w_*`, `manaGain` dans `applyStatusToCharacter`, `resetCombat` étendu. Tests par propriété
 avec `rng` injecté.
 
-**Livraison 3 — propriétés assistées et rappels** (lot 3, §5).
+**Livraison 3 — propriétés assistées et rappels** (lot 3, §5) — ✅ **codée le 2026-09-15** (journal du jour, section « Livraison 3 »).
 
 ---
 

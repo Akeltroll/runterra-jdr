@@ -793,6 +793,9 @@
   var LOT2_ATTACK_PROPS = ['duel', 'attaque_double', 'balayage', 'combo', 'quitte_ou_double', 'canalisation',
     'fourberie', 'plenitude', 'concentration', 'connexion_astrale', 'purge', 'decimation'];
   function weaponCdKey(propId) { return 'w_' + propId; }
+  /* Livraison 3 : propriétés ASSISTÉES — l'app roule le dé, l'effet sur la cible reste narratif
+     (les débuffs sur cible sont hors périmètre mécanique depuis le 2026-09-06). */
+  var LOT3_ASSISTED_PROPS = ['assommage', 'brisage', 'frappe_entravante', 'estropiaison', 'desarmement', 'parade_riposte'];
 
   /* Sources de propriétés tenues en main : 'attacker' et/ou 'support'. */
   function weaponPropSources(profile) {
@@ -827,12 +830,13 @@
     if (has('connexion_astrale')) max = 2;
     if (has('balayage') && toggles.sweep && ready('balayage')) max = 3;
     if (has('decimation') && toggles.decimation && ready('decimation')) max = null;
+    if (has('desarmement') && toggles.disarm) max = 1;
     return { damage: { camp: 'any', min: 1, max: max } };
   }
 
   /* Plan d'une attaque de base PLEINE avec les propriétés du tour.
      input = { turn, selfId, targets:[ids], active:[propIds], toggles:{ double, sweep, risky,
-       channel, backstab, purgeHasBuff, decimation }, weaponCombat:{ duelTarget, concTarget },
+       channel, backstab, purgeHasBuff, decimation, concentrate, disarm, entrave }, weaponCombat:{ duelTarget, concTarget },
        cooldowns, isKo(id), manaCur, rng }
      → { ok, reason, label, instances, cost:{ mana, manaPer, manaMax, cdPrev, cdKey },
          cooldown:{ key, readyAt }|null, combat:{ duelTarget, concTarget }, notes:[] } */
@@ -884,6 +888,19 @@
       return inst;
     };
 
+    /* Débuff NARRATIF sur la cible (livraison 3). Quand il pose un rechargement, l'instance porte
+       `cdKey`/`cdPrev` : si le MJ la retire (l'attaque a raté en table, le débuff n'a pas pris),
+       `actionRefundPlan(action, 'instance', inst)` rend le rechargement. */
+    var debuff = function (tid, label, cdProp, readyAt) {
+      var inst = { seq: ++seq, kind: 'status', targetId: tid, narrative: true, label: label };
+      if (cdProp) {
+        setCd(cdProp, readyAt);
+        inst.cdKey = weaponCdKey(cdProp); inst.cdPrev = cost.cdPrev;
+      }
+      instances.push(inst);
+      return inst;
+    };
+
     /* --- Duel : 125 % contre la cible désignée ; attaquer ailleurs perd la désignation --- */
     var duelMult = function (tid) { return 1; };
     if (has('duel')) {
@@ -893,19 +910,34 @@
       else { combat.duelTarget = null; notes.push('duel perdu (autre cible)'); }
     }
     /* --- Concentration : crit doublé contre la cible désignée ; changer de cible = 1 tour de rechargement --- */
+    /* Concentration = CHOIX du joueur (case à cocher, MJ 2026-09-15). `toggles.concentrate`
+       absent = on garde l'état courant : cochée si une concentration est en cours, sinon non.
+       Relâcher ou changer de cible = concentration perdue, 1 tour de rechargement. */
     var concCrit = function (tid) { return crit0; };
     if (has('concentration')) {
       var cc = combat.concTarget && !isKo(combat.concTarget) ? combat.concTarget : null;
+      var wantConc = tg.concentrate === undefined ? !!cc : !!tg.concentrate;
       var t1 = targets[0];
-      if (cc && cc !== t1) { combat.concTarget = null; setCd('concentration', turn + 1); notes.push('concentration perdue (1 tour de rechargement)'); }
+      if (!wantConc) {
+        if (cc) { combat.concTarget = null; setCd('concentration', turn + 1); notes.push('concentration relâchée (1 tour de rechargement)'); }
+      } else if (cc && cc !== t1) { combat.concTarget = null; setCd('concentration', turn + 1); notes.push('concentration perdue (1 tour de rechargement)'); }
       else if (cc === t1 || ready('concentration')) {
         combat.concTarget = t1; concCrit = function (tid) { return tid === t1 ? crit0 * 2 : crit0; }; labels.push('Concentration');
-      }
+      } else notes.push('concentration en rechargement');
     }
     var mainMult = function (tid) { return duelMult(tid); };
     var critFor = function (tid) { return concCrit(tid); };
 
-    if (has('decimation') && tg.decimation) {
+    var disarming = has('desarmement') && tg.disarm;
+    if (disarming) {
+      if (!ready('desarmement')) return fail('Désarmement en rechargement');
+      var td = targets[0];
+      var grab = rng() < 0.2;
+      debuff(td, 'Désarmement : cible désarmée' + (grab ? ', le lanceur récupère son arme (20 %)' : ', son arme tombe au sol')
+        + '. Elle peut la ramasser à son prochain tour en perdant une action, sauf si quelqu\'un l\'a prise entre-temps.',
+        'desarmement', turn + 2);
+      labels.push('Désarmement' + (grab ? ' (arme récupérée)' : ''));
+    } else if (has('decimation') && tg.decimation) {
       if (!ready('decimation')) return fail('Décimation déjà utilisée ce combat');
       var total = 0;
       targets.forEach(function (tid) { total += dmgInst(tid, 0.5 * mainMult(tid), 'Décimation 50 %', { critPct: critFor(tid) }).computedDmg; });
@@ -962,6 +994,36 @@
       dmgInst(t4, mult, null, { critPct: critFor(t4) });
     }
 
+    /* --- Livraison 3 : débuffs roulés par l'app sur la cible principale (effet narratif) --- */
+    var tMain = targets[0];
+    if (!disarming && has('assommage')) {
+      if (rng() < 0.1) { debuff(tMain, 'Assommage (10 %) : étourdi pour sa prochaine action'); labels.push('Assommage'); }
+      else notes.push('assommage raté (10 %)');
+    }
+    if (!disarming && has('brisage')) {
+      if (!ready('brisage')) notes.push('Brisage en rechargement');
+      else if (rng() < 0.5) { debuff(tMain, 'Brisé (50 %) : −50 % d\'armure pendant 2 tours (jusqu\'au tour ' + (turn + 1) + ') · si l\'attaque touche', 'brisage', turn + 3); labels.push('Brisage'); }
+      else notes.push('brisage raté (50 %)');
+    }
+    if (!disarming && has('frappe_entravante')) {
+      var slow = tg.entrave === 'ralenti';
+      if (!ready('frappe_entravante')) notes.push('Frappe entravante en rechargement');
+      else if (rng() < 0.5) {
+        debuff(tMain, (slow ? 'Ralentissement (50 %) : déplacement réduit de moitié' : 'Affaiblissement (50 %) : −50 % d\'AD')
+          + ' pendant 2 tours (jusqu\'au tour ' + (turn + 1) + ') · si l\'attaque touche', 'frappe_entravante', turn + 3);
+        labels.push('Frappe entravante');
+      } else notes.push('frappe entravante ratée (50 %)');
+    }
+    if (!disarming && has('estropiaison')) {
+      if (rng() < 0.5) {
+        var ticks = 1;
+        while (ticks < 5 && rng() >= 0.25) ticks++;
+        debuff(tMain, 'Saignement (50 %) : 8 % des PV max en dégâts physiques par tour, pendant ' + ticks
+          + ' tour' + (ticks > 1 ? 's' : '') + ' (arrêt à 25 %/tour déjà roulé) · si l\'attaque touche');
+        labels.push('Estropiaison ' + ticks + ' t.');
+      } else notes.push('estropiaison ratée (50 %)');
+    }
+
     /* --- Canalisation : 5 % du mana max en bruts ×2, payé au cast --- */
     if (has('canalisation') && tg.channel) {
       var spend = Math.round((eff.mana || 0) * 0.05);
@@ -987,6 +1049,32 @@
     }
     return { ok: true, reason: '', label: labels.join(' · '), instances: instances, cost: cost,
       cooldown: cooldown, combat: combat, notes: notes };
+  }
+
+  /* Parade/Riposte (épée longue) : réaction, action à part. Le porteur a désigné UN candidat
+     pour le tour ; quand ce candidat l'attaque, la parade annule son attaque de base et roule
+     50 % de riposte. Rechargement 3 tours, qui ne court qu'APRÈS activation (révision du 2026-09-12). */
+  function buildParade(profile, eff, input) {
+    eff = eff || {}; input = input || {};
+    var rng = input.rng || Math.random;
+    var turn = input.turn || 1, cds = input.cooldowns || {}, key = weaponCdKey('parade_riposte');
+    if (!input.candidate) return { ok: false, reason: 'Désigne d\'abord un candidat' };
+    if (!cooldownReady(cds[key], turn)) return { ok: false, reason: 'Parade en rechargement' };
+    var instances = [{ seq: 1, kind: 'status', targetId: input.candidate, narrative: true,
+      label: 'Parade : son attaque de base contre le porteur est annulée' }];
+    var riposte = rng() < 0.5;
+    if (riposte) {
+      var power = (profile && profile.power) || 0;
+      var cr = rollCrit(eff.crit || 0, eff.dcrit || 0, rng);
+      instances.push({ seq: 2, kind: 'damage', targetId: input.candidate, computedDmg: power,
+        critDmg: Math.round(power * cr.multiplier), didCrit: cr.didCrit, critMult: cr.multiplier,
+        type: (profile && profile.dmgType) || 'physique', letha: eff.letha || 0, lethaMag: eff.lethaMag || 0,
+        crit: eff.crit || 0, dcrit: eff.dcrit || 0, vol: eff.vol || 0, sapience: eff.sapience || 0,
+        omni: eff.omni || 0, hpMax: eff.hp || 0, modeId: 'normal', label: 'Riposte (50 %) : si l\'ennemi est à portée' });
+    }
+    return { ok: true, reason: '', riposte: riposte, instances: instances,
+      cost: { mana: 0, manaPer: 0, manaMax: Math.max(0, eff.mana | 0), cdPrev: cds[key] != null ? cds[key] : null, cdKey: key },
+      cooldown: { key: key, readyAt: turn + 3 } };
   }
 
   /* Focalisation (masse d'armes) : action à part, sans attaque. +15 % du mana max, CD 2. */
@@ -1755,8 +1843,15 @@
        · mais si le MJ a déjà APPLIQUÉ une instance, la compétence a eu lieu : plus
          rien n'est rendu, jamais. Sans ce garde-fou une salve sur 3 gnolls dont 2
          meurent serait remboursée. */
-  function actionRefundPlan(action, mode) {
+  function actionRefundPlan(action, mode, inst) {
     if (!action || mode === 'fail') return null;
+    // Débuff d'arme retiré par le MJ (l'attaque a raté, il n'a pas pris) : on rend SON
+    // rechargement, même si les dégâts de l'action ont déjà été appliqués (livraison armes 3).
+    if (mode === 'instance' && inst && inst.cdKey && action.attackerId) {
+      return { attackerId: action.attackerId, attackerName: action.attackerName || '',
+        skillId: action.skillId, skillName: action.skillName || action.skillId,
+        mana: 0, manaMax: 0, cdPrev: inst.cdPrev != null ? inst.cdPrev : null, restoreCd: true, cdKey: inst.cdKey };
+    }
     var cost = action.cost || {};
     var applied = Math.max(0, action.appliedCount | 0);
     var remaining = action.instances ? Object.keys(action.instances).length : 0;
@@ -2459,7 +2554,7 @@
     isAccessorySlot, weaponLoadout, weaponMastered, sumWeaponPropMods, basicAttackProfile,
     equipSlotCheck, weaponCatLabel,
     LOT2_ATTACK_PROPS, weaponCdKey, weaponPropSources, weaponActiveSource, weaponActiveProps,
-    weaponAttackTargeting, buildWeaponAttack, buildFocalisation,
+    weaponAttackTargeting, buildWeaponAttack, buildFocalisation, LOT3_ASSISTED_PROPS, buildParade,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
     dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,

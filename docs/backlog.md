@@ -82,9 +82,10 @@ prédéfinies par compétence, ou pool de points libre ?).
   session » + code `VX-7K2` factices, invisible des joueurs — par un vrai tableau de bord : roster du groupe
   PV/mana live, séance en cours, dernier récap, état du combat) ; **D — Passe
   d'animations** transversale (transitions d'onglets, level-up, etc.). Ordre suggéré : C puis D en continu.
-- **Armes et maîtrises — LIVRAISONS 1 ET 2 FAITES le 2026-09-15** (`docs/journal/2026-09-15.md`). Reste la
-  **livraison 3** (débuffs assistés : Assommage, Brisage, Frappe entravante, Estropiaison, Désarmement,
-  Parade/Riposte) : §5 et §7 de `docs/superpowers/specs/2026-09-14-armes-maitrises-design.md`.
+- **Armes et maîtrises — LIVRAISONS 1, 2 ET 3 FAITES le 2026-09-15** (`docs/journal/2026-09-15.md`). Chantier
+  clos côté code. Restent : image de la Rapière ; Technologie hextech (passifs d'arme sur mesure, à créer avec
+  les joueurs) ; retour de table sur les propriétés catégorisées « hors modèle » (Danse martiale, Iaido,
+  Invocation), rappels texte seulement.
 - ~~**Nouveau système d'attaque de base**~~ (historique, remplacé par la ligne ci-dessus) : catégories d'armes
   (`info-mj/Nouveau système de gestion des attaques de base (2).md`) + **maîtrise par perso×arme** (−25 % +
   perte des propriétés si non maîtrisée), idée de **maîtrise qui progresse à l'usage**. À reprendre.

@@ -47,7 +47,8 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
                      ABSENT = mode par défaut de la catégorie (1er de `modes`)
                      propSource ∈ 'attacker'|'support' = l'arme dont les propriétés jouent ce tour (deux armes en main) ;
                      ABSENT = l'arme d'attaque si elle a une propriété, sinon la mini-arme (weaponActiveSource)
-    weaponCombat: { duelTarget, concTarget }   ← cibles désignées par Duel / Concentration (armes, livraison 2) ;
+    weaponCombat: { duelTarget, concTarget, parry:{ target, round } }   ← cibles désignées par Duel / Concentration (livraison 2)
+                     et candidat de Parade du tour (livraison 3) ;
                      écrit par le JOUEUR au cast (état de l'arme, pas un effet) ; effacé par « ⟲ Combat » ;
                      ⚠️ n'est PAS remboursé si le MJ annule l'attaque (assumé : la désignation a eu lieu)
     counters:  { [key]: n }   ← compteurs de compétences (chasseur/marques/tranches/cn…), steppers manuels
@@ -79,6 +80,7 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
         kind 'damage' : computedDmg, critDmg, didCrit, critMult, type, letha, lethaMag, crit, dcrit, vol, sapience, omni, hpMax, modeId
         kind 'heal'   : amount
         kind 'status' : mods, until, shield, counters, transformUntil, hpGain, hpMax, manaGain, manaMax — ou narrative:true (effet en table, « Valider » n'écrit rien)
+        cdKey, cdPrev (instance status d'un débuff d'arme, livraison 3) : rechargement rendu si le MJ retire CETTE ligne
         label (toute instance, optionnel) : ce que l'instance représente (« Balayage 80 % », « d6 = 4 : améliorée 150 % »), affiché sur la carte du MJ
                                               modeId = mode d'attaque de base (`BASIC_MODES`) quand `skillId === 'basic'` ; absent = attaque pleine
                                               letha/lethaMag = les DEUX léthalités snapshotées au cast ; le champ MJ affiché suit le type choisi (physique→letha, magique→lethaMag, brut→0)

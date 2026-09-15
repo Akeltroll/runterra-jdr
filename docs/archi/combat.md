@@ -37,8 +37,17 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   (action à part). Les rechargements vivent sous `cooldowns/w_<propriété>` et reviennent au remboursement via
   **`cost.cdKey`** (`actionRefundPlan` + `refundCast`). ⚠️ Chaque instance de dégâts qui roule le crit
   consomme UN tirage de `rng` : les tests en dépendent.
-  **Restent en table (lot 3)** : Assommage, Brisage, Frappe entravante, Estropiaison, Désarmement,
-  Parade/Riposte et les rappels (§5 de la spec).
+  **Livraison 3 (2026-09-15) — propriétés assistées** : dans `buildWeaponAttack`, Assommage (10 %), Brisage et
+  Frappe entravante (50 %, rechargement 3), Estropiaison (50 %, durée roulée 1-5 tours) déposent une instance
+  `status` NARRATIVE sur la cible principale ; Désarmement (`toggles.disarm`) REMPLACE les dégâts (20 % de
+  récupérer l'arme, rechargement 2) ; `buildParade` (candidat `weaponCombat.parry = {target, round}`, un par
+  tour, 50 % de riposte, rechargement 3 après activation). **Concentration est une case à cocher**
+  (`toggles.concentrate` ; absent = état courant). ⚠️ Un débuff qui pose un rechargement porte
+  `cdKey`/`cdPrev` sur SON instance : `actionRefundPlan(action, 'instance', inst)` rend ce rechargement quand
+  le MJ retire la ligne (attaque ratée en table), **même si les dégâts ont déjà été appliqués**.
+  Ne restent qu'en rappel texte : Danse martiale, Iaido, Recul, Repositionnement, Projection défensive,
+  Attaque lente, Maniement risqué, Usage limité, Enchantement, Déchiffrage, Adaptation, Invocation,
+  Technologie hextech.
   **Modes d'attaque de base** : `BASIC_MODES` (6 gestes à ratio FIXE sur la puissance d'attaque —
   Attaque 100 % / Coup retenu 50 % / Coup de poing 25 % / Botter le cul 15 % / Bousculade 10 % /
   Gifle 5 %) + `basicMode(id)` (id inconnu → attaque pleine) + `basicModeDamage(power, id)`.

@@ -1080,7 +1080,8 @@ function PendingActionsPanel({ enemies, stampKo, stOf, turn }) {
   /* Rejet d'UNE instance. Ne rembourse rien tant qu'il en reste d'autres — sauf
      `manaPer` ; rejeter la dernière équivaut à annuler la compétence (§6 de la spec). */
   const onRejectInstance = (action) => async (inst) => {
-    const plan = actionRefundPlan(action, 'instance');
+    // L'instance est passée : un débuff d'arme retiré rend SON rechargement (livraison armes 3).
+    const plan = actionRefundPlan(action, 'instance', inst);
     resolveInstance(action, inst.id, false);
     await announceRefund(plan, action, toast);
   };

@@ -2326,16 +2326,30 @@ test('armes L2 — Duel : 125 % sur la cible désignée, perdu en changeant de c
   assert.equal(r.instances[0].computedDmg, 125); assert.equal(r.combat.duelTarget, 'b');
 });
 
-test('armes L2 — Concentration : crit doublé sur la cible ; changer de cible = 1 tour de rechargement', () => {
+test('armes L2/L3 — Concentration : CASE À COCHER ; crit doublé sur la cible ; relâcher ou changer = 1 tour de rechargement', () => {
   const p = prof('arc_court');
   const eff = Object.assign({}, WEFF, { crit: 20 });
-  let r = L.buildWeaponAttack(p, eff, { turn: 3, selfId: 'me', targets: ['a'], active: ['concentration'], rng: rngSeq(0.99) });
+  const go = (extra) => L.buildWeaponAttack(p, eff, Object.assign({ turn: 3, selfId: 'me', active: ['concentration'], rng: rngSeq(0.99) }, extra));
+  // non cochée et aucune concentration en cours : rien
+  let r = go({ targets: ['a'] });
+  assert.equal(r.instances[0].crit, 20); assert.equal(r.combat.concTarget, null); assert.equal(r.cooldown, null);
+  // cochée : désignation, crit doublé
+  r = go({ targets: ['a'], toggles: { concentrate: true } });
   assert.equal(r.instances[0].crit, 40); assert.equal(r.combat.concTarget, 'a');
-  r = L.buildWeaponAttack(p, eff, { turn: 3, selfId: 'me', targets: ['b'], active: ['concentration'], weaponCombat: { concTarget: 'a' }, rng: rngSeq(0.99) });
+  // concentration en cours, case non touchée (absente) : on la garde
+  r = go({ targets: ['a'], weaponCombat: { concTarget: 'a' } });
+  assert.equal(r.instances[0].crit, 40); assert.equal(r.combat.concTarget, 'a');
+  // décochée pendant une concentration : relâchée, rechargement
+  r = go({ targets: ['a'], weaponCombat: { concTarget: 'a' }, toggles: { concentrate: false } });
   assert.equal(r.instances[0].crit, 20); assert.equal(r.combat.concTarget, null);
   assert.deepEqual(r.cooldown, { key: 'w_concentration', readyAt: 4 });
-  r = L.buildWeaponAttack(p, eff, { turn: 3, selfId: 'me', targets: ['b'], active: ['concentration'], cooldowns: { w_concentration: 4 }, rng: rngSeq(0.99) });
-  assert.equal(r.instances[0].crit, 20); assert.equal(r.combat.concTarget, null);   // en rechargement : pas de désignation
+  // autre cible : perdue, rechargement
+  r = go({ targets: ['b'], weaponCombat: { concTarget: 'a' } });
+  assert.equal(r.instances[0].crit, 20); assert.equal(r.combat.concTarget, null);
+  assert.deepEqual(r.cooldown, { key: 'w_concentration', readyAt: 4 });
+  // cochée mais en rechargement : pas de désignation
+  r = go({ targets: ['b'], toggles: { concentrate: true }, cooldowns: { w_concentration: 4 } });
+  assert.equal(r.instances[0].crit, 20); assert.equal(r.combat.concTarget, null);
 });
 
 test('armes L2 — Combo : 25 % de relance, cumulable', () => {
@@ -2425,4 +2439,83 @@ test('armes L2 — remboursement : le rechargement d une propriété revient via
   const plan = L.actionRefundPlan(action, 'cancel');
   assert.equal(plan.cdKey, 'w_balayage'); assert.equal(plan.restoreCd, true); assert.equal(plan.cdPrev, null);
   assert.equal(L.actionRefundPlan({ attackerId: 'me', skillId: 'basic', source: 'basic', cost: { mana: 0 } }, 'cancel'), null);
+});
+
+/* ============================================================
+   ARMES — LIVRAISON 3 : propriétés assistées (dé roulé par l'app, effet narratif)
+   ============================================================ */
+test('armes L3 — Assommage : 10 % d étourdir, sans rechargement', () => {
+  const p = prof('marteau_guerre');
+  // crit(0.99) · assommage(0.05 réussi) · frappe entravante(0.9 ratée)
+  let r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.05, 0.9) });
+  const st = r.instances.filter(i => i.kind === 'status');
+  assert.equal(st.length, 1); assert.equal(st[0].targetId, 'a'); assert.equal(st[0].narrative, true);
+  assert.match(st[0].label, /Assommage/); assert.equal(st[0].cdKey, undefined);
+  r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.5, 0.9) });
+  assert.equal(r.instances.filter(i => i.kind === 'status').length, 0);
+});
+
+test('armes L3 — Brisage : 50 %, rechargement 3 porté par l instance ; en rechargement : pas de jet', () => {
+  const p = prof('hache_guerre');
+  let r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.2) });
+  const st = r.instances.find(i => i.kind === 'status');
+  assert.match(st.label, /Brisé/);
+  assert.deepEqual([st.cdKey, st.cdPrev], ['w_brisage', null]);
+  assert.deepEqual(r.cooldown, { key: 'w_brisage', readyAt: 6 });
+  r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.8) });
+  assert.equal(r.instances.some(i => i.kind === 'status'), false); assert.equal(r.cooldown, null);
+  r = atk(p, { targets: ['a'], cooldowns: { w_brisage: 6 }, rng: rngSeq(0.99, 0.0) });
+  assert.equal(r.instances.some(i => i.kind === 'status'), false);
+});
+
+test('armes L3 — Frappe entravante : Affaiblissement par défaut, Ralentissement au choix', () => {
+  const p = prof('marteau_guerre');
+  let r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.9, 0.1) });
+  assert.match(r.instances.find(i => i.kind === 'status').label, /Affaiblissement/);
+  r = atk(p, { targets: ['a'], toggles: { entrave: 'ralenti' }, rng: rngSeq(0.99, 0.9, 0.1) });
+  const st = r.instances.find(i => i.kind === 'status');
+  assert.match(st.label, /Ralentissement/); assert.equal(st.cdKey, 'w_frappe_entravante');
+});
+
+test('armes L3 — Estropiaison : 50 %, durée roulée (1er tour garanti, 25 % d arrêt, 5 max)', () => {
+  const p = prof('morgenstern');
+  // crit · estropie(0.1) · continue(0.9) · continue(0.9) · arrêt(0.1)
+  let r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.1, 0.9, 0.9, 0.1) });
+  assert.match(r.instances.find(i => i.kind === 'status').label, /pendant 3 tours/);
+  r = atk(p, { targets: ['a'], rng: rngSeq(0.99, 0.1, 0.9, 0.9, 0.9, 0.9, 0.9) });
+  assert.match(r.instances.find(i => i.kind === 'status').label, /pendant 5 tours/);
+});
+
+test('armes L3 — Désarmement : remplace les dégâts, 20 % de récupérer l arme, rechargement 2', () => {
+  const p = prof('tonfa');
+  let r = atk(p, { targets: ['a'], toggles: { disarm: true }, rng: rngSeq(0.1) });
+  assert.deepEqual(r.instances.map(i => i.kind), ['status']);
+  assert.match(r.instances[0].label, /récupère/);
+  assert.deepEqual(r.cooldown, { key: 'w_desarmement', readyAt: 5 });
+  r = atk(p, { targets: ['a'], toggles: { disarm: true }, rng: rngSeq(0.9) });
+  assert.match(r.instances[0].label, /tombe au sol/);
+  assert.equal(atk(p, { targets: ['a'], toggles: { disarm: true }, cooldowns: { w_desarmement: 5 } }).ok, false);
+  r = atk(p, { targets: ['a'] });                                   // sans la case : attaque normale
+  assert.deepEqual(r.instances.map(i => i.kind), ['damage']);
+});
+
+test('armes L3 — Parade/Riposte : candidat requis, parade narrative, riposte 50 %, rechargement 3', () => {
+  const p = prof('epee_longue');
+  assert.equal(L.buildParade(p, WEFF, { turn: 2, selfId: 'me' }).ok, false);
+  let r = L.buildParade(p, WEFF, { turn: 2, selfId: 'me', candidate: 'g1', rng: rngSeq(0.3, 0.99) });
+  assert.deepEqual(r.instances.map(i => i.kind), ['status', 'damage']);
+  assert.equal(r.instances[1].computedDmg, 100);
+  assert.deepEqual(r.cooldown, { key: 'w_parade_riposte', readyAt: 5 });
+  r = L.buildParade(p, WEFF, { turn: 2, selfId: 'me', candidate: 'g1', rng: rngSeq(0.7) });
+  assert.deepEqual(r.instances.map(i => i.kind), ['status']);
+  assert.equal(L.buildParade(p, WEFF, { turn: 3, selfId: 'me', candidate: 'g1', cooldowns: { w_parade_riposte: 5 } }).ok, false);
+});
+
+test('armes L3 — retirer un débuff rend SON rechargement, même après application des dégâts', () => {
+  const action = { attackerId: 'me', skillId: 'basic', source: 'basic', appliedCount: 1,
+    cost: { mana: 0, cdKey: 'w_brisage', cdPrev: null }, instances: { i2: { id: 'i2' } } };
+  const plan = L.actionRefundPlan(action, 'instance', { id: 'i2', cdKey: 'w_brisage', cdPrev: 2 });
+  assert.deepEqual([plan.cdKey, plan.cdPrev, plan.restoreCd, plan.mana], ['w_brisage', 2, true, 0]);
+  // une instance sans rechargement : règle habituelle (rien, dégâts déjà appliqués)
+  assert.equal(L.actionRefundPlan(action, 'instance', { id: 'i2' }), null);
 });

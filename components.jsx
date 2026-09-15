@@ -1170,6 +1170,7 @@ function WeaponStatusLine({ profile }) {
 function WeaponPropsList({ profile, active }) {
   if (!profile || (!profile.props.length && !profile.lostProps.length)) return null;
   const auto = (window.LOT2_ATTACK_PROPS || []).concat(['focalisation']);
+  const assisted = window.LOT3_ASSISTED_PROPS || [];
   const sources = {};
   profile.props.forEach(x => { sources[x.source] = true; });
   const line = (pid, lost, from, idle) => {
@@ -1179,7 +1180,7 @@ function WeaponPropsList({ profile, active }) {
       <div key={pid + (lost ? '-lost' : '')} style={{ fontSize:12, lineHeight:1.45, opacity: lost || idle ? 0.5 : 1 }}>
         <b style={{ color: lost ? 'var(--faint)' : (p.malus ? 'var(--hp)' : 'var(--gold-pale)'), textDecoration: lost ? 'line-through' : 'none' }}>{p.name}</b>
         {from ? <span className="faint"> ({from})</span> : null}
-        {!lost && <span className="faint" style={{ fontSize:10.5 }}> · {isAuto ? 'automatisée' : 'en table'}</span>}
+        {!lost && <span className="faint" style={{ fontSize:10.5 }}> · {isAuto ? 'automatisée' : (assisted.indexOf(pid) !== -1 ? 'assistée : dé roulé, effet en table' : 'en table')}</span>}
         {idle && <span className="faint" style={{ fontSize:10.5 }}> · pas ce tour</span>}
         <span className="dim"> — {p.text}</span>
       </div>

@@ -189,7 +189,7 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
 
 ## Comment tester (dev)
 ```bash
-node --test test/game-logic.test.js          # logique pure (283 tests au 2026-09-15)
+node --test test/game-logic.test.js          # logique pure (290 tests au 2026-09-15)
 node --test test/auth.test.js                 # helpers d'auth (11 tests)
 python -m http.server 5050 --bind 127.0.0.1  # servir le site (autre terminal)
 SMOKE_USER=smoke SMOKE_PASS=... node test/smoke.mjs   # smoke (règles publiées + compte attribué)
@@ -251,7 +251,7 @@ sujet, lire son entrée** : c'est là que sont les ⚠️, les « ne pas faire �
 **Nouvelle livraison = nouveau fichier `docs/journal/<date>.md`** + une ligne dans l'index ci-dessous,
 jamais une nouvelle section ici.
 
-**Dernier état** : cache `20260915-3`, **294 tests verts** (game-logic 283 + auth 11). Règles RTDB
+**Dernier état** : cache `20260915-4`, **301 tests verts** (game-logic 290 + auth 11). Règles RTDB
 en ligne == dépôt (règle `masteries` publiée et relue le 2026-09-15).
 **Armes et maîtrises, livraison 1** (2026-09-15) : l'arme en main pilote l'attaque de base
 (`basicAttackProfile`), maîtrises par perso, catalogue d'armes recalé. ⚠️ **`WEAPONS` n'existe plus** :
@@ -278,8 +278,8 @@ joueurs les subissent déjà, annoncés ou non.
 un buff n'apparaît qu'après le clic du MJ (2026-09-06) ; encaissement des profils offensifs à bas
 niveau (2026-09-06).
 
-**Suivant** : **armes, livraison 3** — les débuffs sur cible (dé roulé par l'app, effet narratif) et
-Parade/Riposte. La **livraison 2** (13 propriétés automatisées) est faite le 2026-09-15.
+**Suivant** : le chantier **armes** est clos côté code (livraisons 1, 2, 3 le 2026-09-15) ; à éprouver à la
+table, en particulier le rythme de résolution MJ des propriétés.
 Plan et décisions : §5 et §7 de `docs/superpowers/specs/2026-09-14-armes-maitrises-design.md`.
 ✅ Engagement du bâton magique honoré : Canalisation maîtrisée = +50 Mana + 10/niveau.
 Puis le **rééquilibrage des compétences** (voir backlog).
@@ -288,7 +288,7 @@ début de campagne (2026-09-09).
 
 | Entrée | Sujets |
 |---|---|
-| [2026-09-15](docs/journal/2026-09-15.md) | **Armes et maîtrises, livraisons 1 et 2** — L2 : 13 propriétés automatisées (`buildWeaponAttack`, rechargements `w_*` remboursables via `cost.cdKey`, `weaponCombat`, `manaGain`) ; stats de la mini-arme de soutien muettes hors paire mini + mini ; L1 : catégories (`weaponCat`), maîtrises staff (`masteries` + règle `.validate`), profil d'attaque de base (mini-armes, dual wield, −25 %, mode hybride, cellules de Jett), armes en accessoire sans stats, règles d'emplacement ; catalogue +15/+10-10, explosifs en consommables, retrait de `WEAPONS` |
+| [2026-09-15](docs/journal/2026-09-15.md) | **Armes et maîtrises, livraisons 1, 2 et 3** — L3 : débuffs assistés (Assommage, Brisage, Frappe entravante, Estropiaison), Désarmement, Parade/Riposte, Concentration en case à cocher, rechargement rendu au retrait d'un débuff ; L2 : 13 propriétés automatisées (`buildWeaponAttack`, rechargements `w_*` remboursables via `cost.cdKey`, `weaponCombat`, `manaGain`) ; stats de la mini-arme de soutien muettes hors paire mini + mini ; L1 : catégories (`weaponCat`), maîtrises staff (`masteries` + règle `.validate`), profil d'attaque de base (mini-armes, dual wield, −25 %, mode hybride, cellules de Jett), armes en accessoire sans stats, règles d'emplacement ; catalogue +15/+10-10, explosifs en consommables, retrait de `WEAPONS` |
 | [2026-09-13](docs/journal/2026-09-13.md) | Dédoublonnage des 18 armures du catalogue (les valeurs du 2026-09-09 l'emportent) ; images du MJ converties en fichiers `ATH/Armures/` ; recalage des copies déjà distribuées ; icônes Butin/Consommables du MJ jusque dans les inventaires, Butin de monstre → Cuir de brackern ; renommages « du capitaine », Coffret de terrain, encyclopédie, pierre à usage unique ; Dague simple (accessoire) pour Jett et Elias |
 | [2026-09-12](docs/journal/2026-09-12.md) | **`MITIGATION_K` 120 → 100** ; chiffrage des maîtrises d'armes et de la portée (41 armes) ; nerfs Attaque double / Canalisation / Adaptation ; dual wield de mini-armes |
 | [2026-09-09](docs/journal/2026-09-09.md) | Barème de valeur des stats (équivalent AD) ; patchs `BASE_AR_RM`, omnivamp cumulative, armures légères |
