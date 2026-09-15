@@ -252,7 +252,7 @@ sujet, lire son entrée** : c'est là que sont les ⚠️, les « ne pas faire �
 jamais une nouvelle section ici.
 
 **Dernier état** : cache `20260915-1`, **278 tests verts** (game-logic 267 + auth 11). Règles RTDB
-en ligne == dépôt au 2026-09-15 AVANT la règle `masteries` (voir le journal du jour pour sa publication).
+en ligne == dépôt (règle `masteries` publiée et relue le 2026-09-15).
 **Armes et maîtrises, livraison 1** (2026-09-15) : l'arme en main pilote l'attaque de base
 (`basicAttackProfile`), maîtrises par perso, catalogue d'armes recalé. ⚠️ **`WEAPONS` n'existe plus** :
 la catégorie d'une arme est `item.weaponCat`. Les 18 armures de base sont **en base** (Firebase),
