@@ -80,11 +80,43 @@ test('computeEffective reste rétrocompatible sans 4e argument', () => {
 });
 
 /* --- Task 3 : soins modifiés + seed --- */
-test('applyHealMods applique miracule/hemorragie', () => {
-  assert.equal(L.applyHealMods(100, []), 100);
-  assert.equal(L.applyHealMods(100, ['miracule']), 150);
-  assert.equal(L.applyHealMods(100, ['hemorragie']), 50);
-  assert.equal(L.applyHealMods(100, ['miracule', 'hemorragie']), 100);
+test('applyHealBonus : la stat `soins` est ADDITIVE producteur + receveur', () => {
+  // aucun bonus
+  assert.equal(L.applyHealBonus(100, {}), 100);
+  // producteur seul / receveur seul / les deux (additif, pas multiplicatif : 110 x 1,2 ferait 132)
+  assert.equal(L.applyHealBonus(100, { producerSoins: 10 }), 110);
+  assert.equal(L.applyHealBonus(100, { receiverSoins: 20 }), 120);
+  assert.equal(L.applyHealBonus(100, { producerSoins: 10, receiverSoins: 20 }), 130);
+  // producteur = receveur -> compte UNE FOIS, comme producteur (decision MJ 2026-10-05)
+  assert.equal(L.applyHealBonus(100, { producerSoins: 10, receiverSoins: 20, sameActor: true }), 110);
+  // une potion n'a pas de producteur : seul le receveur compte
+  assert.equal(L.applyHealBonus(100, { receiverSoins: 18 }), 118);
+});
+
+test('applyHealBonus : Miracule sur le RECU, Hemorragie sur tout', () => {
+  // Miracule = +50 % des soins RECUS (sens corrige le 2026-10-05) : cote receveur seulement
+  assert.equal(L.applyHealBonus(100, { receiverBuffs: ['miracule'] }), 150);
+  assert.equal(L.applyHealBonus(100, { producerBuffs: ['miracule'] }), 100);
+  // Hemorragie = -50 %, que le porteur soigne ou soit soigne
+  assert.equal(L.applyHealBonus(100, { receiverBuffs: ['hemorragie'] }), 50);
+  assert.equal(L.applyHealBonus(100, { producerBuffs: ['hemorragie'] }), 50);
+  // des deux cotes : applique UNE SEULE FOIS (« reduit de 50 % », pas un cumul a 25 %)
+  assert.equal(L.applyHealBonus(100, { producerBuffs: ['hemorragie'], receiverBuffs: ['hemorragie'] }), 50);
+  // les deux buffs : 1,5 x 0,5
+  assert.equal(L.applyHealBonus(100, { receiverBuffs: ['miracule', 'hemorragie'] }), 75);
+  // la stat et les buffs se composent : (1 + 0,20) x 1,5
+  assert.equal(L.applyHealBonus(100, { receiverSoins: 20, receiverBuffs: ['miracule'] }), 180);
+});
+
+test('lifestealHeal : regle PROPRE (Miracule +25 %, Hemorragie -50 %), `soins` exclu', () => {
+  // 10 % d'omnivamp sur 200 degats = 20, sans buff
+  assert.equal(L.lifestealHeal(200, 'physique', { omni: 10 }, false), 20);
+  assert.equal(L.lifestealHeal(200, 'physique', { omni: 10 }, false, ['miracule']), 25);   // +25 %, PAS +50 %
+  assert.equal(L.lifestealHeal(200, 'physique', { omni: 10 }, false, ['hemorragie']), 10); // -50 %
+  assert.equal(L.lifestealHeal(200, 'physique', { omni: 10 }, false, ['miracule', 'hemorragie']), 13);
+  // le vol de vie ne compte que sur une attaque de BASE, et le multiplicateur s'y applique aussi
+  assert.equal(L.lifestealHeal(200, 'physique', { vol: 10 }, true, ['miracule']), 25);
+  assert.equal(L.lifestealHeal(200, 'physique', { vol: 10 }, false), 0);
 });
 
 test('buildDefaultState convertit ratios en valeurs absolues', () => {
@@ -344,6 +376,168 @@ test('runeHasAdpChoice détecte toute clé « au choix AD/AP »', () => {
   assert.equal(L.runeHasAdpChoice({ mods:{ hp:50 } }), false);
   assert.equal(L.runeHasAdpChoice({ kind:'reminder' }), false);
   assert.equal(L.runeHasAdpChoice(null), false);
+  // un adp porté UNIQUEMENT par la pente compte aussi (sinon pas de toggle AD/AP)
+  assert.equal(L.runeHasAdpChoice({ perLevel:{ adp:3 } }), true);
+  assert.equal(L.runeHasAdpChoice({ perLevel:{ hp:6 } }), false);
+});
+
+test('runeNodeMods : socle + pente par niveau (2026-10-03)', () => {
+  const agr = { id:'agr', mods:{ adp:24 }, perLevel:{ adp:3 } };
+  assert.deepEqual(L.runeNodeMods(agr, 2),  { adp:30 });   // 24 + 3×2
+  assert.deepEqual(L.runeNodeMods(agr, 10), { adp:54 });
+  assert.deepEqual(L.runeNodeMods(agr, 18), { adp:78 });
+  // niveau absent/0/négatif → niveau 1, JAMAIS 0 (un appelant qui oublie ne doit pas annuler la pente)
+  assert.deepEqual(L.runeNodeMods(agr),     { adp:27 });
+  assert.deepEqual(L.runeNodeMods(agr, 0),  { adp:27 });
+  assert.deepEqual(L.runeNodeMods(agr, -5), { adp:27 });
+  // une stat peut avoir un socle sans pente et inversement
+  assert.deepEqual(L.runeNodeMods({ mods:{ hp:55, omni:5 }, perLevel:{ hp:6 } }, 2), { hp:67, omni:5 });
+  // pente décimale : arrondie, jamais laissée en flottant
+  assert.deepEqual(L.runeNodeMods({ mods:{ adp:12 }, perLevel:{ adp:1.5 } }, 5), { adp:20 });  // 12+7,5 → 20
+  // rune plate : inchangée ; rune sans mods : vide
+  assert.deepEqual(L.runeNodeMods({ mods:{ hp:100 } }, 18), { hp:100 });
+  assert.deepEqual(L.runeNodeMods({ kind:'reminder' }, 18), {});
+  assert.deepEqual(L.runeNodeMods(null, 18), {});
+});
+
+test('runeNodeMods : progression par PALIERS (levelSteps, Mobilité 2026-10-03)', () => {
+  // table du MJ : 1-5 -> 5 % de crit, 6-11 -> 6 %, 12-18 -> 7 %
+  const mob = { id:'mob', levelSteps:[
+    { from:1,  mods:{ crit:5 } },
+    { from:6,  mods:{ crit:6 } },
+    { from:12, mods:{ crit:7 } },
+  ]};
+  for (const l of [1, 2, 3, 4, 5])        assert.deepEqual(L.runeNodeMods(mob, l), { crit:5 }, 'niv ' + l);
+  for (const l of [6, 7, 10, 11])         assert.deepEqual(L.runeNodeMods(mob, l), { crit:6 }, 'niv ' + l);
+  for (const l of [12, 15, 18, 30])       assert.deepEqual(L.runeNodeMods(mob, l), { crit:7 }, 'niv ' + l);
+  // un palier REMPLACE le precedent, il ne s'empile pas
+  assert.deepEqual(L.runeNodeMods(mob, 18), { crit:7 });
+  // niveau absent/0 -> premier palier (jamais rien)
+  assert.deepEqual(L.runeNodeMods(mob), { crit:5 });
+  assert.deepEqual(L.runeNodeMods(mob, 0), { crit:5 });
+  // cumul des trois sources : socle + pente + palier
+  const mix = { id:'mix', mods:{ hp:10 }, perLevel:{ hp:2 }, levelSteps:[{ from:1, mods:{ crit:5 } }, { from:10, mods:{ crit:9 } }] };
+  assert.deepEqual(L.runeNodeMods(mix, 2),  { hp:14, crit:5 });
+  assert.deepEqual(L.runeNodeMods(mix, 10), { hp:30, crit:9 });
+  // aucun levelSteps -> runeLevelStep rend null, rien ne change
+  assert.equal(L.runeLevelStep({ mods:{ hp:1 } }, 5), null);
+  assert.equal(L.runeLevelStep(null, 5), null);
+});
+
+test('runeHasAdpChoice : un adp porté par un PALIER compte aussi', () => {
+  assert.equal(L.runeHasAdpChoice({ levelSteps:[{ from:1, mods:{ adp:5 } }] }), true);
+  assert.equal(L.runeHasAdpChoice({ levelSteps:[{ from:1, mods:{ crit:5 } }] }), false);
+});
+
+test('sumRuneMods : la pente suit le niveau ET le choix AD/AP', () => {
+  const fam = [{ key:'c', name:'C', color:'#fff', theme:'t', paths:[
+    { key:'t', name:'T', nodes:[
+      { id:'ten', tier:'mineure', name:'+37 HP et 11 AD ou AP', desc:'',
+        mods:{ hp:37, adp:11 }, perLevel:{ hp:4, adp:2 } },
+    ]},
+  ]}];
+  const idx = L.buildRuneIndex(fam);
+  assert.deepEqual(L.sumRuneMods(['ten'], {}, idx, 2),         { hp:45, ad:15 });
+  assert.deepEqual(L.sumRuneMods(['ten'], { ten:'ap' }, idx, 2), { hp:45, ap:15 });
+  assert.deepEqual(L.sumRuneMods(['ten'], {}, idx, 18),        { hp:109, ad:47 });
+});
+
+/* --- Runes « N domaines au choix » (pick, 2026-10-04) --- */
+const PICK2 = { id:'dur', pick:{ count:2, options:[
+  { key:'vit',    label:'Vitalité',     mods:{ hp:35 }, perLevel:{ hp:5 } },
+  { key:'armure', label:'Armure',       mods:{ armure:16 } },
+  { key:'resmag', label:'Rés. magique', mods:{ resmag:16 } },
+]}};
+
+test('runePickKeys : choix normalisé, tronqué, complété par défaut', () => {
+  assert.deepEqual(L.runePickKeys(PICK2, 'vit,armure'),  ['vit', 'armure']);
+  assert.deepEqual(L.runePickKeys(PICK2, 'armure,vit'),  ['armure', 'vit']);   // ordre du joueur conservé
+  // choix absent / vide / inconnu → les `count` PREMIÈRES options (bonus déterministe)
+  assert.deepEqual(L.runePickKeys(PICK2, null),          ['vit', 'armure']);
+  assert.deepEqual(L.runePickKeys(PICK2, ''),            ['vit', 'armure']);
+  assert.deepEqual(L.runePickKeys(PICK2, 'nawak'),       ['vit', 'armure']);
+  // choix partiel → complété ; trop de clés → tronqué ; doublon ignoré ; espaces tolérés
+  assert.deepEqual(L.runePickKeys(PICK2, 'resmag'),              ['resmag', 'vit']);
+  assert.deepEqual(L.runePickKeys(PICK2, 'vit,armure,resmag'),   ['vit', 'armure']);
+  assert.deepEqual(L.runePickKeys(PICK2, 'vit,vit'),             ['vit', 'armure']);
+  assert.deepEqual(L.runePickKeys(PICK2, ' vit , resmag '),      ['vit', 'resmag']);
+  // un nœud sans pick n'a pas de domaines
+  assert.deepEqual(L.runePickKeys({ mods:{ hp:10 } }, 'vit'), []);
+  assert.equal(L.runeHasPick(PICK2), true);
+  assert.equal(L.runeHasPick({ mods:{ hp:10 } }), false);
+  assert.equal(L.runePickCount(PICK2), 2);
+});
+
+test('runePickToggle : le plus ancien choix cède la place, jamais moins de `count`', () => {
+  assert.equal(L.runePickToggle(PICK2, 'vit,armure', 'resmag'), 'armure,resmag');  // 'vit' sort
+  assert.equal(L.runePickToggle(PICK2, 'armure,resmag', 'vit'), 'resmag,vit');
+  // cliquer un domaine DÉJÀ retenu ne le retire pas (sinon la rune gravée vaudrait moins)
+  assert.equal(L.runePickToggle(PICK2, 'vit,armure', 'vit'),    'vit,armure');
+  assert.equal(L.runePickToggle(PICK2, 'vit,armure', 'armure'), 'vit,armure');
+  // clé inconnue : sans effet ; nœud sans pick : le choix passe tel quel
+  assert.equal(L.runePickToggle(PICK2, 'vit,armure', 'nawak'),  'vit,armure');
+  assert.equal(L.runePickToggle({ mods:{ hp:1 } }, 'ad', 'ap'), 'ad');
+});
+
+test('runeNodeMods : les domaines retenus s\'ajoutent, pente comprise', () => {
+  assert.deepEqual(L.runeNodeMods(PICK2, 2,  'vit,armure'),    { hp:45, armure:16 });
+  assert.deepEqual(L.runeNodeMods(PICK2, 18, 'vit,armure'),    { hp:125, armure:16 });  // 35 + 5×18
+  assert.deepEqual(L.runeNodeMods(PICK2, 18, 'armure,resmag'), { armure:16, resmag:16 });
+  // sans choix : les deux premières options, jamais rien
+  assert.deepEqual(L.runeNodeMods(PICK2, 2),                   { hp:45, armure:16 });
+  // un pick de 1 parmi 2 cumule avec les mods de base du nœud
+  const cc = { id:'cc', mods:{ rescrit:25, hp:20 }, perLevel:{ hp:3 }, pick:{ count:1, options:[
+    { key:'armure', label:'Armure', mods:{ armure:8 } },
+    { key:'resmag', label:'Rés. magique', mods:{ resmag:8 } },
+  ]}};
+  assert.deepEqual(L.runeNodeMods(cc, 2,  'armure'), { rescrit:25, hp:26, armure:8 });
+  assert.deepEqual(L.runeNodeMods(cc, 18, 'resmag'), { rescrit:25, hp:74, resmag:8 });
+});
+
+test('runeNodeMods : pente ACCELEREE (`accel`, mana 2026-10-05)', () => {
+  // gain du niveau L = perLevel + accel x (L-1)  =>  total = mods + perLevel.L + accel.L(L-1)/2
+  const man = { id:'man', mods:{ mana:60 }, perLevel:{ mana:13.5, ap:2 }, accel:{ mana:0.75 } };
+  assert.deepEqual(L.runeNodeMods(man, 2),  { mana:88,  ap:4 });   // 60 + 27 + 0,75x1   = 87,75
+  assert.deepEqual(L.runeNodeMods(man, 10), { mana:229, ap:20 });  // 60 + 135 + 0,75x45 = 228,75
+  assert.deepEqual(L.runeNodeMods(man, 18), { mana:418, ap:36 });  // 60 + 243 + 0,75x153 = 417,75
+  // au niveau 1, `accel` n'ajoute RIEN (L(L-1)/2 = 0) : la pente n'a pas encore acceleree
+  assert.deepEqual(L.runeNodeMods(man, 1), { mana:74, ap:2 });
+  // accel sans perLevel, et accel nul : les deux restent lisibles
+  assert.deepEqual(L.runeNodeMods({ mods:{ mana:10 }, accel:{ mana:2 } }, 4), { mana:22 });  // 10 + 2x6
+  assert.deepEqual(L.runeNodeMods({ mods:{ mana:10 }, accel:{ mana:0 } }, 9), { mana:10 });
+});
+
+test('runePick : les GROUPES tiennent « 2 domaines parmi 3 » (Presage)', () => {
+  const pre = { id:'pre', pick:{ count:2, options:[
+    { key:'off_ad', group:'off',  mods:{ ad:12 }, perLevel:{ ad:1.5 } },
+    { key:'off_ap', group:'off',  mods:{ ap:12 }, perLevel:{ ap:1.5 } },
+    { key:'def_ar', group:'def',  mods:{ armure:16 } },
+    { key:'def_rm', group:'def',  mods:{ resmag:16 } },
+    { key:'soins',  group:'heal', mods:{ soins:9 } },
+  ]}};
+  // defaut : jamais deux options du MEME groupe (sinon la rune vaudrait moins que son cout)
+  assert.deepEqual(L.runePickKeys(pre, null), ['off_ad', 'def_ar']);
+  // un choix qui doublonne un groupe est nettoye, puis complete par un groupe libre
+  assert.deepEqual(L.runePickKeys(pre, 'off_ad,off_ap'), ['off_ad', 'def_ar']);
+  assert.deepEqual(L.runePickKeys(pre, 'soins,def_rm'), ['soins', 'def_rm']);
+  // changer de SOUS-choix (AD -> AP) remplace la soeur, PAS l'autre domaine
+  assert.equal(L.runePickToggle(pre, 'off_ad,def_ar', 'off_ap'), 'def_ar,off_ap');
+  assert.equal(L.runePickToggle(pre, 'off_ad,def_ar', 'def_rm'), 'off_ad,def_rm');
+  // changer de DOMAINE fait sortir le plus ancien
+  assert.equal(L.runePickToggle(pre, 'off_ad,def_ar', 'soins'), 'def_ar,soins');
+  // les mods suivent, pente comprise
+  assert.deepEqual(L.runeNodeMods(pre, 18, 'off_ap,soins'), { ap:39, soins:9 });
+  assert.deepEqual(L.runeNodeMods(pre, 2,  'def_rm,soins'), { resmag:16, soins:9 });
+});
+
+test('sumRuneMods résout les domaines au choix (vraie data.jsx)', () => {
+  const idx = L.buildRuneIndex([{ key:'v', name:'V', color:'#fff', theme:'t', paths:[
+    { key:'d', name:'D', nodes:[PICK2] },
+  ]}]);
+  assert.deepEqual(L.sumRuneMods(['dur'], { dur:'armure,resmag' }, idx, 18), { armure:16, resmag:16 });
+  assert.deepEqual(L.sumRuneMods(['dur'], { dur:'vit,resmag' },    idx, 2),  { hp:45, resmag:16 });
+  // choix absent → défaut, pas de bonus perdu
+  assert.deepEqual(L.sumRuneMods(['dur'], {}, idx, 2), { hp:45, armure:16 });
 });
 
 test('mitigateDamage : la léthalité magique réduit la rés. magique (miroir du physique)', () => {

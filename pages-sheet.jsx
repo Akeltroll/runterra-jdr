@@ -28,15 +28,56 @@ function ResourceStack({ char, eff, hp, mana, shield }) {
    panneau ne « saute » pas à la bascule (la case réservée du bas ne sert donc plus
    qu'en cas de vue impaire — la garder pour ça). */
 const STAT_VIEWS = {
-  principales: ['ad', 'ap', 'armure', 'resmag', 'crit', 'dcrit'],
+  principales: ['ad', 'ap', 'armure', 'resmag', 'critPair', 'soins'],
   secondaires: ['letha', 'lethaMag', 'rescrit', 'vol', 'sapience', 'omni'],
 };
+/* `critPair` n'est pas une stat du moteur : c'est une case FUSIONNEE (chance de critique /
+   degats critiques), qui libere le 6e emplacement des principales pour `soins`
+   (decision MJ du 2026-10-05). Les deux chiffres gardent leur decomposition propre. */
+const STAT_PAIRS = { critPair: ['crit', 'dcrit'] };
+/* Case FUSIONNEE : deux stats dans un seul cadre (Crit / Degats Crit).
+   Meme habillage que la case simple, mais deux colonnes de chiffres — c'est ce qui
+   libere une case pour une 6e stat sans allonger la grille. */
+function PairedStatCell({ label, parts, detail }) {
+  const fam = 'neut';
+  return (
+    <div style={{ padding:'10px 12px', borderRadius:8, minHeight:60, boxSizing:'border-box',
+      display:'flex', flexDirection:'column', justifyContent:'center',
+      background:`linear-gradient(90deg, var(--stat-${fam}-wash), transparent 62%),`
+               + ' linear-gradient(180deg, var(--bg-panel-2), var(--bg-inset))',
+      border:`1px solid var(--stat-${fam}-line)`,
+      borderLeft:`3px solid var(--stat-${fam})` }}>
+      <div style={{ fontSize:13, fontWeight:700, letterSpacing:'.03em', color:`var(--stat-${fam})` }}>{label}</div>
+      <div className="row" style={{ gap:10, alignItems:'baseline', marginTop:2 }}>
+        {parts.map(({ k, d }, i) => {
+          const bonus = d.effective - d.base;
+          return (
+            <span key={k} style={{ display:'flex', alignItems:'baseline', gap:4 }}>
+              {i > 0 && <span className="faint" style={{ fontSize:13, marginRight:4 }}>/</span>}
+              {bonus !== 0 && (
+                <span className="mono dim" style={{ fontSize:11 }}>
+                  {d.base} <span style={{ color: bonus > 0 ? 'var(--buff)' : 'var(--hp)', fontWeight:700 }}>
+                    {bonus > 0 ? '+' : '−'}{Math.abs(bonus)}</span> =
+                </span>
+              )}
+              <span className="mono" style={{ fontSize:17, fontWeight:700, color:`var(--stat-${fam}-ink)` }}>{d.effective}%</span>
+            </span>
+          );
+        })}
+      </div>
+      <div className="faint" style={{ fontSize:11, fontFamily:'var(--font-mono)', marginTop:3 }}>
+        {parts.map(p => detail(p.d)).filter(Boolean).join(' · ') || 'aucun bonus'}
+      </div>
+    </div>
+  );
+}
+
 function SecondaryStats({ breakdown }) {
   const b = breakdown || {};
   const [view, setView] = useState('principales');
   const items = STAT_VIEWS[view];
   // Stats exprimées en points de % (la sapience EST un %, cf. lifestealHeal).
-  const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'rescrit' || k === 'omni' || k === 'vol' || k === 'sapience';
+  const pct = (k) => k === 'crit' || k === 'dcrit' || k === 'rescrit' || k === 'omni' || k === 'vol' || k === 'sapience' || k === 'soins';
   const detail = (d) => {
     const parts = [];
     if (d.buff)  parts.push(`${d.buff  > 0 ? '+' : ''}${d.buff} buff`);
@@ -56,6 +97,9 @@ function SecondaryStats({ breakdown }) {
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
       {items.map((k) => {
+        const pair = STAT_PAIRS[k];
+        if (pair) return <PairedStatCell key={k} label={STAT_LABEL_SHORT[k]} parts={pair.map(pk =>
+          ({ k:pk, d: b[pk] || { effective:0, base:0, buff:0, mod:0, stuff:0 } }))} detail={detail} />;
         const d = b[k] || { effective:0, base:0, buff:0, mod:0, stuff:0 };
         const bonus = d.effective - d.base;
         const bonusCol = bonus > 0 ? 'var(--buff)' : 'var(--hp)';
@@ -225,7 +269,8 @@ function FicheInventoryColumn({ char, state, eff, canEdit, force, setInvItem, re
   const consume = (it) => {
     const fx = parseConsumableEffect(it); if (!fx) { setMenu(null); return; }
     if (fx.kind === 'hp') {
-      const gain = applyHealMods(fx.flat + Math.round((eff.hp || 0) * fx.pct / 100), Object.keys(state.buffs || {}));
+      const gain = applyHealBonus(fx.flat + Math.round((eff.hp || 0) * fx.pct / 100),
+        { receiverSoins: eff.soins || 0, receiverBuffs: Object.keys(state.buffs || {}) });
       window.RTDB.updatePath(charPath(char.id), { hpCur: Math.min(eff.hp || 0, (state.hpCur || 0) + gain) });
       toast(`<b>${char.name}</b> utilise ${it.name} · +${gain} PV`, 'buff');
     } else {
@@ -290,9 +335,11 @@ function HealPanel({ char, eff, hp, setHp, mana, setMana, shield, setShield, act
   const clampV = (v, m) => Math.max(0, Math.min(m, Math.round(v)));
 
   // Consommables : composant partagé avec l'onglet Combat (components.jsx).
-  const healHp    = () => { const g = applyHealMods(amt, activeBuffs); setHp(h => clampV(h + g, maxHp)); toast(`<b>${char.name}</b> reçoit ${g} soins`, 'buff'); };
+  // Soin/bouclier saisi à la main : c'est un soin REÇU, donc la stat `soins` du porteur compte.
+  const recv      = { receiverSoins: eff.soins || 0, receiverBuffs: activeBuffs };
+  const healHp    = () => { const g = applyHealBonus(amt, recv); setHp(h => clampV(h + g, maxHp)); toast(`<b>${char.name}</b> reçoit ${g} soins`, 'buff'); };
   const dmgHp     = () => { setHp(h => clampV(h - amt, maxHp));     toast(`<b>${char.name}</b> subit ${amt} dégâts`, 'debuff'); };
-  const addShield = () => { const g = applyHealMods(amt, activeBuffs); setShield(s => clampV(s + g, maxShield)); toast(`<b>${char.name}</b> gagne ${g} bouclier`, 'gold'); };
+  const addShield = () => { const g = applyHealBonus(amt, recv); setShield(s => clampV(s + g, maxShield)); toast(`<b>${char.name}</b> gagne ${g} bouclier`, 'gold'); };
   const recupMana = () => { setMana(v => clampV(v + amt, maxMana)); toast(`<b>${char.name}</b> récupère ${amt} mana`, 'gold'); };
 
   return (
@@ -300,7 +347,7 @@ function HealPanel({ char, eff, hp, setHp, mana, setMana, shield, setShield, act
       <div className="panel-head"><h3>Consommables</h3><span className="overline">temps réel</span></div>
       <div className="col gap-4" style={{ padding:'16px' }}>
         <div>
-          <ConsumablesRow char={char} maxHp={maxHp} maxMana={maxMana} activeBuffs={activeBuffs}
+          <ConsumablesRow char={char} maxHp={maxHp} maxMana={maxMana} activeBuffs={activeBuffs} soins={eff.soins || 0}
             inventory={inventory} setHp={setHp} setMana={setMana}
             setInvItem={setInvItem} removeInvItem={removeInvItem} />
         </div>
@@ -358,7 +405,7 @@ function SheetBody({ char }) {
   const itemMods = sumItemMods(state.equipment, state.inventory, state.masteries, effLevel);
   const runesSt  = state.runes || {};
   const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
-    runesSt.choices || {}, buildRuneIndex(RUNES));
+    runesSt.choices || {}, buildRuneIndex(RUNES), effLevel);
   const sheetBase = charBaseStats(char, state);
   const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel, sheetBase);
   const skillBuffMods = sumSkillBuffs(state.skillBuffs || {}, turn);

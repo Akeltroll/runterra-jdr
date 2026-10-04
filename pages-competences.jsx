@@ -80,10 +80,11 @@ function TargetRow({ effKey, spec, pool, selected, onChange, detail }) {
   );
 }
 
-/* Mods de runes (miroir des autres pages). */
-function runeModsOf(state) {
+/* Mods de runes (miroir des autres pages).
+   ⚠️ `level` obligatoire : les runes à `perLevel` en dépendent (cf. `runeNodeMods`). */
+function runeModsOf(state, level) {
   const rs = state.runes || {};
-  return sumRuneMods(Object.keys(rs.selected || {}).filter(id => rs.selected[id]), rs.choices || {}, buildRuneIndex(RUNES));
+  return sumRuneMods(Object.keys(rs.selected || {}).filter(id => rs.selected[id]), rs.choices || {}, buildRuneIndex(RUNES), level);
 }
 
 const CD_LOCKED = 999999; // sentinelle « 1×/combat » (débloqué par Nouveau combat)
@@ -304,7 +305,7 @@ function MyResources({ char, eff, state, activeBuffs, setHp, setMana, setInvItem
         <ResourceBar kind="shield" cur={shield} max={Math.max(char.shieldMax || 0, shield)} />
       </div>
       <div style={{ marginTop: 9 }}>
-        <ConsumablesRow char={char} maxHp={eff.hp} maxMana={eff.mana} activeBuffs={activeBuffs}
+        <ConsumablesRow char={char} maxHp={eff.hp} maxMana={eff.mana} activeBuffs={activeBuffs} soins={eff.soins || 0}
           inventory={state.inventory} setHp={setHp} setMana={setMana}
           setInvItem={setInvItem} removeInvItem={removeInvItem}
           empty="Aucune potion dans l'inventaire." />
@@ -656,7 +657,7 @@ function CompetencesBody({ char, staff }) {
   // envoyés au MJ — ignorent l'effet que le MJ vient d'appliquer. Les 3 autres pages
   // (fiche, MJ, Équipement) les passent déjà ; cette page était la seule à passer [].
   const activeBuffs = Object.keys(state.buffs || {});
-  const eff = computeEffective(base, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeModsOf(state)), passiveMods), skillBuffMods));
+  const eff = computeEffective(base, state.modifiers, activeBuffs, mergeMods(mergeMods(mergeMods(itemMods, runeModsOf(state, level)), passiveMods), skillBuffMods));
   /* Arme en main → profil d'attaque de base (spec armes §4) : stat, type de dégâts, ratio
      mini-arme, malus de maîtrise, propriétés. `wType` en dérive, et avec lui le type des
      compétences qui frappent « avec l'arme » (Elias C1, Smith C1). */
@@ -714,7 +715,7 @@ function CompetencesBody({ char, staff }) {
     // Cooldown d'AVANT le cast : snapshoté pour le remboursement si le MJ annule.
     const cdPrev = cooldowns[sk.id] != null ? cooldowns[sk.id] : null;
     const plan = buildCastPlan(sk, eff, ctx, selection,
-      { turn, base, selfId: char.id, wType, cdPrev, narrative: narrativeLabel(sk) });
+      { turn, base, selfId: char.id, wType, cdPrev, buffs: activeBuffs, narrative: narrativeLabel(sk) });
     // Paiement AVANT dépôt : sinon la compétence est relançable pendant que le MJ arbitre.
     setField('manaCur', manaCur - cost);
     setCooldown(sk.id, sk.kind === 'combat' ? CD_LOCKED : nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));
@@ -786,7 +787,7 @@ function CompetencesBody({ char, staff }) {
     const label = profile.mode.label;
     const fake = { id: 'basic', name: label, mana: 0, dmg: () => null };
     const plan = buildCastPlan(fake, eff, baseCtx, {},
-      { turn, base, selfId: char.id, wType, cdPrev: null, narrative: `${label} (${profile.name})` });
+      { turn, base, selfId: char.id, wType, cdPrev: null, buffs: activeBuffs, narrative: `${label} (${profile.name})` });
     addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
       source: 'basic', round: turn, cost: plan.cost }, weaponMeta), plan.instances);
     pushLog(`<b>${char.name}</b> — ${label} — en attente MJ`, 'gold');
@@ -799,7 +800,7 @@ function CompetencesBody({ char, staff }) {
   function weaponAttack() {
     const plan = buildWeaponAttack(profile, eff, { turn, selfId: char.id, targets: basicSel.damage || [],
       active: activeProps, toggles: wToggles, weaponCombat: wCombat, cooldowns, isKo,
-      manaCur: state.manaCur || 0 });
+      manaCur: state.manaCur || 0, buffs: activeBuffs });
     if (!plan.ok) { toast(`<b>${char.name}</b> — ${plan.reason}`, 'gold'); return; }
     if (plan.cost.mana) setField('manaCur', (state.manaCur || 0) - plan.cost.mana);
     if (plan.cooldown) setCooldown(plan.cooldown.key, plan.cooldown.readyAt);
@@ -857,7 +858,7 @@ function CompetencesBody({ char, staff }) {
     // que la carte du MJ doit dire la vérité de CE coup, pas la fiche de l'attaquant.
     const fake = { id: 'basic', name: label, mana: 0, dmg: () => basicDmg };
     const plan = buildCastPlan(fake, eff, baseCtx, basicSel,
-      { turn, base, selfId: char.id, wType, cdPrev: null, noCrit: !mode.crit });
+      { turn, base, selfId: char.id, wType, cdPrev: null, buffs: activeBuffs, noCrit: !mode.crit });
     plan.instances.forEach(i => { if (i.kind === 'damage') i.modeId = mode.id; });
     addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
       source: 'basic', round: turn, cost: plan.cost }, weaponMeta), plan.instances);

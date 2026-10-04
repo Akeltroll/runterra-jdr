@@ -163,9 +163,9 @@ function EquipBody({ char }) {
      (même étage que les modificateurs → amplifiés par les buffs, comme partout). --- */
   const activeBuffs = Object.keys(state.buffs || {});
   const runesSt  = state.runes || {};
-  const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
-    runesSt.choices || {}, buildRuneIndex(RUNES));
   const effLevel = (state.level != null ? state.level : char.level) || 1;
+  const runeMods = sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
+    runesSt.choices || {}, buildRuneIndex(RUNES), effLevel);
   const equipBase = charBaseStats(char, state);
   const passiveMods = sumPassiveMods(char.id, state.counters || {}, effLevel, equipBase);
   const bonuses = mergeMods(mergeMods(sumItemMods(equipment, itemsById, state.masteries, effLevel), runeMods), passiveMods);  // items + runes + passif -> vert
@@ -224,7 +224,8 @@ function EquipBody({ char }) {
     // Effet (potions) appliqué en live sur l'état temps réel.
     const fx = parseConsumableEffect(cur);
     if (fx && fx.kind === 'hp') {
-      const gain = applyHealMods(fx.flat + Math.round(eff.hp * fx.pct / 100), activeBuffs);
+      const gain = applyHealBonus(fx.flat + Math.round(eff.hp * fx.pct / 100),
+        { receiverSoins: eff.soins || 0, receiverBuffs: activeBuffs });
       const nv = Math.min(eff.hp, (state.hpCur || 0) + gain);
       setField('hpCur', nv);
       toast(`<b>${char.name}</b> utilise ${cur.name} · +${gain} PV`, 'buff');

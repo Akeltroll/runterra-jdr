@@ -16,7 +16,7 @@ function mjLive(c, st, turn) {
   const itemMods = st ? sumItemMods(st.equipment, st.inventory, st.masteries, effLevel) : {};
   const runesSt  = (st && st.runes) || {};
   const runeMods = st ? sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
-    runesSt.choices || {}, buildRuneIndex(RUNES)) : {};
+    runesSt.choices || {}, buildRuneIndex(RUNES), effLevel) : {};
   const base = charBaseStats(c, st);
   const passiveMods = st ? sumPassiveMods(c.id, st.counters || {}, effLevel, base) : {};
   const skillBuffMods = st ? sumSkillBuffs(st.skillBuffs || {}, turn) : {};
@@ -1034,7 +1034,11 @@ function PendingActionsPanel({ enemies, stampKo, stOf, turn }) {
     toast(txt, r.hpCur === 0 ? 'debuff' : 'gold');
     pushLog(txt, r.hpCur === 0 ? 'debuff' : 'gold');
     // Vol de vie / Sapience / Omnivamp : soin de l'attaquant sur les dégâts infligés.
-    const heal = lifestealHeal(r.applied, type, { omni: inst.omni || 0, vol: inst.vol || 0, sapience: inst.sapience || 0 }, action.skillId === 'basic');
+    // ⚠️ Le drain a sa PROPRE règle de buffs (Miraculé +25 %, Hémorragie −50 %) : la stat
+    // `soins` n'y entre PAS (décision MJ du 2026-10-05).
+    const atk = resolveTarget(action.attackerId);
+    const heal = lifestealHeal(r.applied, type, { omni: inst.omni || 0, vol: inst.vol || 0, sapience: inst.sapience || 0 },
+      action.skillId === 'basic', Object.keys(((atk && atk.st) || {}).buffs || {}));
     if (heal > 0) {
       const hr = await healCharacter(action.attackerId, heal, inst.hpMax || 0);
       if (hr.healed > 0) {
@@ -1047,7 +1051,19 @@ function PendingActionsPanel({ enemies, stampKo, stOf, turn }) {
   const applyHeal = async (action, inst, target, amount) => {
     let healed = 0;
     if (target.kind === 'enemy') healed = healEnemy(target.enemy, amount).healed;
-    else healed = (await healCharacter(target.id, amount, (target.live.eff || {}).hp || 0)).healed;
+    else {
+      /* `soins` : le PRODUCTEUR est snapshoté au cast (`inst.healBonus`), le RECEVEUR est
+         lu ici — c'est le MJ, seul à voir les stats effectives de la cible. Producteur =
+         receveur (`inst.sameActor`) : compté UNE SEULE FOIS, comme producteur (décision MJ). */
+      const amp = applyHealBonus(amount, {
+        producerSoins: inst.healBonus || 0,
+        receiverSoins: (target.live.eff || {}).soins || 0,
+        sameActor: !!inst.sameActor,
+        producerBuffs: inst.producerBuffs || [],
+        receiverBuffs: Object.keys((target.st || {}).buffs || {}),
+      });
+      healed = (await healCharacter(target.id, amp, (target.live.eff || {}).hp || 0)).healed;
+    }
     const txt = healed > 0
       ? `<b>${action.attackerName}</b> soigne <b>${target.name}</b> de <b>${healed}</b> PV`
       : `<b>${target.name}</b> est déjà au maximum — aucun soin appliqué`;

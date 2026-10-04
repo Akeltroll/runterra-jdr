@@ -91,13 +91,40 @@
     return out;
   }
 
-  /* --- Soins/boucliers reçus : Miraculé +50%, Hémorragie -50% (additif) --- */
-  function applyHealMods(amount, activeBuffs) {
-    activeBuffs = activeBuffs || [];
-    let f = 1;
-    if (activeBuffs.indexOf('miracule') !== -1) f += 0.5;
-    if (activeBuffs.indexOf('hemorragie') !== -1) f -= 0.5;
-    return Math.round(amount * f);
+  /* --- Soins et boucliers : la stat `soins` + Miraculé / Hémorragie (2026-10-05) ---
+     Règles du MJ, à ne pas réinterpréter :
+       · `soins` (% du porteur) compte CÔTÉ PRODUCTEUR **et** CÔTÉ RECEVEUR, en ADDITIF ;
+       · producteur = receveur → compté UNE SEULE FOIS, comme producteur ;
+       · Miraculé = +50 % sur les soins/boucliers **REÇUS** (sens corrigé le 2026-10-05) ;
+       · Hémorragie = −50 % sur TOUT soin/bouclier, produit comme reçu — appliqué une fois
+         même si les deux côtés l'ont (« réduit de 50 % », pas « se cumule ») ;
+       · ⚠️ NE s'applique PAS au vol de vie / omnivamp : ils ont leur propre règle
+         (`lifestealHeal`, Miraculé +25 % / Hémorragie −50 %) ;
+       · ⚠️ NE s'applique PAS à une hausse de PV MAX (`hpGain` d'un `selfBuff.hp` :
+         Urskaar C4, ultime de Rathäel) — c'est un plafond déplacé, pas un soin.
+     Une potion n'a pas de producteur : seul le receveur compte. */
+  function healMultiplier(o) {
+    o = o || {};
+    var pct = Number(o.producerSoins) || 0;
+    if (!o.sameActor) pct += Number(o.receiverSoins) || 0;
+    var f = Math.max(0, 1 + pct / 100);
+    var rb = o.receiverBuffs || [], pb = o.producerBuffs || [];
+    if (rb.indexOf('miracule') !== -1) f *= 1.5;
+    if (rb.indexOf('hemorragie') !== -1 || pb.indexOf('hemorragie') !== -1) f *= 0.5;
+    return f;
+  }
+  function applyHealBonus(amount, o) {
+    return Math.max(0, Math.round((Number(amount) || 0) * healMultiplier(o)));
+  }
+  /* Vol de vie / omnivamp : règle PROPRE, volontairement différente (le gain est
+     inconditionnel, donc il ne reçoit pas le même traitement que les soins ciblés).
+     Miraculé +25 %, Hémorragie −50 %. `buffs` = ceux de celui qui encaisse le gain. */
+  function lifestealMultiplier(buffs) {
+    buffs = buffs || [];
+    var f = 1;
+    if (buffs.indexOf('miracule') !== -1) f *= 1.25;
+    if (buffs.indexOf('hemorragie') !== -1) f *= 0.5;
+    return f;
   }
 
   /* --- Inventaire : modèle d'item + helpers --- */
@@ -942,7 +969,9 @@
       if (!ready('decimation')) return fail('Décimation déjà utilisée ce combat');
       var total = 0;
       targets.forEach(function (tid) { total += dmgInst(tid, 0.5 * mainMult(tid), 'Décimation 50 %', { critPct: critFor(tid) }).computedDmg; });
+      // Soin sur soi : producteur = receveur, `soins` compté une fois (2026-10-05).
       instances.push({ seq: ++seq, kind: 'heal', targetId: input.selfId, amount: total,
+        healBonus: eff.soins || 0, sameActor: true, producerBuffs: input.buffs || [],
         label: 'Décimation : soin égal aux dégâts infligés (ajuster après mitigation)' });
       setCd('decimation', WEAPON_CD_LOCKED);
       labels.push('Décimation');
@@ -1247,14 +1276,144 @@
     adp:      ['ad', 'ap'],
     lethaAdp: ['letha', 'lethaMag'],
   };
-  function sumRuneMods(selectedIds, choices, index) {
+
+  /* --- Runes « N domaines au choix » (2026-10-04) ------------------------------------
+     Un nœud peut porter `pick:{ count, options:[{ key, label, short, mods, perLevel }] }` :
+     le joueur retient `count` options parmi `options`, et reçoit leurs `mods`/`perLevel`.
+     Sert à Volonté : CC choisit sa résistance (1 parmi 2), Durabilité ses domaines
+     (2 parmi 3 : Vitalité / Armure / Rés. Mag).
+     ⚠️ Le choix vit dans le MÊME champ que le choix AD/AP (`runes/choices/{nodeId}`),
+     sérialisé en liste de clés séparées par des virgules (« vit,armure »). Un nœud porte
+     donc SOIT un `adp`, SOIT un `pick`, jamais les deux — rien ne le vérifie, mais un
+     nœud mixte verrait son `choices` écrasé par l'un ou l'autre.
+     ⚠️ Un choix absent n'annule RIEN : on retombe sur les `count` premières options, pour
+     que la rune gravée donne toujours un bonus déterministe (même idiome que `adp` → 'ad').
+     ⚠️ Les options rendent des stats RÉELLES (hp/armure/resmag), pas des clés `ADP_KEYS` :
+     elles sont donc résolues dès `runeNodeMods`, et le tooltip les lit sans traduction. */
+  function runePickOptions(node) {
+    var opts = node && node.pick && node.pick.options;
+    return (opts && opts.length) ? opts : null;
+  }
+  function runeHasPick(node) { return !!runePickOptions(node); }
+  function runePickCount(node) {
+    var opts = runePickOptions(node);
+    if (!opts) return 0;
+    return Math.max(1, Math.min((node.pick.count | 0) || 1, opts.length));
+  }
+  /* Groupe d'une option (2026-10-05) : une option peut porter `group`, et on ne retient
+     JAMAIS deux options du même groupe. C'est ce qui permet « 2 DOMAINES parmi 3 » quand un
+     domaine offre lui-même un sous-choix — Présage : offensif (AD ou AP), défensif (AR ou RM),
+     soins. Soit 5 options pour 3 groupes. Une option sans `group` est seule dans le sien. */
+  function runePickGroup(opt) { return (opt && opt.group) || (opt && opt.key) || ''; }
+  /* Clés retenues, dans l'ordre de choix du joueur, complétées par défaut jusqu'à `count`.
+     ⚠️ Le défaut saute les options d'un groupe déjà pris : sans ça, une rune non cliquée
+     donnerait deux fois le même domaine et vaudrait moins que son coût. */
+  function runePickKeys(node, choice) {
+    var opts = runePickOptions(node);
+    if (!opts) return [];
+    var n = runePickCount(node), byKey = {}, out = [], seen = {}, i;
+    for (i = 0; i < opts.length; i++) byKey[opts[i].key] = opts[i];
+    String(choice == null ? '' : choice).split(',').forEach(function (k) {
+      k = k.trim();
+      var o = byKey[k];
+      if (!o || out.indexOf(k) !== -1 || out.length >= n) return;
+      var g = runePickGroup(o);
+      if (seen[g]) return;
+      seen[g] = true; out.push(k);
+    });
+    for (i = 0; i < opts.length && out.length < n; i++) {
+      var g2 = runePickGroup(opts[i]);
+      if (out.indexOf(opts[i].key) !== -1 || seen[g2]) continue;
+      seen[g2] = true; out.push(opts[i].key);
+    }
+    return out;
+  }
+  function runePickedOptions(node, choice) {
+    var opts = runePickOptions(node);
+    if (!opts) return [];
+    var keys = runePickKeys(node, choice), out = [], i, j;
+    for (i = 0; i < keys.length; i++)
+      for (j = 0; j < opts.length; j++) if (opts[j].key === keys[i]) out.push(opts[j]);
+    return out;
+  }
+  /* Clic sur une option → nouvelle valeur de `choices[nodeId]`.
+     Option déjà retenue : rien (on ne descend jamais sous `count`, sinon la rune
+     gravée vaudrait moins que son coût). Sinon elle entre, et le choix le PLUS ANCIEN
+     cède la place — un pick de 2 parmi 3 se pilote ainsi en un clic. */
+  function runePickToggle(node, choice, key) {
+    var opts = runePickOptions(node);
+    if (!opts) return choice || null;
+    var keys = runePickKeys(node, choice), n = runePickCount(node), byKey = {}, i;
+    for (i = 0; i < opts.length; i++) byKey[opts[i].key] = opts[i];
+    if (!byKey[key] || keys.indexOf(key) !== -1) return keys.join(',');
+    /* Même groupe = sous-choix du MÊME domaine (AD → AP) : la sœur sort, pas le plus ancien.
+       Sinon le joueur perdrait un domaine en changeant simplement d'avis sur AD/AP. */
+    var g = runePickGroup(byKey[key]);
+    keys = keys.filter(function (k) { return runePickGroup(byKey[k]) !== g; });
+    keys.push(key);
+    while (keys.length > n) keys.shift();
+    return keys.join(',');
+  }
+  /* Bonus d'une rune AU NIVEAU DU PORTEUR (2026-10-03) : `mods` est le socle, `perLevel`
+     l'incrément par niveau. Une rune `mods:{adp:24}, perLevel:{adp:3}` vaut donc +30 au
+     niveau 2 et +78 au niveau 18.
+     ⚠️ Motif, à ne pas défaire : un bonus PLAT vaut 100 % de l'étalon au niveau 2 et 60 %
+     au niveau 18, parce que le personnage quadruple sur la campagne alors que la rune ne
+     bouge pas (diagnostic chiffré du 2026-09-15, §5.1 — 7 runes étaient ainsi gelées).
+     ⚠️ `level` est à passer par TOUS les appelants de `sumRuneMods` (fiche, Combat,
+     Équipement, MJ, resetCombat) — même piège que `sumItemMods` : en oublier un fait
+     diverger les stats d'une page. Absent → niveau 1, JAMAIS 0 (idiome `passiveMods`).
+     Renvoie les clés BRUTES (`adp`/`lethaAdp` non résolus) : c'est `sumRuneMods` qui
+     tranche AD/AP. Arrondi ici, donc un `perLevel` décimal reste exploitable.
+     `choice` ne sert qu'aux runes à `pick` (domaines au choix) : leurs options donnent des
+     stats réelles, donc elles sont résolues ici et pas dans `sumRuneMods`. */
+  function runeNodeMods(node, level, choice) {
+    var lv = Math.max(1, level | 0), out = {}, k;
+    if (!node) return out;
+    for (k in (node.mods || {})) out[k] = Number(node.mods[k]) || 0;
+    for (k in (node.perLevel || {})) out[k] = (out[k] || 0) + (Number(node.perLevel[k]) || 0) * lv;
+    /* `accel` = la PENTE elle-même grandit (2026-10-05, décision MJ) : le gain du niveau L
+       vaut `perLevel + accel × (L−1)`, donc le total ajoute `accel × L(L−1)/2`.
+       ⚠️ Raison d'être : le prix du MANA DÉCROÎT (1 PV = 1 mana au niveau 1, 3 au niveau 18).
+       Une quantité linéaire sert donc trop de valeur tôt et pas assez tard. Mesuré sur
+       Manifestation : +11 % au niveau 2 en linéaire, +1 % en accéléré, à ancre n18 identique.
+       ⚠️ N'a de sens QUE pour une stat dont le prix décroît — sur une stat à prix croissant
+       (armure, crit, soins) elle compose dans le mauvais sens. Le mana est la seule du barème. */
+    for (k in (node.accel || {})) out[k] = (out[k] || 0) + (Number(node.accel[k]) || 0) * lv * (lv - 1) / 2;
+    var step = runeLevelStep(node, lv);
+    if (step) for (k in step) out[k] = (out[k] || 0) + (Number(step[k]) || 0);
+    var picked = runePickedOptions(node, choice);
+    for (var i = 0; i < picked.length; i++) {
+      for (k in (picked[i].mods || {})) out[k] = (out[k] || 0) + (Number(picked[i].mods[k]) || 0);
+      for (k in (picked[i].perLevel || {}))
+        out[k] = (out[k] || 0) + (Number(picked[i].perLevel[k]) || 0) * lv;
+    }
+    for (k in out) { out[k] = Math.round(out[k]); if (!out[k]) delete out[k]; }
+    return out;
+  }
+  /* `levelSteps` = progression PAR PALIERS, pour une rune qui ne grandit pas linéairement
+     (Mobilité : 1-5, puis 6-11, puis 12-18 — décision MJ du 2026-10-03). Liste ordonnée de
+     `{ from, mods }` ; on retient le DERNIER palier dont `from` <= niveau, et ses `mods`
+     s'ajoutent à `mods` et `perLevel`.
+     ⚠️ Un palier REMPLACE le précédent, il ne s'empile pas : `from:6 {crit:6}` vaut 6 % de
+     crit au total, pas 5 + 6. C'est ce qui permet d'écrire une table de MJ telle quelle.
+     ⚠️ Un escalier crée des SAUTS de puissance aux frontières (mesuré sur Mobilité : +96 %
+     au niveau 6, +55 % au niveau 12). C'est voulu — à ne pas lisser sans le MJ. */
+  function runeLevelStep(node, level) {
+    var steps = (node && node.levelSteps) || [];
+    var lv = Math.max(1, level | 0), pick = null;
+    for (var i = 0; i < steps.length; i++) if ((steps[i].from | 0) <= lv) pick = steps[i];
+    return pick ? (pick.mods || null) : null;
+  }
+  function sumRuneMods(selectedIds, choices, index, level) {
     selectedIds = selectedIds || []; choices = choices || {}; index = index || {};
     var out = {};
     for (var i = 0; i < selectedIds.length; i++) {
       var e = index[selectedIds[i]];
-      if (!e || !e.mods) continue;
-      for (var k in e.mods) {
-        var v = Number(e.mods[k]) || 0; if (!v) continue;
+      if (!e) continue;
+      var mods = runeNodeMods(e, level, choices[e.id]);
+      for (var k in mods) {
+        var v = mods[k];
         var stat = k;
         var pair = ADP_KEYS[k];
         if (pair) stat = (choices[e.id] === 'ap') ? pair[1] : pair[0];
@@ -1263,10 +1422,18 @@
     }
     return out;
   }
-  /* Une rune propose-t-elle un choix AD/AP ? (pilote l'affichage du toggle) */
+  /* Une rune propose-t-elle un choix AD/AP ? (pilote l'affichage du toggle)
+     ⚠️ Regarde les TROIS sources (`mods`, `perLevel`, `levelSteps`) : une rune peut n'avoir
+     d'adp que dans sa pente ou dans un palier. */
   function runeHasAdpChoice(node) {
-    if (!node || !node.mods) return false;
-    for (var k in ADP_KEYS) if (node.mods[k] != null) return true;
+    if (!node) return false;
+    var steps = (node && node.levelSteps) || [];
+    for (var k in ADP_KEYS) {
+      if (node.mods && node.mods[k] != null) return true;
+      if (node.perLevel && node.perLevel[k] != null) return true;
+      for (var i = 0; i < steps.length; i++)
+        if (steps[i].mods && steps[i].mods[k] != null) return true;
+    }
     return false;
   }
 
@@ -1415,7 +1582,7 @@
      Conséquence de tarif : l'omnivamp vaut ~1,25× le vol de vie (elle porte aussi les
      dégâts de compétence, cf. le ratio de rotation optimale), et montera vers 1,50×
      quand les compétences seront rééquilibrées — voir docs/bareme-stats.md. */
-  function lifestealHeal(applied, type, stats, isBasic) {
+  function lifestealHeal(applied, type, stats, isBasic, buffs) {
     applied = Math.max(0, Number(applied) || 0);
     stats = stats || {};
     let pct = Number(stats.omni) || 0;
@@ -1424,7 +1591,8 @@
            : type === 'magique'  ? (Number(stats.sapience) || 0)
            : 0;
     }
-    return Math.round(applied * Math.max(0, pct) / 100);
+    // ⚠️ `soins` n'entre PAS ici (décision MJ) : seul Miraculé/Hémorragie module le drain.
+    return Math.round(applied * Math.max(0, pct) / 100 * lifestealMultiplier(buffs));
   }
 
   /* --- Visibilité des PV ennemis côté joueur ---
@@ -1773,7 +1941,11 @@
       if (flat.hp) { out.hpGain = flat.hp; out.hpMax = (eff.hp || 0) + flat.hp; }
     }
     if (typeof sk.shield === 'function') {
+      // Bouclier TOUJOURS sur soi : producteur = receveur, donc `soins` compte une fois
+      // (décision MJ du 2026-10-05) et tout est résolu dès le cast.
       var sh = Math.max(0, sk.shield(eff, ctx) | 0);
+      sh = applyHealBonus(sh, { producerSoins: eff.soins || 0, sameActor: true,
+        producerBuffs: opts.buffs || [], receiverBuffs: opts.buffs || [] });
       if (sh) { out.shield = sh; parts.push('+' + sh + ' bouclier'); }
     }
     var counters = {}, cur = ctx.counters || {};
@@ -1822,7 +1994,11 @@
     });
     var heal = typeof sk.heal === 'function' ? sk.heal(eff, ctx) : null;
     if (heal != null) (selection.heal || []).forEach(function (tid) {
-      instances.push({ seq: ++seq, kind: 'heal', targetId: tid, amount: Math.max(0, Math.round(heal)) });
+      /* Côté PRODUCTEUR snapshoté au cast (contrat du 2026-09-06) ; le côté RECEVEUR est
+         ajouté à la résolution par le MJ, qui est le seul à connaître les stats de la cible.
+         ⚠️ Sur soi, le producteur compte seul (`sameActor`) : pas de double compte. */
+      instances.push({ seq: ++seq, kind: 'heal', targetId: tid, amount: Math.max(0, Math.round(heal)),
+        healBonus: eff.soins || 0, sameActor: tid === selfId, producerBuffs: opts.buffs || [] });
     });
     var self = buildSelfEffect(sk, eff, ctx, opts);
     if (self) instances.push(Object.assign({ seq: ++seq, kind: 'status', targetId: selfId }, self));
@@ -2534,7 +2710,7 @@
   return {
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,
-    applyHealMods, buildDefaultState, makeItem, newItemId,
+    healMultiplier, applyHealBonus, lifestealMultiplier, buildDefaultState, makeItem, newItemId,
     EQUIP_TYPES, planItemTransfer,
     STACK_MAX, fillStacks, planItemAdd, buildCatalogSeed, catalogArray,
     COIN_VALUE, planCoinConvert, COIN_PER_WEIGHT, coinsWeight,
@@ -2546,7 +2722,9 @@
     ARMOR_CLASSES, armorWeightReduction, armorEffectiveWeight,
     paginate,
     RUNE_COST, buildRuneIndex, runeBudget, runeSpent,
-    canSelectRune, canDeselectRune, sumRuneMods, mergeMods, ADP_KEYS, runeHasAdpChoice,
+    canSelectRune, canDeselectRune, sumRuneMods, runeNodeMods, runeLevelStep,
+    mergeMods, ADP_KEYS, runeHasAdpChoice,
+    runePickOptions, runeHasPick, runePickCount, runePickKeys, runePickedOptions, runePickToggle, runePickGroup,
     mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, critMultAfterResist, enemyPublicView,
     combatantSide, isAlly, splitCombatants,
     INIT_DIE, rollInitiative, initiativeTotal, initiativeStatus, initiativeReady,

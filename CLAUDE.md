@@ -181,8 +181,24 @@ de l'ancienne valeur, ex. `20260622-1` → `20260622-2`), sinon le navigateur/CD
   fusion auto sur name+type+cat) et pièces (`moveCoins`). Destinataire : joueur = sa fiche, MJ = choix.
 - **Kéminite** = `Consommable` (catalogue + inventaires par défaut Rathäel/Urskaar ; défaut `type:''`).
 - **Rendu perso = image `.webp`** (`ATH/Perso/`), **pas de 3D** (modèle Meshy trop lourd, abandonné).
-- **Arbre de runes** : contenu figé (`RUNES`, data.jsx, issu de l'Excel — DA convertie en « AD ou AP »
-  à la moyenne). Effets **hybrides** : bonus plats calculés (`sumRuneMods`→`computeEffective`),
+- **Arbre de runes** : contenu **en cours de recalibrage** (`RUNES`, data.jsx — à l'origine l'Excel,
+  DA convertie en « AD ou AP » à la moyenne). **Cible d'un point de rune = `30 + 3,125 × (niveau − 2)`**
+  (30 / 55 / 80 aux niveaux 2 / 10 / 18, décision MJ du 2026-10-03) ; les runes **scalent par niveau**
+  via `perLevel` (levier retenu contre le pourcentage). **Domination a une bande à part** (`n2 ≥ 20`,
+  `n18 ≤ 100`) : ses stats sont multiplicatrices et ne peuvent pas tenir la cible ferme aux deux bouts.
+  **Les 15 mineures sont faites** (2026-10-05) ; les paliers avancée/fondamentale restent à passer
+  — ⚠️ **bloqué sur la règle des capstones**. ⚠️ **Aucune mineure ne porte plus d'EFFET** : six ont été
+  retirées du jeu sciemment (`−1 tour aux CC reçus`, `+1 JA`, `−1 CDR`, `+1 tour de CC infligé`,
+  `+1 tour de buff/debuff`, `1 inspiration par séance`) — **ne pas les réintroduire comme des oublis**.
+  **Pente ACCÉLÉRÉE** (`accel`, 2026-10-05) : gain du niveau L = `perLevel + accel×(L−1)`.
+  ⚠️ Réservée aux stats à prix **décroissant** — le **mana** est la seule du barème.
+  **Une rune peut laisser un CHOIX au joueur** : `adp` (AD ou AP, binaire) ou **`pick`** — N domaines
+  parmi M, options à `mods`/`perLevel` propres (Volonté : CC choisit sa résistance, Durabilité
+  2 domaines sur 3 ; Inspiration/Présage : 2 domaines sur 3, avec **`group`** sur l'option quand un
+  domaine a lui-même un sous-choix — 5 options, 3 groupes, jamais deux du même groupe). ⚠️ Les deux écrivent `runes/choices/{nodeId}` (le `pick` en liste
+  « clé,clé »), donc **jamais `adp` et `pick` sur le même nœud** ; **choix absent = les `count`
+  premières options**, jamais rien. Détail : `docs/journal/2026-10-04.md` §2.
+  Effets **hybrides** : bonus plats calculés (`sumRuneMods`→`computeEffective`),
   conditionnel/actif en rappels. Points = niveau, ordre strict, respec libre. Source de règles :
   `info-mj/Système de Runes.md`. **À confirmer MJ** : capstone vs thématique −2 CD ; 2 cellules
   tronquées (Inspiration « Altruisme excessif » + 1er capstone).
@@ -251,8 +267,33 @@ sujet, lire son entrée** : c'est là que sont les ⚠️, les « ne pas faire �
 **Nouvelle livraison = nouveau fichier `docs/journal/<date>.md`** + une ligne dans l'index ci-dessous,
 jamais une nouvelle section ici.
 
-**Dernier état** : cache `20260915-5`, **301 tests verts** (game-logic 290 + auth 11). Règles RTDB
+**Dernier état** : cache `20261005-2`, **313 tests verts** (game-logic 302 + auth 11). Règles RTDB
 en ligne == dépôt (règle `masteries` publiée et relue le 2026-09-15).
+**Runes : scaling par niveau livré** (2026-10-03) — `perLevel` (pente) + `levelSteps` (paliers) +
+`runeNodeMods`, `sumRuneMods` prend un 4e param `level` (⚠️ 5 appelants) ; **Conquérant, Domination,
+Sorcellerie et Volonté recalibrés** (12 mineures sur 15). **Volonté réécrite le 2026-10-04** :
+CC et Durabilité passent aux **domaines au choix** (`pick`).
+⚠️ **La rés. critique est PLAFONNÉE à 100 %** (`critMultAfterResist`) et le Mental en donne déjà
+3 %/point (60 % à 20 Mental) — le barème la tarife linéairement **sans connaître ce plafond** et
+surévalue donc toute grosse quantité. C'est ce qui a fait tomber les 40 % de CC à **25 %** le
+2026-10-04 : à 40 %, un tank plein Mental niveau 18 atteignait **pile 100 %, l'immunité totale aux
+critiques**, sur une mineure à 1 point. **Ne pas remonter ce chiffre sans revérifier le plafond.**
+⚠️ **Mais en QUANTITÉ le barème la sous-paie** : il la tarife à la moyenne du roster alors qu'il
+reconnaît 0,29 contre un bruiser et **1,0 contre un assassin**. Décision MJ du 2026-10-04 :
+**CC est écrite sous la cible du barème** (20 / 42 / 68 au lieu de 30 / 55 / 80) parce que le crit
+est répandu (l'Habileté en donne, les équipements aussi) — elle vaut **pile sa cible** si l'on
+tarife la rés. crit au prix « contre un assassin ». **Ne pas la « recaler » : c'est un pari assumé
+sur le design des monstres**, à éprouver à la table (journal du 2026-10-04 §3).
+✅ **Le prix du mana est tranché, et c'est la seule stat du barème qui DÉCROÎT** : équivalence MJ
+**`1 PV = 1 mana` au niveau 1, `2` au niveau 9, `3` au niveau 18** (soit 0,29 AD par mana au niveau 2
+et **0,11** au niveau 18), ligne ajoutée à `docs/bareme-stats.md` (⚠️ 0). **Ne pas le lisser en taux
+plat, ni le rendre croissant par symétrie.**
+⚠️ **MS et portée ne sont PAS tarifables** (décision MJ : pas sans expérience de table) : Mobilité
+et Maîtrise reposent sur une hypothèse à ¼ de tour par point.
+⚠️ **Le barème sous-évaluait l'omnivamp / le vol de vie / la sapience de ×3,8** : `docs/bareme-stats.md`
+est corrigé. ⚠️ **Avant de recalibrer une rune, lire le tableau de croissance du §6 du journal** : une
+stat PLATE (AD/PV) exige un `perLevel`, une stat MULTIPLICATRICE (crit, dcrit, léthalité, MS) doit
+surtout ne pas en avoir — elle dépasse déjà la cible toute seule.
 **Armes et maîtrises, livraison 1** (2026-09-15) : l'arme en main pilote l'attaque de base
 (`basicAttackProfile`), maîtrises par perso, catalogue d'armes recalé. ⚠️ **`WEAPONS` n'existe plus** :
 la catégorie d'une arme est `item.weaponCat`. Les 18 armures de base sont **en base** (Firebase),
@@ -288,6 +329,9 @@ début de campagne (2026-09-09).
 
 | Entrée | Sujets |
 |---|---|
+| [2026-10-05](docs/journal/2026-10-05.md) | **Inspiration : les 15 mineures sont faites** — **`accel`**, pente qui ACCÉLÈRE (gain du niveau L = `perLevel + accel×(L−1)`, total `+accel·L(L−1)/2`) : ⚠️ **réservée aux stats à prix DÉCROISSANT**, le mana est la seule — Manifestation `60 + 14/niv, +0,5` (corrige un **+11 % au niveau 2**), Harmonie dégraissée `3 + 6/niv` (corrige **+16 %**), Partage `35 PV + 30 mana, +5/+11, +0,75` — ⚠️ **à ancre 320 l'accélération ne sert à RIEN** (optimiseur → 0), il a fallu monter l'ancre (~343) ; **groupes de `pick`** (Présage : 2 domaines parmi 3, 5 options, changer AD→AP remplace la sœur et pas l'autre domaine) ; **nouvelle stat `soins`** (% Soins/Bouclier) : prix `0,75 × 1 % de dégâts`, **1 % de dégâts = AD/100** dérivé et validé à 2 % près contre les lignes crit/dcrit du barème ; **additif producteur + receveur, compté UNE FOIS si c'est le même** ; potions oui, vol de vie/omnivamp non, hausses de PV max non ; **Miraculé ×1,5 sur le REÇU** (+25 % sur le drain), **Hémorragie ×0,5 sur tout** (une seule fois) ; ⚠️ `applyHealMods` n'était **pas** du code mort (5 appelants) → remplacé par `applyHealBonus` ; fiche : case **fusionnée** Crit/Dégâts Crit (`critPair`, pas une stat du moteur) pour libérer la 6ᵉ case ; ⚠️ **convention de texte figée** : le `name` d'une rune ne porte **plus aucun chiffre** (stats + fixe/croissant + choix de domaine), les chiffres vivent dans deux lignes CALCULÉES du tooltip — `.rt-level` (valeurs au niveau du porteur) et `.rt-scale` (niveau 1 → 18), le `desc` ne donnant que l'attitude générale ; `runeLevelLine` rendue pour TOUTE rune chiffrée, **plate comprise** ; **abréviations** propres à la page (`RUNE_STAT_ABBR` : AD/AP, AR, RM, RCrit, DCrit, PM, SB — `MOD_STATS` **non** touché) + cadre de légende `RuneAbbrLegend` (⚠️ toute abréviation ajoutée doit l'être dans les DEUX) ; **le titre d'une rune dit le POIDS de chaque stat, pas son comportement** (`title:[{t,w}]`, w ∈ fort/moyen/faible, rendu par la FORME de la pastille : pleine / contourée / pointillée — ⚠️ pas un dégradé typographique, jugé trop indistinct ; ⚠️ poids posés sur la part de VALEUR mesurée ; ⚠️ rune à domaines = tout à `moyen` + marqueur « N AU CHOIX » ; ⚠️ `title` est la SOURCE UNIQUE, `name` n'en est que l'aplatissement) ; **2 effets retirés** (`+1 tour de buff/debuff`, `1 inspiration par séance`) — six au total, **plus aucune mineure à effet** |
+| [2026-10-04](docs/journal/2026-10-04.md) | **Volonté : runes à « domaines au choix »** — mécanisme **`pick`** (N parmi M, options à `mods`/`perLevel` propres, `runePickKeys`/`runePickToggle`, 3e param `choice` de `runeNodeMods`, sélecteur `.rune-adp` généralisé, domaines nommés dans `.rt-level`) ; **CC : 40 % → 25 % de rés. crit** (⚠️ à 40 % un tank plein Mental niveau 18 atteignait **pile le plafond de 100 %** = immunité aux critiques) + 20 PV et +3/niveau + **8 AR ou RM au choix** ; ⚠️ **CC est SOUS la cible au barème** (20 / 42 / 68) — **décision MJ assumée**, le barème sous-paie la rés. crit (moyenne du roster alors que 1,0 contre un assassin) : la rune vaut **pile sa cible** au prix « contre un assassin », **ne pas la recaler** ; **Durabilité : 2 domaines parmi 3** — Vitalité `+35 PV et +5/niv` · Armure `+16` · Rés. mag `+16` (⚠️ `Armure + Rés. mag` **reconduit l'ancienne rune à 1 point près** → changement quasi purement additif ; les domaines ne sont équivalents qu'au **niveau 10**, la Vitalité gagne à bas niveau et les résistances à haut) ; ⚠️ correction d'un bullet périmé du §7 du 2026-10-03 (`ap:0.5`) |
+| [2026-10-03](docs/journal/2026-10-03.md) | **Scaling des runes par niveau** (`perLevel` + `runeNodeMods`, 4e param `level` de `sumRuneMods`, ligne `.rt-level` du tooltip) ; cible d'un point de rune `30 + 3,125 × (niv − 2)` ; **⚠️ le barème sous-évaluait vol de vie / sapience / omnivamp de ×3,8** (corrigé) ; **Conquérant**, **Domination** et **Sorcellerie** recalibrés (⚠️ **méthode INVERSE** : stat multiplicatrice = surtout PAS de `perLevel`, tableau de croissance au §6 ; MS = ¼ de tour, hors moteur ; Burst chiffré sur un assassin) ; `levelSteps` pour les tables en paliers (Mobilité, Maîtrise) ; ✅ prix du mana tranché et DÉCROISSANT : 1 PV = 1 mana (niv. 1), 2 (niv. 9), 3 (niv. 18) — seule ligne du barème qui décroît ; ⚠️ MS et portée non tarifables (décision MJ) ; **3 effets retirés du jeu** : « −1 tour aux CC reçus », « +1 JA », « −1 CDR » |
 | [2026-09-15](docs/journal/2026-09-15.md) | **Armes et maîtrises, livraisons 1, 2 et 3** — Combo : la relance redonne l'attaque (cible libre) ; L3 : débuffs assistés (Assommage, Brisage, Frappe entravante, Estropiaison), Désarmement, Parade/Riposte, Concentration en case à cocher, rechargement rendu au retrait d'un débuff ; L2 : 13 propriétés automatisées (`buildWeaponAttack`, rechargements `w_*` remboursables via `cost.cdKey`, `weaponCombat`, `manaGain`) ; stats de la mini-arme de soutien muettes hors paire mini + mini ; L1 : catégories (`weaponCat`), maîtrises staff (`masteries` + règle `.validate`), profil d'attaque de base (mini-armes, dual wield, −25 %, mode hybride, cellules de Jett), armes en accessoire sans stats, règles d'emplacement ; catalogue +15/+10-10, explosifs en consommables, retrait de `WEAPONS` |
 | [2026-09-13](docs/journal/2026-09-13.md) | Dédoublonnage des 18 armures du catalogue (les valeurs du 2026-09-09 l'emportent) ; images du MJ converties en fichiers `ATH/Armures/` ; recalage des copies déjà distribuées ; icônes Butin/Consommables du MJ jusque dans les inventaires, Butin de monstre → Cuir de brackern ; renommages « du capitaine », Coffret de terrain, encyclopédie, pierre à usage unique ; Dague simple (accessoire) pour Jett et Elias |
 | [2026-09-12](docs/journal/2026-09-12.md) | **`MITIGATION_K` 120 → 100** ; chiffrage des maîtrises d'armes et de la portée (41 armes) ; nerfs Attaque double / Canalisation / Adaptation ; dual wield de mini-armes |
@@ -317,6 +361,12 @@ qu'il ne faut pas refaire.
   Jett ×1,00). Diagnostic : §10 de `docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md`.
   **❓ Question non tranchée par le MJ** : scaling numérique par niveau **ou** upgrades de compétences au
   choix du joueur — l'un ou l'autre, pas les deux.
+- **Arbre de runes : déséquilibré, et c'est MESURÉ** (2026-09-15). Diagnostic chiffré des 45 nœuds :
+  `docs/superpowers/specs/2026-09-15-runes-chiffrage-design.md` — ⚠️ **le lire avant de toucher
+  `RUNES`**. ×5 entre la meilleure et la pire mineure (seules accessibles au niveau 2 = en jeu
+  aujourd'hui), une rune à valeur **négative**, une **non bornée**, 7 runes **gelées** sur toute la
+  campagne. **Bloqué sur une décision MJ** : la règle des capstones (jamais fixée, ils valent
+  jusqu'à plus qu'une voie entière — rien n'est équilibrable avant).
 - **Contenu du catalogue** : armes (aucune n'a de `mods`), potions (catalogue 2 à 3× sous le guide
   d'économie), palier supérieur des armures (à faire trancher par le MJ) —
   `docs/superpowers/specs/2026-09-07-catalogue-objets-design.md`.

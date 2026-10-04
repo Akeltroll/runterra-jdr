@@ -70,16 +70,20 @@ function XpBar({ level, xp }) {
    parseConsumableEffect) : un clic consomme une unité, applique l'effet en temps réel
    et décrémente la pile (suppression à 0). setHp/setMana acceptent une valeur ou un
    updater (v => …) — même contrat que sur la fiche. */
-function ConsumablesRow({ char, maxHp, maxMana, activeBuffs, inventory, setHp, setMana, setInvItem, removeInvItem, empty }) {
+function ConsumablesRow({ char, maxHp, maxMana, activeBuffs, soins, inventory, setHp, setMana, setInvItem, removeInvItem, empty }) {
   const toast = useToast();
   const clampV = (v, m) => Math.max(0, Math.min(m, Math.round(v)));
   const consumables = Object.values(inventory || {})
     .filter(it => it.cat === 'Consommables' && (it.qty || 0) > 0 && parseConsumableEffect(it));
-  const consumValue = (it) => { const fx = parseConsumableEffect(it); if (!fx) return 0; return fx.flat + Math.round((fx.kind === 'hp' ? maxHp : maxMana) * fx.pct / 100); };
+  const consumValue = (it) => { const fx = parseConsumableEffect(it); if (!fx) return 0;
+    const raw = fx.flat + Math.round((fx.kind === 'hp' ? maxHp : maxMana) * fx.pct / 100);
+    return fx.kind === 'hp' ? applyHealBonus(raw, { receiverSoins: soins || 0, receiverBuffs: activeBuffs || [] }) : raw; };
   const consume = (it) => {
     const fx = parseConsumableEffect(it); if (!fx) return;
     if (fx.kind === 'hp') {
-      const gain = applyHealMods(fx.flat + Math.round(maxHp * fx.pct / 100), activeBuffs);
+      // Potion = soin REÇU, sans producteur : seules les stats du buveur comptent (2026-10-05).
+      const gain = applyHealBonus(fx.flat + Math.round(maxHp * fx.pct / 100),
+        { receiverSoins: soins || 0, receiverBuffs: activeBuffs || [] });
       setHp(h => clampV(h + gain, maxHp));
       toast(`<b>${char.name}</b> utilise ${it.name} · +${gain} PV`, 'buff');
     } else {
@@ -119,6 +123,7 @@ const STAT_LABEL = {
   ad:'Dégâts (AD)', ap:'Puissance (AP)', hp:'PV max', mana:'Mana max', armure:'Armure', resmag:'Rés. Magique',
   crit:'% Critique', dcrit:'% Dégâts Crit', sapience:'% Sapience', vol:'% Vol de vie', omni:'% Omnivamp',
   letha:'Léthalité physique', lethaMag:'Léthalité magique', rescrit:'% Rés. Critique',
+  soins:'% Soins/Bouclier',
 };
 /* --- Famille d'une stat : 'phys' (chaud) / 'mag' (froid) / 'neut' (les deux) ---
    Pilote le code couleur des cartes de stats (tokens CSS --stat-{famille}-*).
@@ -127,7 +132,7 @@ const STAT_LABEL = {
 const STAT_FAMILY = {
   ad:'phys', armure:'phys', letha:'phys',    vol:'phys',
   ap:'mag',  resmag:'mag',  lethaMag:'mag',  sapience:'mag',
-  crit:'neut', dcrit:'neut', omni:'neut', hp:'neut', mana:'neut', rescrit:'neut',
+  crit:'neut', dcrit:'neut', omni:'neut', hp:'neut', mana:'neut', rescrit:'neut', soins:'neut',
 };
 const statFamily = (k) => STAT_FAMILY[k] || 'neut';
 
@@ -136,6 +141,7 @@ const STAT_LABEL_SHORT = {
   ad:'AD', ap:'AP', hp:'PV max', mana:'Mana max', armure:'Armure', resmag:'Rés. Mag.',
   crit:'Critique', dcrit:'Dégâts Crit', sapience:'Sapience', vol:'Vol de vie', omni:'Omnivamp',
   letha:'Léth. phys.', lethaMag:'Léth. mag.', rescrit:'Rés. Crit',
+  soins:'Soins/Bouclier', critPair:'Crit / Dégâts Crit',
 };
 
 /* --- Buff / Débuff badge (toggle + tooltip) --- */
@@ -875,6 +881,7 @@ const MOD_STATS = [
   { k:'omni',     label:'Omnivamp %', pct:true },
   { k:'letha',    label:'Léth. phys.' },
   { k:'lethaMag', label:'Léth. mag.' },
+  { k:'soins',    label:'Soins/Bouclier %', pct:true },
 ];
 
 function InvItemRow({ item, editable, onSave, onRemove, startEdit }) {

@@ -572,6 +572,43 @@ input, select { font-family: inherit; }
 .rune-legend span { display:inline-flex; align-items:center; gap:8px; }
 .rune-legend svg polygon, .rune-legend svg rect { fill:none; stroke:var(--gold-deep,#8A6A22); stroke-width:1.6; }
 
+/* --- Poids d'une stat dans son titre de rune (2026-10-05) ---
+   Trois crans qui doivent se distinguer AU PREMIER COUP D'ŒIL : une différence de graisse et
+   de taille seule ne suffisait pas (retour MJ). Chaque cran change donc de FORME :
+     fort   = pastille pleine à la couleur de la famille ;
+     moyen  = pastille contourée ;
+     faible = contour pointillé, encre atténuée.
+   ⚠️ `.rt-name` passe en flex : c'est lui qui espace les pastilles (`gap`). Sans ça, les
+   libellés se collent les uns aux autres (« LéthalitéAD/AP »). */
+.rune-tooltip .rt-name { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+.rt-w { display:inline-flex; align-items:center; border-radius:5px; line-height:1.15;
+  font-family:var(--font-mono); letter-spacing:.02em; white-space:nowrap; }
+/* Marqueur d'une rune à domaines. ⚠️ Il doit rester VISUELLEMENT à part des pastilles de
+   poids : c'est une étiquette, pas une stat. D'où le mono minuscule et le coin carré. */
+.rt-pick { display:inline-flex; align-items:center; padding:2px 8px; border-radius:3px;
+  border:1px solid color-mix(in srgb, var(--fam, var(--gold)) 50%, transparent);
+  background:color-mix(in srgb, var(--fam, var(--gold)) 12%, transparent);
+  font-family:var(--font-mono); font-size:9.5px; letter-spacing:.1em; font-weight:700;
+  text-transform:uppercase; color:var(--fam, var(--gold)); }
+.rt-w-fort { background:var(--fam, var(--gold)); color:#12100A; font-weight:800;
+  font-size:14px; padding:3px 10px;
+  box-shadow:0 0 12px color-mix(in srgb, var(--fam, var(--gold)) 38%, transparent); }
+.rt-w-moyen { border:1px solid color-mix(in srgb, var(--fam, var(--gold)) 60%, transparent);
+  color:var(--fam, var(--gold)); font-weight:700; font-size:12.5px; padding:2px 9px; }
+.rt-w-faible { border:1px dashed var(--line-strong); color:var(--ink-faint);
+  font-weight:500; font-size:11.5px; padding:2px 8px; }
+
+/* --- Cadre des abréviations (page de runes seulement, 2026-10-05) --- */
+.rune-abbr { max-width:940px; margin:14px auto 0; border:1px solid var(--line);
+  border-radius:8px; padding:10px 14px 12px; background:var(--bg-panel-2); }
+.rune-abbr .ra-head { font-family:var(--font-mono); font-size:10px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-faint); margin-bottom:8px; }
+.rune-abbr .ra-list { display:flex; flex-wrap:wrap; gap:8px 22px; }
+.rune-abbr .ra-item { display:inline-flex; align-items:baseline; gap:7px;
+  font-size:12px; color:var(--ink-dim); }
+.rune-abbr .ra-item b { font-family:var(--font-mono); font-size:11.5px; font-weight:700;
+  color:var(--gold); letter-spacing:.04em; }
+
 /* --- Rappels --- */
 .rune-reminders { max-width:940px; margin:26px auto 0; border-top:1px solid var(--line); padding-top:14px; }
 .rune-reminders .rr-head { font-family:var(--font-mono); font-size:10px; letter-spacing:.2em;
@@ -590,6 +627,14 @@ input, select { font-family: inherit; }
   text-transform:uppercase; color:var(--ink-faint); }
 .rune-tooltip .rt-name { font-family:'Cinzel',serif; font-size:15px; font-weight:700;
   color:var(--gold-pale); margin:2px 0 5px; letter-spacing:.02em; }
+/* Valeur résolue au niveau du porteur (runes à `perLevel`) : c'est le chiffre qui compte,
+   donc il est mis en avant au-dessus de la description. */
+.rune-tooltip .rt-level { font-size:12px; line-height:1.35; color:var(--fam);
+  font-family:var(--font-mono); margin:-2px 0 3px; }
+/* Échelle niveau 1 → 18 : second plan par rapport à la valeur courante, mais au-dessus
+   de la description — c'est ce qui dit si la stat est fixe ou croissante. */
+.rune-tooltip .rt-scale { font-size:11px; line-height:1.35; color:var(--ink-faint);
+  font-family:var(--font-mono); margin:0 0 6px; }
 .rune-tooltip .rt-desc { font-size:12.5px; line-height:1.42; color:var(--ink-dim); }
 .rune-tooltip .rt-note { font-size:11.5px; color:var(--ink-dim); margin-top:6px; line-height:1.35; }
 .rune-tooltip .rt-cap { margin-top:8px; padding-top:7px;

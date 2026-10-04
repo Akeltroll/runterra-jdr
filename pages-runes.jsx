@@ -332,16 +332,26 @@ function RuneConstellation({ nodeState, choices, famPoints, spent, budget, onCli
             </React.Fragment>
           );
         })}
+        {/* Sélecteur sous un nœud gravé : AD/AP (`adp`) ou domaines au choix (`pick`).
+            Les deux écrivent le même champ `runes/choices/{id}` — jamais sur le même nœud. */}
         {RUNE_LAYOUT.families.map(fam => fam.nodes.map(nd => {
           const node = RUNE_INDEX[nd.id];
-          if (!runeHasAdpChoice(node) || nodeState(nd.id) !== 'selected') return null;
+          if (nodeState(nd.id) !== 'selected') return null;
+          const opts = runePickOptions(node);
+          if (!opts && !runeHasAdpChoice(node)) return null;
+          const taken = opts ? runePickKeys(node, choices[nd.id]) : null;
+          const btns = opts
+            ? opts.map(o => ({ k:o.key, label:o.short || o.label, title:o.label,
+                on: taken.indexOf(o.key) !== -1, next: runePickToggle(node, choices[nd.id], o.key) }))
+            : ['ad', 'ap'].map(k => ({ k, label:k.toUpperCase(), title:k.toUpperCase(),
+                on:(choices[nd.id] || 'ad') === k, next:k }));
           return (
             <div key={nd.id} className="rune-adp" style={{ '--fam': fam.color,
               left:(nd.x / S * 100) + '%', top:((nd.y + 42) / S * 100) + '%' }}
               onClick={(e) => e.stopPropagation()}>
-              {['ad', 'ap'].map(k => (
-                <button key={k} className={(choices[nd.id] || 'ad') === k ? 'on' : ''}
-                  onClick={() => onChoice(nd.id, k)}>{k.toUpperCase()}</button>
+              {btns.map(b => (
+                <button key={b.k} className={b.on ? 'on' : ''} title={b.title}
+                  onClick={() => onChoice(nd.id, b.next)}>{b.label}</button>
               ))}
             </div>
           );
@@ -354,14 +364,103 @@ function RuneConstellation({ nodeState, choices, famPoints, spent, budget, onCli
 /* Nom d'affichage d'une rune : une rune « AD ou AP » (mods.adp) montre le choix RÉEL
    une fois gravée (« +15 AD et 10 létalité »). Tant qu'elle n'est pas gravée, aucun choix
    n'est fait : on garde « AD ou AP ». Sans le motif, le nom est rendu tel quel. */
-function runeDisplayName(node, choices, selectedSet) {
-  if (!node || !runeHasAdpChoice(node) || !selectedSet[node.id]) return node.name;
+/* Poids d'une stat dans sa rune (décision MJ du 2026-10-05) : le titre ne dit plus « fixe » ou
+   « croissant », il dit **ce qui pèse**. Trois crans, calés sur la part de VALEUR réellement
+   mesurée de chaque stat (fort ≥ ~55 %, moyen ~30-55 %, faible < ~25 %).
+   ⚠️ Une rune à domaines a toutes ses stats à `moyen` — règle MJ, pas une mesure. */
+const RUNE_WEIGHTS = ['fort', 'moyen', 'faible'];
+const RUNE_WEIGHT_LABEL = { fort:'poids important', moyen:'poids moyen', faible:'poids faible' };
+
+/* Parties du titre, choix AD/AP résolu une fois la rune gravée. `title` est la source unique :
+   `name` n'en est que l'aplatissement, pour le panneau « Rappels » et les nœuds sans stats. */
+function runeTitleParts(node, choices, selectedSet) {
+  if (!node || !node.title) return null;
+  const graved = !!selectedSet[node.id];
   const pick = (choices[node.id] || 'ad') === 'ap' ? 'AP' : 'AD';
-  return node.name.replace('AD ou AP', pick);
+  return node.title.map(part => ({
+    t: graved ? part.t.replace('AD/AP', pick) : part.t,
+    w: RUNE_WEIGHTS.indexOf(part.w) !== -1 ? part.w : 'moyen',
+  }));
+}
+function runeDisplayName(node, choices, selectedSet) {
+  if (!node) return '';
+  const parts = runeTitleParts(node, choices, selectedSet);
+  if (parts) return parts.map(p => p.t).join(' · ');
+  return node.name;
 }
 
 /* Popover de détail (survol d'un nœud ou d'un cœur de famille). */
-function RuneTooltip({ hover, choices, selectedSet }) {
+/* Étiquette de substitution d'une clé « au choix » tant que la rune n'est pas gravée
+   (une fois gravée, c'est MOD_STATS qui nomme la stat réellement reçue). */
+const RUNE_ADP_LABEL = { adp:'AD/AP', lethaAdp:'Léthalité' };
+
+/* Abréviations de l'arbre de runes (décision MJ du 2026-10-05) : les lignes du tooltip sont
+   étroites et une rune peut aligner quatre stats. ⚠️ PROPRE à cette page — on ne touche pas aux
+   libellés de `MOD_STATS`, qui servent à la fiche, aux objets et à la page Admin.
+   ⚠️ Toute clé ajoutée ici doit l'être AUSSI dans `RUNE_ABBR_LEGEND` : le cadre de légende est
+   le seul endroit où le joueur apprend ce que veut dire l'abréviation. */
+const RUNE_STAT_ABBR = {
+  armure:'AR', resmag:'RM', rescrit:'RCrit', dcrit:'DCrit', crit:'%Crit', soins:'SB',
+};
+/* Légende affichée sous la constellation. AD et AP n'y figurent pas : décision MJ, ils sont
+   connus de tous. `PM` n'est pas une stat du moteur (suivi à la table) mais vit dans les titres. */
+const RUNE_ABBR_LEGEND = [
+  ['AR', 'Armure'], ['RM', 'Résistance magique'], ['RCrit', 'Résistance critique'],
+  ['DCrit', 'Dégâts critiques'], ['PM', 'Point de mouvement'], ['SB', 'Soins et boucliers'],
+];
+
+/* Nom d'une stat telle que le joueur doit la lire, le choix AD/AP résolu une fois la rune
+   gravée (avant, on garde « AD/AP » : aucun choix n'est encore fait). */
+function runeStatLabel(k, choices, node, graved) {
+  const pair = ADP_KEYS[k];
+  if (pair && !graved) return RUNE_ADP_LABEL[k];
+  const stat = pair ? pair[(choices[node.id] || 'ad') === 'ap' ? 1 : 0] : k;
+  if (RUNE_STAT_ABBR[stat]) return RUNE_STAT_ABBR[stat];
+  const meta = MOD_STATS.find(s => s.k === stat);
+  return meta ? meta.label : stat;
+}
+/* Préfixe « domaines retenus » d'une rune à `pick` — sans lui, le joueur ne sait pas d'où
+   sortent les chiffres qui suivent. Vide pour une rune sans domaines. */
+function runeDomPrefix(node, choices) {
+  const dom = runePickedOptions(node, choices[node.id]).map(o => o.label);
+  return dom.length ? dom.join(' + ') + ' → ' : '';
+}
+
+/* CE QUE LA RUNE DONNE MAINTENANT, au niveau du porteur et avec le choix fait.
+   ⚠️ Depuis le 2026-10-05, le `name` d'une rune ne porte PLUS aucun chiffre (il dit quelles
+   stats et comment elles évoluent) : cette ligne est donc le SEUL endroit où le joueur lit ses
+   valeurs exactes, et elle sort de `runeNodeMods` — jamais désynchronisée du moteur.
+   Rendue pour TOUTE rune chiffrée, plate comprise. Null pour un nœud `reminder`. */
+function runeLevelLine(node, choices, selectedSet, level) {
+  if (!node) return null;
+  const raw = runeNodeMods(node, level, choices[node.id]);
+  const graved = !!selectedSet[node.id];
+  const parts = Object.keys(raw).map(k => '+' + raw[k] + ' ' + runeStatLabel(k, choices, node, graved));
+  if (!parts.length) return null;
+  return runeDomPrefix(node, choices) + parts.join(' · ');
+}
+
+/* L'ÉCHELLE de la rune : ce que chaque stat vaut au niveau 1 et au niveau 18 (décision MJ du
+   2026-10-05). C'est ce qui dit d'un coup d'œil si une stat est fixe ou si elle grandit — et
+   de combien — sans que le `desc` ait à porter des chiffres qui se périmeraient.
+   Null si rien ne bouge n'a de sens (nœud `reminder`). */
+function runeScaleLine(node, choices, selectedSet) {
+  if (!node) return null;
+  const ch = choices[node.id];
+  const lo = runeNodeMods(node, 1, ch), hi = runeNodeMods(node, 18, ch);
+  const keys = Object.keys(hi).length ? Object.keys(hi) : Object.keys(lo);
+  if (!keys.length) return null;
+  const graved = !!selectedSet[node.id];
+  const parts = keys.map(k => {
+    const a = lo[k] || 0, b = hi[k] || 0;
+    const lbl = runeStatLabel(k, choices, node, graved);
+    return a === b ? `${lbl} +${b} (fixe)` : `${lbl} +${a} → +${b}`;
+  });
+  // Pas de préfixe de domaines ici : la ligne « Au niveau N » juste au-dessus les a déjà nommés.
+  return parts.join(' · ');
+}
+
+function RuneTooltip({ hover, choices, selectedSet, level }) {
   if (!hover) return null;
   const style = { '--fam': hover.fam,
     left: Math.min(hover.x + 16, window.innerWidth - 292),
@@ -377,10 +476,24 @@ function RuneTooltip({ hover, choices, selectedSet }) {
   }
   const node = hover.node;
   const cost = RUNE_COST[node.tier] || 0;
+  const lvlLine = runeLevelLine(node, choices || {}, selectedSet || {}, level);
+  const scaleLine = runeScaleLine(node, choices || {}, selectedSet || {});
+  const titleParts = runeTitleParts(node, choices || {}, selectedSet || {});
   return (
     <div className="rune-tooltip" style={style}>
       <div className="rt-tier">{RUNE_PATH_NAME[node.id]} · {RUNE_TIER_LABEL[node.tier] || node.tier}</div>
-      <div className="rt-name">{runeDisplayName(node, choices || {}, selectedSet || {})}</div>
+      <div className="rt-name">{titleParts
+        ? (<React.Fragment>
+            {runeHasPick(node) && (
+              <span className="rt-pick">{runePickCount(node)} au choix</span>
+            )}
+            {titleParts.map((p, i) => (
+              <span key={i} className={'rt-w rt-w-' + p.w} title={RUNE_WEIGHT_LABEL[p.w]}>{p.t}</span>
+            ))}
+          </React.Fragment>)
+        : runeDisplayName(node, choices || {}, selectedSet || {})}</div>
+      {lvlLine ? <div className="rt-level">Au niveau {Math.max(1, level | 0)} : {lvlLine}</div> : null}
+      {scaleLine ? <div className="rt-scale">Du niveau 1 au 18 : {scaleLine}</div> : null}
       <div className="rt-desc">{node.desc}</div>
       {node.note ? <div className="rt-note">⚠ {node.note}</div> : null}
       {hover.capstone ? <div className="rt-cap"><span>Bonus thématique</span>{hover.capstone}</div> : null}
@@ -404,6 +517,30 @@ function RuneLegend() {
         const c = RUNE_COST[t] || 0;
         return <span key={t}>{shape[t]}{RUNE_TIER_LABEL[t]} · {c} pt{c > 1 ? 's' : ''}</span>;
       })}
+    </div>
+  );
+}
+
+/* Cadre des abréviations — réservé à la page de runes (décision MJ du 2026-10-05).
+   AD et AP en sont volontairement absents. */
+function RuneAbbrLegend() {
+  return (
+    <div className="rune-abbr">
+      <div className="ra-head">Abréviations</div>
+      <div className="ra-list">
+        {RUNE_ABBR_LEGEND.map(([k, label]) => (
+          <span key={k} className="ra-item"><b>{k}</b>{label}</span>
+        ))}
+      </div>
+      <div className="ra-head" style={{ marginTop:12 }}>Poids d'une stat dans sa rune</div>
+      <div className="ra-list">
+        {RUNE_WEIGHTS.map(w => (
+          <span key={w} className="ra-item">
+            <span className={'rt-w rt-w-' + w}>{w}</span>
+            {w === 'fort' ? "l'essentiel de la rune" : w === 'moyen' ? 'une part notable' : "un appoint"}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -514,9 +651,10 @@ function RuneBody({ char, staff }) {
       <RuneConstellation nodeState={nodeState} choices={choices} famPoints={famPoints}
         spent={spent} budget={budget} onClick={onClick} onChoice={setRuneChoice} onHover={onHover} />
       <RuneLegend />
+      <RuneAbbrLegend />
       <RuneReminders selectedIds={selectedIds} choices={choices} />
       <RuneTooltip hover={hover ? { ...hover, fam: hoverFam || 'var(--gold)' } : null}
-        choices={choices} selectedSet={selectedSet} />
+        choices={choices} selectedSet={selectedSet} level={effLevel} />
     </div>
   );
 }

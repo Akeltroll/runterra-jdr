@@ -105,9 +105,40 @@ prédéfinies par compétence, ou pool de points libre ?).
   plus tard** : (1) **comps Jett C3/C4** (kits pas encore reçus) à ajouter dans `SKILLS` + `game-logic.js` ;
   (2) automatiser l'état Âme fendue de Rathael à 5 charges (aujourd'hui narratif/manuel) ; (3) Phase 2 :
   auto-application des dégâts aux ennemis (aujourd'hui le MJ saisit le nombre dans « Subir »).
-- **Arbre de runes** : **FAIT et déployé** (voir `docs/journal/`). Les 5 familles sont chiffrées
-  (`RUNES`, data.jsx) et interactives. Reste seulement la validation MJ (capstone vs thématique,
-  2 cellules tronquées).
+- **Arbre de runes** : **livré et déployé** côté code (voir `docs/journal/`). Les 5 familles sont
+  saisies (`RUNES`, data.jsx) et interactives. **⚠️ MAIS l'arbre est DÉSÉQUILIBRÉ et c'est mesuré** :
+  diagnostic chiffré complet des 45 nœuds dans
+  `docs/superpowers/specs/2026-09-15-runes-chiffrage-design.md` — **le lire avant toute retouche de
+  `RUNES`**, l'analyse est faite. En résumé : ×5 d'écart entre la meilleure et la pire **mineure**
+  (les seules accessibles au niveau 2, donc en jeu aujourd'hui), ×18 entre voies au niveau 18, une
+  rune à **valeur négative** (`Compétence à risque`), une **non bornée** (`Opportunité`), 7 runes
+  dont la valeur est **gelée** de bout en bout de la campagne, 8 nœuds non chiffrables (3 attendent
+  un système d'éléments qui n'existe pas). Restent à trancher par le MJ : les **capstones**
+  (règle de déclenchement jamais fixée — ils valent jusqu'à 190 unités, soit plus qu'une voie
+  entière, donc **rien ne peut être équilibré avant**), les 2 cellules tronquées, et le choix
+  scaling par niveau vs pourcentage (⚠️ **même question que pour les compétences — trancher une
+  fois pour les deux**).
+  **✅ Recalibrage COMMENCÉ le 2026-10-03** (`docs/journal/2026-10-03.md`) : le MJ a tranché le
+  **scaling par niveau** (`perLevel`, moteur livré) et fixé la cible d'un point de rune à
+  **`30 + 3,125 × (niveau − 2)`** = 30 / 55 / 80. **Conquérant, Domination, Sorcellerie ET Volonté sont faits**
+  (12 mineures sur 15 ; **4 effets retirés du jeu** : « −1 tour aux CC reçus », « +1 JA »,
+  « −1 CDR » et « +1 tour de CC infligé » — ne pas les réintroduire comme des oublis). ⚠️ Le barème sous-évaluait
+  l'omnivamp, le vol de vie et la sapience de **×3,8** — corrigé dans `docs/bareme-stats.md`.
+  ✅ **Le prix du mana est tranché** (2026-10-03) et c'est **la seule ligne du barème qui décroît** :
+  `1 PV = 1 mana` au niveau 1, `2` au niveau 9, `3` au niveau 18 (équivalence MJ), soit 0,29 AD par mana
+  au niveau 2 et 0,11 au niveau 18. ⚠️ **Ne pas le lisser en taux plat** (aucun ne satisfait les deux voies).
+  ⚠️ **Deux contraintes à connaître** : **MS et portée ne sont pas tarifables** (décision MJ : pas sans
+  expérience de table), donc Mobilité et Maîtrise reposent sur une hypothèse à ¼ de tour par point ; et la **rés. crit est plafonnée à 100 %** alors que le barème la tarife linéairement.
+  ⚠️ **La méthode s'inverse selon l'ingrédient** (tableau de croissance, §6 du journal du 2026-10-03,
+  **à lire avant de toucher une rune**) : une stat **plate** (AD/AP/PV) exige un `perLevel` pour
+  suivre la cible, une stat **multiplicatrice** (% crit, % dégâts crit, léthalité, MS) la dépasse
+  déjà sans pente — et une quantité qui monte sur un prix qui monte explose (léthalité en `perLevel`
+  = +121 % au niveau 18). Domination a donc sa propre bande (`n2 ≥ 20`, `n18 ≤ 100`).
+  **Reste** : 3 mineures (Inspiration), puis TOUS les paliers
+  avancée/fondamentale (cible **160** au niveau 18 pour 2 points), les 2 cellules tronquées, et
+  **⚠️ LE BLOCAGE : les capstones**.
+  ⚠️ **Le scaling par niveau est désormais un précédent** — la même question est ouverte pour les
+  compétences (en tête de ce backlog) et devrait recevoir la même réponse.
 - **Nouveau système d'attaques de base** (`info-mj/`) : catégories d'armes + propriétés +
   maîtrise (−25 % si non maîtrisée). **Remplace** l'ancienne idée ×1.5/×1.75.
 - **Journal de combat partagé** : **FAIT** (`combat/log`, `CombatLog` ; voir `docs/journal/`).

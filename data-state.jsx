@@ -146,7 +146,7 @@ function useSharedTurn() {
       const runesSt = st.runes || {};
       const runeMods = sumRuneMods(
         Object.keys(runesSt.selected || {}).filter((id) => runesSt.selected[id]),
-        runesSt.choices || {}, buildRuneIndex(RUNES));
+        runesSt.choices || {}, buildRuneIndex(RUNES), lvl);
       const cbase = charBaseStats(c, st);
       const passiveMods = sumPassiveMods(c.id, st.counters || {}, lvl, cbase);
       // Max de base SANS skillBuffs (les buffs BUFFS n'affectent pas les PV max).

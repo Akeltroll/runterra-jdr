@@ -50,7 +50,54 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   Les **libellés sont un calque HTML au-dessus du SVG** (les `<text>` SVG ne se mettent pas en page ici).
   Styles dans `runeterra.css` (classes `.rune-*` + `--fam`) ; seuls les dégradés calculés sont inline.
   Sélection stricte (budget = `level + runeBonus`, ordre Mineure→Avancée→Fondamentale), persistée
-  `state/runes` (`setRuneSelected`/`setRuneChoice`/`resetRunes`). Bonus plats via `sumRuneMods`+`mergeMods`
+  `state/runes` (`setRuneSelected`/`setRuneChoice`/`resetRunes`).
+  **Bonus par niveau (2026-10-03)** : un nœud porte `mods` (socle), `perLevel` (incrément par
+  niveau) **et** `levelSteps` (progression par paliers, `[{from, mods}]`, dernier palier dont
+  `from` ≤ niveau — ⚠️ il **remplace** le précédent, il ne s'empile pas), les trois cumulés par
+  **`runeNodeMods(node, level)`**. ⚠️ **`sumRuneMods` prend un 4e paramètre
+  `level`, à passer par les 5 appelants** (`pages-sheet`, `pages-mj`, `pages-equip`,
+  `pages-competences` via `runeModsOf(state, level)`, `data-state`/`resetCombat`) — **même piège que
+  `sumItemMods`** : en oublier un fait diverger les stats d'une seule page, sans rien signaler.
+  Absent → niveau 1, **jamais 0**. ⚠️ **Depuis le 2026-10-05, le `name` d'une rune ne porte AUCUN chiffre** : il dit quelles stats,
+  si elles sont fixes ou croissantes, et s'il y a un choix de domaine. Les chiffres vivent dans deux
+  lignes **calculées** du tooltip — `.rt-level` (`runeLevelLine` : valeurs exactes au niveau du
+  porteur, choix résolu) et `.rt-scale` (`runeScaleLine` : niveau 1 → niveau 18, ou « +N (fixe) »).
+  Le `desc` ne porte que l'attitude générale, **sans chiffres**. ⚠️ `runeLevelLine` est rendue pour
+  TOUTE rune chiffrée, **plate comprise** — ne pas rétablir l'ancien filtre `perLevel`/`levelSteps`,
+  une rune plate n'afficherait plus rien.
+  **Abréviations** : `RUNE_STAT_ABBR` (AD/AP, AR, RM, RCrit, DCrit, SB) — ⚠️ **propre à cette page**,
+  `MOD_STATS` reste intact (fiche, objets, Admin). Le cadre `RuneAbbrLegend` sous la constellation
+  les explique (⚠️ AD et AP en sont exclus, décision MJ) : **toute clé ajoutée à l'un doit l'être à
+  l'autre**. **Titre = POIDS** (2026-10-05) : `title:[{t,w}]`, `w` ∈ `fort`/`moyen`/`faible`, rendu par la FORME de la
+  pastille (`.rt-w-*`) : pleine / contourée / pointillée. ⚠️ Pas un dégradé typographique — la
+  version graisse+taille a été jugée trop indistincte. ⚠️ `.rt-name` doit rester `display:flex`
+  avec un `gap`, sinon les libellés se collent (« LéthalitéAD/AP »). Le comportement (fixe/croissant) n'est plus nommé — il se
+  lit dans la ligne « Du niveau 1 au 18 ». ⚠️ `title` est la **source unique** : `runeDisplayName`
+  le préfère, `name` n'en est que l'aplatissement (Rappels, nœuds sans stats). ⚠️ Une rune à
+  domaines a tout à `moyen` (règle MJ) — d'où le marqueur `.rt-pick` « N au choix », sans lequel
+  rien ne la distinguerait. La légende `RuneAbbrLegend` explique aussi les trois poids.
+  ⚠️ `runeHasAdpChoice` lit `mods` ET `perLevel`. Motif et cibles : `docs/journal/2026-10-03.md`.
+  **Domaines au choix (`pick`, 2026-10-04)** : `pick:{ count, options:[{key,label,short,mods,perLevel}] }`
+  laisse le joueur retenir `count` options parmi `options` (Volonté : CC 1 parmi 2 résistances,
+  Durabilité 2 parmi 3). Résolu **dans `runeNodeMods(node, level, choice)`** (3e paramètre) parce
+  que les options rendent des stats RÉELLES, pas des clés `ADP_KEYS`.
+  ⚠️ **Même champ que l'AD/AP** (`runes/choices/{nodeId}`), sérialisé « clé,clé » → **jamais `adp`
+  et `pick` sur le même nœud**. ⚠️ **Choix absent = les `count` premières options**, jamais rien
+  (idiome `adp` → `'ad'`). `runePickToggle` : un domaine déjà retenu ne se retire pas, un nouveau
+  fait sortir **le plus ancien**. Helpers : `runePickOptions`/`runeHasPick`/`runePickCount`/
+  `runePickKeys`/`runePickedOptions`/`runePickToggle`. Le sélecteur `.rune-adp` sert les deux cas,
+  et `runeLevelLine` **nomme les domaines retenus** (le `name` ne dit que « 2 domaines au choix »).
+  Détail : `docs/journal/2026-10-04.md` §2.
+  **Groupes (2026-10-05)** : une option peut porter `group` — on ne retient jamais deux options du
+  même groupe. C'est ce qui tient « 2 DOMAINES parmi 3 » quand un domaine a un sous-choix
+  (Présage : offensif AD/AP, défensif AR/RM, soins — 5 options, 3 groupes).
+  ⚠️ Dans `runePickToggle`, cliquer une option du **même** groupe remplace **sa sœur** (changer
+  d'avis sur AD/AP ne doit pas coûter l'autre domaine) ; d'un **autre** groupe, c'est le choix le
+  **plus ancien** qui sort.
+  **Pente ACCÉLÉRÉE (`accel`, 2026-10-05)** : gain du niveau L = `perLevel + accel×(L−1)`, donc le
+  total ajoute `accel·L(L−1)/2`. ⚠️ **Réservée aux stats dont le PRIX DÉCROÎT** (le mana est la
+  seule du barème) — ailleurs elle compose dans le mauvais sens. ⚠️ Au niveau 1 elle n'ajoute rien.
+  Bonus plats via `sumRuneMods`+`mergeMods`
   → `computeEffective` (fiche/MJ/équip) ; seul l'**effet réactif** (renvoi de Peau épineuse) reste en
   panneau « Rappels ». Toggle AD/AP (clé `adp`) ; **`runeDisplayName`** résout « AD ou AP » sur le choix
   réel une fois la rune gravée. **La légende et le tooltip lisent `RUNE_COST`** (jamais de coût en dur).
