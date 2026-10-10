@@ -100,8 +100,41 @@ function runeModsOf(state, level) {
 function narrativeLabel(sk, ctx) {
   // Une compétence peut nommer elle-même son effet en table (configuration tirée de Jett).
   if (sk && typeof sk.narrative === 'function') return sk.narrative(ctx || {});
-  const first = String((sk && sk.note) || '').split('.')[0].trim();
+  // Sinon : la première phrase de sa description (`SKILL_DESC`, data.jsx), sans le gras.
+  const d = (sk && SKILL_DESC[sk.id]) || [];
+  const first = String(d[0] || '').replace(/\*\*/g, '').split('.')[0].trim();
   return first ? (first.length > 110 ? first.slice(0, 110) + '…' : first) : (sk && sk.name) || 'Effet géré en table';
+}
+
+/* Description d'une compétence ou d'un passif, REPLIÉE par défaut (demande MJ du 2026-10-10) :
+   la carte reste un outil de jeu (chiffres, cibles, bouton), le texte de règle s'ouvre au clic
+   sur « Description », dans une police claire et aérée. `lines` = entrée de `SKILL_DESC`
+   (data.jsx) : un paragraphe par ligne, « - » en tête = puce, **gras**. */
+function descRich(text) {
+  return String(text).split(/(\*\*[^*]+\*\*)/).filter(Boolean).map((part, i) =>
+    /^\*\*/.test(part) ? <b key={i} style={{ color: 'var(--gold-pale)', fontWeight: 600 }}>{part.slice(2, -2)}</b> : part);
+}
+function SkillDescription({ lines, color }) {
+  const [open, setOpen] = useState(false);
+  if (!lines || !lines.length) return null;
+  return (
+    <div style={{ marginTop: 10 }}>
+      <button className="btn btn-sm btn-ghost" onClick={() => setOpen(o => !o)} aria-expanded={open}
+        style={{ padding: '3px 10px', fontSize: 12 }}>
+        {open ? '▾' : '▸'} Description
+      </button>
+      {open && (
+        <div style={{ marginTop: 8, padding: '12px 14px', background: 'var(--bg-inset)', borderRadius: 8,
+          borderLeft: `3px solid ${color || 'var(--line-gold)'}`, fontSize: 14, lineHeight: 1.65, color: 'var(--ink)' }}>
+          {lines.map((l, i) => /^- /.test(l)
+            ? <div key={i} style={{ display: 'flex', gap: 8, margin: '4px 0 4px 4px' }}>
+                <span style={{ color: 'var(--gold)', flex: 'none' }}>•</span><span>{descRich(l.slice(2))}</span>
+              </div>
+            : <p key={i} style={{ margin: i ? '10px 0 4px' : '0 0 4px' }}>{descRich(l)}</p>)}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* Résumé lisible d'un cast pour le journal de combat : « 120 dégâts → Gnoll A, Gnoll B
@@ -346,7 +379,7 @@ function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
     <div className="panel" style={{ borderLeft: `3px solid ${color}` }}>
       <div className="panel-head"><h3>⟡ {p.name || 'Passif'}</h3><span className="overline">Passif</span></div>
       <div style={{ padding: '10px 14px' }}>
-        {p.note && <div className="faint" style={{ fontSize: 12.5, marginBottom: ctr ? 12 : 0, lineHeight: 1.5 }}>{p.note}</div>}
+
         {ctr && (
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <CounterStepper label={ctr.label} value={cur} max={max} color={color} onChange={(n) => setCounter(ctr.key, n)} />
@@ -366,6 +399,7 @@ function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
             <span className="faint" style={{ fontSize: 11.5 }}>· aide-mémoire, sans effet sur le calcul</span>
           </label>
         )}
+        <SkillDescription lines={SKILL_DESC['passif_' + kit._id]} color={color} />
       </div>
     </div>
   );
@@ -385,7 +419,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
         </div>
         <div style={{ padding: '10px 14px' }}>
           <div className="faint" style={{ fontSize: 12.5 }}>Se débloque au niveau {minLevel}.</div>
-          {sk.note && <div className="faint" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>{sk.note}</div>}
+          <SkillDescription lines={SKILL_DESC[sk.id]} />
         </div>
       </div>
     );
@@ -536,7 +570,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
         {!check.ok && ready && enoughMana && (
           <div className="faint" style={{ fontSize: 11.5, marginTop: 6, color: 'var(--gold-pale)' }}>{check.reason}</div>
         )}
-        {sk.note && <div className="faint" style={{ fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>{sk.note}</div>}
+        <SkillDescription lines={SKILL_DESC[sk.id]} color={color} />
       </div>
     </div>
   );

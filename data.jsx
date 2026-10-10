@@ -441,118 +441,281 @@ const ITEM_CATALOG = [
    (`skillManaCost`, game-logic). `manaFixed: true` = coût fixe à tout niveau (les C4). --- */
 /* Plafond par caractéristique à un niveau (`LEVELS[].limit`) : c'est le « Mental » et la
    « Magie » du Nano-hex de Jett. Au-delà de la table, le dernier palier. */
+/* --- DESCRIPTIONS des compétences et passifs (onglet Combat, bouton « Description »).
+   Clé = id de la compétence, ou `passif_<charId>`. Une entrée = un tableau de lignes :
+   un paragraphe par ligne, « - » en tête = puce, **gras** entre doubles astérisques.
+   Texte de RÈGLE adressé au joueur : ni coût ni délai (les badges de la carte les donnent,
+   au niveau du lanceur), ni note de révision. Remplace l'ancien champ `note` de SKILLS.
+   ⚠️ La 1re phrase de la 1re ligne sert de libellé à l'action « en table » d'une compétence
+   sans effet chiffré (Fondu au noir, Voile, Ailes de Givre) : la garder parlante. --- */
+const SKILL_DESC = {
+  /* ---------- Elias ---------- */
+  passif_lunick: [
+    'Chaque charge te donne **6 % de ton AD de base**, jusqu\'à la fin du combat. **5 charges au maximum, +1 tous les 4 niveaux** (6 au niveau 5, 7 au niveau 9…). Les charges se remettent à zéro entre les combats.',
+    '**Gain des charges** (tu montes ton compteur toi-même) :',
+    '- Chaque **nouvelle cible blessée** donne 1 charge (vaut aussi pour la Salve).',
+    '- Quand tu as touché **toutes les cibles présentes**, coche la case ci-dessous.',
+    '- Case cochée : **+1 charge à la fin de ton tour** si tu as touché **deux cibles différentes** dans le tour ; ou, s\'il n\'y a qu\'une cible, si tu as concentré sur elle **au moins deux compétences** (l\'attaque de base ne compte pas).',
+  ],
+  tir_cible: [
+    'Arme à distance. **66 % AD**, **sans coup critique**.',
+    '- Première frappe sur une cible : **+25 % de dégâts et +2 au jet d\'attaque**.',
+    '- Te soigne de 5 % des dégâts infligés.',
+  ],
+  dash_tactique: [
+    'Tu te repositionnes dans un rayon de 6 cases.',
+    '- Si tu finis au corps à corps d\'un ennemi : **66 % AD** et −1 tour de délai sur cette compétence.',
+    '- Sinon : simple repositionnement, aucun dégât.',
+    '- Quitter un corps à corps sans désengagement déclenche une attaque d\'opportunité.',
+  ],
+  frappe_duale: [
+    'Tu frappes avec puissance. L\'effet dépend de l\'arme utilisée :',
+    '- **À distance** : **96 % AD**, repousse la cible de 4 cases.',
+    '- **En mêlée** : **84 % AD**, marque la cible : elle subit +25 % de dégâts de toutes les sources **jusqu\'à la fin de ton prochain créneau**.',
+  ],
+  salve_corsaire: [
+    'Arme à distance. Tu déchaînes une attaque sur plusieurs cibles à la fois : **78 % AD par cible**, sans coup critique.',
+    '- Tu te soignes de **8 % de tes PV max par cible touchée**.',
+    '- Chaque nouvelle cible blessée donne une charge du passif.',
+    '- Une fois par jour.',
+  ],
+
+  /* ---------- Smith ---------- */
+  passif_smith: [
+    'Tu es lié à la Rose noire et tu peux échanger brièvement des informations avec ses membres.',
+    'Une fois par combat, tu focalises de l\'arcane sur une entité consciente : **50 + 50 % AP** dégâts magiques. Si elle échoue à son jet de sauvegarde, elle est **marquée**, perd de vue ses alliés (panique dans la plupart des cas) et tu es camouflé à ses yeux (invisible à 3 cases et plus). Si elle réussit, tu peux retenter aux tours suivants.',
+    '- **La marque reste sur sa cible** : rien ne la consomme, sauf cas très particulier.',
+    '- **Reprise** : tu peux reprendre ta marque au plus tôt 2 tours après la pose, et la reposer au tour suivant.',
+    '- **Propagation** : si tu tues une cible marquée, la marque passe sur **deux** cibles. Si la cible tombe autrement, la marque se propage à la plus proche.',
+    '- Si tu es invisible d\'au moins la moitié des ennemis : +10 % de chance de critique sur une attaque furtive. Toute attaque furtive donne au minimum +10 % de critique et +2 au jet d\'attaque.',
+    '- Tes C1 et C3 peuvent faire un coup critique.',
+  ],
+  attaque_sournoise: [
+    'Tu vises les points vitaux avec ton arme principale ou secondaire. Avec une arme de mêlée, l\'attaque porte à une case de plus.',
+    'Ses dégâts sont un **multiple de l\'attaque de base** (60 % des dégâts d\'arme) :',
+    '- Normale : **×1**',
+    '- Camouflé ou invisible : **×1,5**',
+    '- Cible marquée : **×2**',
+    '- Cible marquée **et** toi camouflé : **×4,5**',
+    '**+30 % de chance de critique** sous camouflage.',
+    '**Attaquer fait perdre le camouflage.** Sur un échec (d20 de 1 à 5) : test d\'Habileté **DD 13**, d20 + ⌊Habileté / 4⌋. Réussi, tu gardes ton camouflage.',
+    'Elle se calcule sur les dégâts d\'arme pleins : elle ne subit pas la réduction des mini-armes.',
+  ],
+  fondu_au_noir: [
+    'Tu te fonds dans une ombre : camouflage pour 3 tours au maximum, +3 de mobilité pour 2 tours.',
+    '- Tu es invisible de tous les ennemis marqués par ton passif.',
+    '- Le bonus de mobilité vaut que tu sois visible ou non.',
+    '- Tu peux troquer à tout moment ton camouflage contre un nuage de fumée opaque de 5×5 cases, qui dure le temps de camouflage restant.',
+  ],
+  chaines: [
+    'Lianes de rose dans un cône de 8 cases. Peut faire un coup critique.',
+    '- **Cible choisie** : **72 % AD**, plus un **saignement de 20 % de ton AD par tour, en dégâts bruts**.',
+    '- **Toutes les cibles du cône** portent la **chaîne** : elles sont exécutées en arrivant à 10 % de PV. Elles ne saignent pas.',
+    '- **Retrait** : à chacun de ses tours, après avoir subi le saignement, le porteur a **2 chances sur 5** de s\'en défaire. Sur la cible choisie, un seul test vaut pour le saignement et la chaîne. Rien ne part tout seul. Un allié de la cible peut retirer l\'effet par une action mineure.',
+  ],
+  voile: [
+    'Tu plonges une cible et toi-même dans une autre dimension pour 1 tour (3 tours en ultime). La dimension mesure A × B cases, entre 5 et 20.',
+    '- Tu n\'y rates aucune compétence et tu ne subis que 50 % des dégâts. La cible joue normalement.',
+    '- **Si la cible y meurt** : +10 % de chance de critique et +25 % de dégâts critiques (**+40 % et +100 %** en ultime) **pour tout le combat**, et tu récupères 10 % des PV max et du mana max de la cible (50 % en ultime).',
+    '- Une fois par jour.',
+  ],
+
+  /* ---------- Urskaar ---------- */
+  passif_urskaar: [
+    '**La tranche** se compte sur le déplacement que tu **annonces** (« j\'ai l\'intention de parcourir X cases ») : **1 tranche à 5 cases, +1 par 3 cases** en plus (2 tranches à 8 cases, 3 à 11). C\'est la même tranche pour toutes tes compétences.',
+    '- **+1 en initiative**, compté automatiquement.',
+    '- Quand tu annonces 5 cases : ton attaque de base gagne **+50 % de l\'attaque de base**, puis **+25 % par tranche de 3 cases** en plus.',
+    '- **+1 point de mouvement par tranche** pour le combat (maximum 3).',
+  ],
+  pugilat: [
+    'Tu frappes du gauche ou du droit. Les deux frappes peuvent faire un coup critique.',
+    '- **Gauche (dégâts)** : **72 % AD + 18 % AD par tranche**. Pas d\'attaque d\'opportunité si tu annonces 5 cases ou plus.',
+    '- **Droite (contrôle)** : **54 % AD + 6 % AD par tranche**. Étourdit la cible à **50 % + 10 % par tranche**.',
+  ],
+  ecrasement: [
+    'Tu bondis sur une cible et tu impactes toutes les unités adjacentes : **90 % AD + 15 % AD par tranche**.',
+    '- Portée **3 + 1 par tranche**.',
+    '- Si tu es d\'une catégorie de taille identique ou plus grande : la cible est à terre, et les entités adjacentes font un jet de sauvegarde de Force ; en cas d\'échec, elles sont repoussées de 2 cases.',
+    '- Tu ne déclenches pas d\'attaque d\'opportunité.',
+  ],
+  ralliement: [
+    'Tu rugis pour tenir bon et motiver tes alliés.',
+    '- Tu gagnes un **bouclier de 30 % de tes PV max + 20 % par 50 AP** (soit 0,4 % par point d\'AP), et l\'état Peau de Fer tant que le bouclier tient.',
+    '- Les alliés qui t\'entendent gagnent Bravoure pendant 2 tours.',
+    '- Passif permanent : +1 aux tests liés au charisme (persuader, dissuader, séduire, calmer, mentir, intimider…).',
+  ],
+  demi_ours: [
+    'Tu te transformes en demi-ours pour 5 tours : taille grande, **+30 % de PV max, d\'AD et d\'Armure**.',
+    '- Les attaques d\'opportunité contre toi subissent un désavantage.',
+    '- **Piétinement** : tes déplacements saccagent tout. Pour chaque unité traversée, une fois par tour, **42 % AD + 12 % AD par tranche**.',
+    '- **Alliés adjacents** : jet de sauvegarde. En cas d\'échec, ils subissent **le quart** de ce qu\'un ennemi subirait.',
+    '- Une fois par jour.',
+  ],
+
+  /* ---------- Jett ---------- */
+  passif_jett: [
+    'Avec ton arc amélioré, **l\'attaque de base n\'inflige plus de dégâts** : elle crée des cellules nano-hextech (CN), des cubes de 1 cm qui réagissent aux impulsions de l\'arc et alimentent tes compétences.',
+    '- Chaque attaque produit **1 CN, plus 1 par palier d\'AD** (50, 125, 225, 375), à placer dans un rayon de 8 cases, 1 CN par case. La quantité est **doublée sur un critique**.',
+    '- Tu peux récupérer tes CN à 8 cases ou moins : **+10 mana par CN** retirée.',
+    '- Les effets de terrain peuvent détruire les CN. Les ennemis ne les voient pas, mais les plus observateurs peuvent deviner leur fonctionnement.',
+  ],
+  remodulation: [
+    'Les CN du terrain se configurent **au hasard** : dix configurations, à **chance égale**. Tire la configuration (🎲) avant de choisir la cible.',
+    '**Effets en croix** — ils s\'activent à **1 case d\'une CN, horizontalement ou verticalement** :',
+    '- **Poison** : **15 + 30 % AP**, dégâts magiques, pour 3 tours.',
+    '- **Repoussement** : les ennemis sont repoussés de 2 cases. En cas de collision : **15 + 30 % AD**.',
+    '- **Attraction** : les ennemis sont attirés au centre des CN. En cas de collision : **15 + 30 % AD**.',
+    '- **Soin** : soigne un allié de **20 + 40 % AP**.',
+    '- **Bouclier** : donne à un allié un bouclier de **25 + 50 % AP**.',
+    '- **Mana** : rend à un allié **15 % de son mana max + 1 % par 40 AP**.',
+    '**Effets tout autour** — ils s\'activent à **1 case d\'une CN, dans toutes les directions** (diagonales comprises) :',
+    '- **Champ électrique** : immobilise pour ce tour et le suivant.',
+    '- **Duplication** : les CN occupent (n+1) × (n+1) cases, n étant le nombre de duplications depuis le début du combat.',
+    '- **Flash** : provoque l\'état Cécité.',
+    '- **Fumigène** : brouillard pour 2 tours, visibilité réduite à une case, unités camouflées.',
+  ],
+  alignement: [
+    'Tu choisis une CN ou l\'ensemble des CN : la zone d\'effet est adjacente à la CN choisie, ou au contact de toutes.',
+    '- **Ennemis** : **étourdis 1 tour** et **36 % AD**.',
+    '- **Alliés** : soignés de **40 + 80 % AP**.',
+  ],
+  surcharge: [
+    'Tu fais détoner toutes tes CN. Le coût augmente avec le nombre de cellules consommées.',
+    '- **Ennemis adjacents à une CN** : **60 + 6 × niveau + 60 % AD** et **Hémorragie pendant 2 tours**.',
+    '- **Alliés adjacents à une CN** : mana rendu, **20 % de leur mana max + 25 % AP**.',
+    '- Une cible ne compte qu\'une fois, même adjacente à plusieurs CN.',
+  ],
+  nano_hex: [
+    'Tu consommes toutes les CN du terrain pour faire apparaître le Nano-hex, un compagnon, pour le combat (ou 10 minutes réelles).',
+    '- Il joue **à ton créneau**, portée 2, 5 cases de déplacement, sans mana.',
+    '- Ses statistiques dépendent du **plafond par caractéristique de ton niveau**, pas de tes propres stats.',
+    '- **Chaque CN consommée lui donne un bonus, à ton choix** : +10 % PV · +15 % AD · +15 % AP · +20 critique · +20 dégâts critiques · +12 Armure · +12 RM.',
+    '- **Attaque** : **12 + 72 % de son AD**, une cible, chaque tour, peut faire un coup critique.',
+    '- **Rayon** : **12 + 72 % de son AP par cible**, à distance, petite zone en croix, **1 tour sur 2**, sans critique.',
+    '- Une fois par jour.',
+  ],
+
+  /* ---------- Rathäel ---------- */
+  passif_rathael: [
+    'Tu gagnes **1 charge de Glaciation à chaque attaque subie** (5 au maximum, toutes cumulables dans le même tour). Chaque charge augmente ton **Armure et ta Résistance magique de base de 10 %**.',
+    '- Si tu passes un tour sans subir de dégâts, tu **perds 3 charges** en fin de tour.',
+    '- Les charges se comptent automatiquement ; le compteur reste ajustable à la main.',
+    'À 5 charges, tu entres en état **Âme fendue** :',
+    '- tu régénères **10 % de tes PV max par tour** ;',
+    '- tu émets une aura qui inflige **8 % des PV max de chaque cible**, en dégâts magiques, dans un rayon de 1 case, **ennemis et alliés** ;',
+    '- tu es temporairement sourd.',
+  ],
+  frappe_irritee: [
+    '**50 % AD × (1 + 1 % par % de PV manquants + 20 % par charge de Glaciation)**, dégâts physiques. Peut faire un coup critique.',
+    '- À PV pleins et sans charge, elle frappe moins fort qu\'une attaque de base : elle monte quand tu es mal en point. Exemple : 5 charges et 30 % de PV restants donnent ×2,7.',
+    '- En Âme fendue : la cible est ralentie 1 tour.',
+  ],
+  mur_de_givre: [
+    'Tu invoques une muraille de glace autour de toi pour **1 ou 2 tours** (au choix au lancement).',
+    '- Pendant l\'effet, tu es inamovible et tu gagnes **+15 Armure et +15 Résistance magique, +5 par 2 niveaux**.',
+    '- Tu provoques un ennemi adjacent, forcé de te cibler.',
+    '- Si tu avais au moins une charge de Glaciation, tu en gagnes une de plus.',
+    '- En Âme fendue : les ennemis adjacents sont immobilisés.',
+  ],
+  eclat_ame: [
+    'Explosion magique dans un rayon de 3 cases, qui **consomme toutes tes charges** de Glaciation.',
+    '- Base : **54 % AP + (45 % + 9 % par 2 niveaux) × (Armure + Résistance magique)**.',
+    '- Chaque charge consommée ajoute **+50 % de la base** (×3,5 à 5 charges).',
+    '- Les cibles proches subissent le montant affiché, celles à 3 cases la moitié.',
+    '- En Âme fendue : étourdit les cibles touchées jusqu\'à leur prochain tour.',
+  ],
+  ailes_givre: [
+    'Transformation de 3 tours : tu déploies une aile de glace, tu peux léviter et tu émets une brume noire dans un rayon de 4 cases.',
+    'La brume inflige à **toutes** les unités, alliées comprises, une combinaison de débuffs fixée au lancement :',
+    '- ① **Brisé et Érosion magique** : −50 % Armure, −50 % AP ;',
+    '- ② **Choc magique et Affaiblissement** : −50 % Résistance magique, −50 % AD.',
+    'Si la transformation devait finir alors qu\'elle affecte encore au moins 2 unités, elle persiste. Une fois par jour.',
+  ],
+  souverain_glacial: [
+    'Ultime : version améliorée des Ailes de Givre, transformation de 4 tours.',
+    '- Chaque charge de Glaciation accorde **+20 % de PV de base** (maximum +100 %), fixé au lancement.',
+    '- Tu gagnes **2 charges par attaque subie** au lieu d\'une.',
+    '- Tu peux infliger 2 % de tes PV max totaux en dégâts bruts à toutes les unités de la zone, et te soigner de 10 % des dégâts ainsi infligés.',
+    '- Une fois par jour.',
+  ],
+};
+
 const attrCapOfLevel = (lvl) => (LEVELS.find(l => l.lvl === (lvl | 0)) || LEVELS[LEVELS.length - 1]).limit;
 const SKILLS = {
   lunick: { // Elias Crowe
     passive: { name: 'Instinct du Chasseur', counter: { key: 'chasseur', label: 'Charges', max: (lvl) => eliasMaxStacks(lvl) },
-      flag: { key: 'chasseurTous', label: 'J\'ai touché toutes les cibles présentes' },
-      note: '+6 % de ton AD de base par charge (5 charges max, +1 tous les 4 niveaux). +1 charge par NOUVELLE cible blessée. '
-        + 'Quand tu as touché toutes les cibles présentes, coche la case : ensuite, +1 charge à la fin de ton tour si tu as '
-        + 'touché deux cibles différentes dans le tour — ou, s\'il n\'y a qu\'une cible, si tu as concentré sur elle au moins '
-        + 'deux compétences (l\'attaque de base ne compte pas). Remis à zéro entre les combats.', statHint: 'ad' },
+      flag: { key: 'chasseurTous', label: 'J\'ai touché toutes les cibles présentes' }, statHint: 'ad' },
     actives: [
       { id: 'tir_cible', name: 'Tir Ciblé', mana: 10, cd: 1, kind: 'turn', noCrit: true,
-        dmg: (eff, c) => dmgEliasC1(eff, c.firstHit),
-        note: 'Arme à distance. 66 % AD, sans critique. 1er coup sur une cible : +25 % et +2 au jet. Soin de 5 % des dégâts infligés (en table).' },
+        dmg: (eff, c) => dmgEliasC1(eff, c.firstHit) },
       { id: 'dash_tactique', name: 'Dash Tactique', mana: 28, cd: 3, kind: 'cd',
-        dmg: (eff) => dmgEliasC2(eff), note: 'Rayon 6. S\'il finit au corps à corps : 66 % AD et −1 tour de délai. Sinon repositionnement (0 dégât).' },
+        dmg: (eff) => dmgEliasC2(eff) },
       { id: 'frappe_duale', name: 'Frappe Duale', mana: 28, cd: 3, kind: 'cd',
         dmg: (eff, c) => dmgEliasC3(eff, c.melee),
         dmgLabel: (eff, c) => c.melee ? 'Mêlée : marque la cible (+25 % de dégâts subis) jusqu\'à la fin du prochain créneau d\'Elias'
-          : 'À distance : repousse de 4 cases',
-        note: 'À distance : 96 % AD, repousse de 4 cases. En mêlée : 84 % AD, marque la cible (+25 % de dégâts subis, toutes sources) '
-          + 'jusqu\'à la fin du prochain créneau d\'Elias.' },
+          : 'À distance : repousse de 4 cases' },
       { id: 'salve_corsaire', name: 'Salve du Corsaire', mana: 60, manaFixed: true, cd: 0, kind: 'day', noCrit: true,
         targeting: { damage: { max: null } },
         dmg: (eff) => dmgEliasC4(eff), selfHeal: (eff, c, n) => eliasC4Heal(eff, n),
-        info: (eff) => [`Soin : ${eliasC4Heal(eff, 1)} PV par cible touchée (8 % de tes PV max)`],
-        note: 'Arme à distance. 78 % AD par cible, sans critique. Soin de 8 % de tes PV max par cible touchée. '
-          + 'Chaque NOUVELLE cible blessée donne une charge du passif. 1×/jour.' },
+        info: (eff) => [`Soin : ${eliasC4Heal(eff, 1)} PV par cible touchée (8 % de tes PV max)`] },
     ],
   },
   smith: {
-    passive: { name: 'Flétrissement de la rose', counter: { key: 'marques', label: 'Marques', max: 9 },
-      note: 'Focalise l\'arcane : 50 + 50 % AP magiques + marque (1×/combat). Marque : reprise possible au plus tôt 2 tours après '
-        + 'la pose, reposable au tour suivant. Si Smith tue une cible marquée, la marque passe sur DEUX cibles ; si elle tombe '
-        + 'autrement, elle se propage à la plus proche. L\'Attaque sournoise ne consomme pas la marque.' },
+    passive: { name: 'Flétrissement de la rose', counter: { key: 'marques', label: 'Marques', max: 9 } },
     actives: [
       { id: 'attaque_sournoise', name: 'Attaque sournoise', mana: 13, cd: 1, kind: 'turn',
         dmg: (eff, c) => dmgSmithC1(c.wType, eff, c.furtif, c.marked), critBonus: (eff, c) => smithC1CritBonus(c.furtif),
-        info: (eff, c) => [`×${String(smithC1Mult(c.furtif, c.marked)).replace('.', ',')} l'attaque de base${c.furtif ? ' · +30 % de chance de critique' : ''}`],
-        note: 'Multiple de l\'attaque de base (60 % des dégâts d\'arme) : ×1 normale · ×1,5 camouflé · ×2 cible marquée · ×4,5 marquée ET '
-          + 'camouflé. +30 % de chance de critique sous camouflage. Attaquer fait perdre le camouflage ; sur un échec (d20 de 1 à 5) : '
-          + 'test d\'Habileté DD 13 (d20 + ⌊Habileté / 4⌋), réussi il le garde.' },
+        info: (eff, c) => [`×${String(smithC1Mult(c.furtif, c.marked)).replace('.', ',')} l'attaque de base${c.furtif ? ' · +30 % de chance de critique' : ''}`] },
       { id: 'fondu_au_noir', name: 'Fondu au noir', mana: 21, cd: 3, kind: 'cd',
-        dmg: () => null, note: 'Camouflage 3 tours, +3 mobilité 2 tours. Peut se troquer en fumigène 5×5.' },
+        dmg: () => null },
       { id: 'chaines', name: 'Chaînes estropiantes', mana: 26, cd: 4, kind: 'cd',
         dmg: (eff) => dmgSmithC3(eff),
         dmgLabel: (eff) => `Saignement : ${smithBleed(eff)} dégâts BRUTS par tour · chaîne sur toutes les cibles du cône (exécutées à 10 % de PV)`,
-        info: (eff) => [`Saignement : ${smithBleed(eff)} bruts par tour (20 % AD)`],
-        note: 'Cône de 8 cases. Cible choisie : 72 % AD + saignement de 20 % AD par tour en dégâts bruts. Toutes les cibles du cône '
-          + 'portent la chaîne (exécutées en arrivant à 10 % de PV). À chaque tour du porteur, après le saignement : 2 chances sur 5 '
-          + 'de s\'en défaire (un seul test pour les deux). Un allié peut retirer l\'effet par une action mineure. Peut critiquer.' },
+        info: (eff) => [`Saignement : ${smithBleed(eff)} bruts par tour (20 % AD)`] },
       { id: 'voile', name: 'Voile dimensionnel', mana: 80, manaFixed: true, cd: 0, kind: 'day',
-        dmg: () => null, note: 'Smith et sa cible sont isolés 1 tour (3 en ultime) : il ne rate aucune compétence et ne subit que 50 % des '
-          + 'dégâts. Si la cible y meurt : +10 % crit et +25 % dégâts crit (+40 % / +100 % en ultime) pour tout le combat, et soin de '
-          + '10 % PV/mana (50 % en ultime). 1×/jour.' },
+        dmg: () => null },
     ],
   },
   urskaar: {
-    passive: { name: 'Voie de l\'ours', counter: { key: 'tranches', label: 'PM bonus', max: 3 }, initBonus: 1,
-      note: '+1 en initiative (compté automatiquement). Quand tu ANNONCES 5 cases de déplacement : attaque de base +50 % '
-        + '(+25 % par tranche de 3 cases en plus) et +1 PM par tranche (max 3). Une tranche = 5 cases annoncées, puis +1 par 3 cases ; '
-        + 'les tranches renforcent aussi C1, C2 et C4.' },
+    passive: { name: 'Voie de l\'ours', counter: { key: 'tranches', label: 'PM bonus', max: 3 }, initBonus: 1 },
     actives: [
       { id: 'pugilat', name: 'Maîtrise du pugilat', mana: 15, cd: 1, kind: 'turn',
         dmg: (eff, c) => dmgUrskaarC1(eff, c.side, c.moved),
         dmgLabel: (eff, c) => c.side === 'droite' ? `Droite : ${urskaarStunPct(c.moved)} % d'étourdir` : '',
         info: (eff, c) => c.side === 'droite' ? [`Étourdit à ${urskaarStunPct(c.moved)} %`]
-          : [(c.moved | 0) >= 5 ? 'Pas d\'attaque d\'opportunité' : 'Attaque d\'opportunité possible (moins de 5 cases annoncées)'],
-        note: 'Gauche (dégâts) : 72 % AD + 18 % par tranche, pas d\'attaque d\'opportunité s\'il annonce 5 cases ou plus. '
-          + 'Droite (contrôle) : 54 % AD + 6 % par tranche, étourdit à 50 % + 10 % par tranche. Peut critiquer.' },
+          : [(c.moved | 0) >= 5 ? 'Pas d\'attaque d\'opportunité' : 'Attaque d\'opportunité possible (moins de 5 cases annoncées)'] },
       { id: 'ecrasement', name: 'Écrasement', mana: 27, cd: 3, kind: 'cd',
         targeting: { damage: { max: null } },
         dmg: (eff, c) => dmgUrskaarC2(eff, c.moved),
-        info: (eff, c) => [`Portée ${3 + bearTranches(c.moved | 0)}`],
-        note: 'Bond. 90 % AD + 15 % par tranche, portée 3 + 1 par tranche, zone adjacente. Pas d\'attaque d\'opportunité.' },
+        info: (eff, c) => [`Portée ${3 + bearTranches(c.moved | 0)}`] },
       { id: 'ralliement', name: 'Ralliement', mana: 50, cd: 5, kind: 'cd',
-        dmg: () => null, shield: (eff, c) => urskaarC3Shield(eff, c.hpMax), note: 'Bouclier (30 % des PV max + 20 % par 50 AP) + Peau de Fer ; alliés : Bravoure 2 tours. +1 charisme (permanent).' },
+        dmg: () => null, shield: (eff, c) => urskaarC3Shield(eff, c.hpMax) },
       { id: 'demi_ours', name: 'On ne m\'arrêtera pas', mana: 100, manaFixed: true, cd: 0, kind: 'day',
         targeting: { damage: { max: null } },
         dmg: (eff, c) => dmgUrskaarC4(eff, c.moved), selfBuff: { hp: 0.30, ad: 0.30, armure: 0.30 },
-        info: (eff, c) => [`Allié adjacent qui rate sa sauvegarde : ${dmgUrskaarC4Ally(eff, c.moved)} (le quart)`],
-        note: 'Transfo 5 tours : +30 % PV/AD/Armure. Piétinement : 42 % AD + 12 % par tranche par unité traversée, une fois par tour. '
-          + 'Un allié adjacent qui rate sa sauvegarde subit le quart. 1×/jour.' },
+        info: (eff, c) => [`Allié adjacent qui rate sa sauvegarde : ${dmgUrskaarC4Ally(eff, c.moved)} (le quart)`] },
     ],
   },
   jett: {
-    passive: { name: 'Nano-hextech', counter: { key: 'cn', label: 'Cellules (CN)', max: 99 },
-      note: 'L\'AA ne fait plus de dégâts : crée des CN (1 + paliers AD, ×2 crit). Récupérer une CN = +10 mana.' },
+    passive: { name: 'Nano-hextech', counter: { key: 'cn', label: 'Cellules (CN)', max: 99 } },
     actives: [
       { id: 'remodulation', name: 'Remodulation expérimentale', mana: 32, cd: 1, kind: 'turn',
         dmg: (eff, c) => jettC1Damage(eff, c.config),
         dmgType: (eff, c) => (jettC1Effect(c.config) || {}).dmgType || null,
         heal: (eff, c) => jettC1Heal(eff, c.config),
         boon: (eff, c) => jettC1Boon(eff, c.config),
-        narrative: (c) => { const e = jettC1Effect(c.config); return e ? `Configuration : ${e.label} (effet en table)` : 'Configuration à tirer en table'; },
-        note: 'Configuration ALÉATOIRE, chance égale pour chacun des 10 effets : Champ électrique, Poison (15 + 30 % AP, magique), '
-          + 'Duplication, Flash, Repoussement et Attraction (15 + 30 % AD), Fumigène, Soin (20 + 40 % AP), Bouclier (25 + 50 % AP), '
-          + 'Mana (15 % du mana max de la cible + 1 % par 40 AP). Tire la configuration (🎲) avant de choisir la cible.' },
+        narrative: (c) => { const e = jettC1Effect(c.config); return e ? `Configuration : ${e.label} (effet en table)` : 'Configuration à tirer en table'; } },
       { id: 'alignement', name: 'Alignement de séquence', mana: 26, cd: 3, kind: 'cd',
         targeting: { damage: { min: 0, max: null }, heal: { camp: 'allies', min: 0, max: null } },
         dmg: (eff) => dmgJettC2(eff), heal: (eff) => healJettC2(eff),
-        dmgLabel: () => 'Étourdi 1 tour',
-        note: 'Étourdit 1 tour + 36 % AD aux ennemis. Soigne les alliés de 40 + 80 % AP.' },
+        dmgLabel: () => 'Étourdi 1 tour' },
       // C3 et C4 créées le 2026-10-10 (lot F). Sans effet en jeu avant les niveaux 3 et 4.
       { id: 'surcharge', name: 'Surcharge destructrice', mana: 13, manaPer: 4, cd: 3, kind: 'cd',
         manaCount: (c) => (c.counters && c.counters.cn) || 0,
         targeting: { damage: { min: 0, max: null }, boon: { camp: 'allies', min: 0, max: null } },
         dmg: (eff, c) => dmgJettC3(eff, c.level), dmgLabel: () => 'Hémorragie 2 tours (−50 % soins et boucliers reçus)',
         boon: (eff) => jettC3Boon(eff), counterSet: { cn: 0 },
-        info: (eff, c) => [`${(c.counters && c.counters.cn) || 0} cellule(s) consommée(s)`],
-        note: 'Consomme toutes tes cellules (coût : 13 + 4 par cellule au niveau 2). Ennemis adjacents à une cellule : '
-          + '60 + 6 × niveau + 60 % AD et Hémorragie 2 tours. Alliés adjacents : mana rendu, 20 % de leur mana max + 25 % AP. '
-          + 'Une cible ne compte qu\'une fois, même adjacente à plusieurs cellules.' },
+        info: (eff, c) => [`${(c.counters && c.counters.cn) || 0} cellule(s) consommée(s)`] },
       { id: 'nano_hex', name: 'Nano-hex', mana: 100, manaFixed: true, cd: 0, kind: 'day',
         dmg: () => null, counterSet: { cn: 0 },
         alloc: { label: 'Cellules à répartir', options: NANOHEX_CN_OPTIONS, max: (c) => (c.counters && c.counters.cn) || 0 },
@@ -560,65 +723,35 @@ const SKILLS = {
         info: (eff, c) => { const s = nanoHexStats(attrCapOfLevel(c.level), c.alloc); return [
           `PV ${s.hp} · AD ${s.ad} · AP ${s.ap} · Armure ${s.armure} · RM ${s.resmag}`,
           `Crit ${s.crit} % · dégâts crit ${s.dcrit} %`,
-          `Attaque ${s.attack} (chaque tour) · Rayon ${s.ray} par cible (1 tour sur 2)`]; },
-        note: 'Consomme toutes les cellules du terrain et fait apparaître le Nano-hex pour le combat (ou 10 minutes réelles). '
-          + 'Il joue à ton créneau, portée 2, 5 cases de déplacement, sans mana. Chaque cellule lui donne un bonus au choix. '
-          + 'Attaque : 12 + 72 % de son AD, peut critiquer. Rayon : 12 + 72 % de son AP par cible, à distance, petite zone en '
-          + 'croix, 1 tour sur 2, sans critique. Le MJ le pose en allié à la validation. 1×/jour.' },
+          `Attaque ${s.attack} (chaque tour) · Rayon ${s.ray} par cible (1 tour sur 2)`]; } },
     ],
   },
   rathael: {
-    passive: { name: 'Chair gelée, âme fendue', counter: { key: 'glaciation', label: 'Glaciation', max: 5 },
-      note: 'Gagne automatiquement une charge de Glaciation à chaque attaque ennemie subie (max 5, tout '
-        + 'stackable en un tour). S\'il ne subit aucun dégât pendant un tour, il perd 3 charges en fin de tour '
-        + '(automatique). +10% Armure et Résistance magique de base par charge. À 5 charges → Âme fendue : régén '
-        + '10% PV max/tour + aura de 8 % des PV max de CHAQUE cible, en dégâts magiques, rayon 1, ennemis ET alliés '
-        + '(gérée en table) ; Rathael devient sourd. '
-        + 'Le stepper reste dispo pour ajuster à la main.', statHint: 'armure' },
+    passive: { name: 'Chair gelée, âme fendue', counter: { key: 'glaciation', label: 'Glaciation', max: 5 }, statHint: 'armure' },
     actives: [
       { id: 'frappe_irritee', name: 'Frappe Irritée', mana: 10, cd: 0, kind: 'cd',
         dmg: (eff, c) => dmgRathaelC1(eff, (c.counters && c.counters.glaciation) || 0, missingHpPct(c.hpCur, eff.hp)),
-        info: (eff, c) => [`PV manquants : ${Math.round(missingHpPct(c.hpCur, eff.hp))} %`],
-        note: '50 % AD × (1 + 1 % par % de PV manquants + 20 % par charge de Glaciation). Faible à froid (moins qu\'une attaque '
-          + 'de base), elle monte quand Rathael est mal en point. Sans CD. Peut critiquer. En état Âme fendue : la cible est ralentie 1 tour.' },
+        info: (eff, c) => [`PV manquants : ${Math.round(missingHpPct(c.hpCur, eff.hp))} %`] },
       { id: 'mur_de_givre', name: 'Mur de Givre', mana: 26, cd: 3, kind: 'cd',
         dmg: () => null,
         duration: { min: 1, max: 2 },
         selfBuffFlat: (eff, c) => { const v = rathaelC2Buff(c.level); return { armure: v, resmag: v }; },
-        counterBump: { key: 'glaciation', by: 1, min: 1, max: 5 },
-        note: 'PE = Pendant l\'Effet (choisis 1 ou 2 tours au lancement). PE : inamovible, +Armure / +Résistance '
-          + 'magique (15 +5/2 niv, soit 20 au niv 2) ; un ennemi adjacent est provoqué (forcé de cibler Rathael) ; '
-          + 'en état Âme fendue, immobilise les ennemis adjacents. Si ≥1 charge de Glaciation : +1 charge.' },
+        counterBump: { key: 'glaciation', by: 1, min: 1, max: 5 } },
       { id: 'eclat_ame', name: "Éclat de l'âme", mana: 30, cd: 3, kind: 'cd',
         targeting: { damage: { max: null } },
         dmg: (eff, c) => dmgRathaelC3(eff, (c.counters && c.counters.glaciation) || 0, c.level),
-        counterSet: { glaciation: 0 },
-        note: 'Explosion magique, rayon 3 cases. CONSOMME toutes les charges de Glaciation. Base = 54 % AP + '
-          + '(45 % +9 %/2 niv) (Armure+RM) ; chaque charge ajoute +50% de la base (max +250%, soit ×3,5 à 5 charges). '
-          + 'Le MJ applique le nombre affiché aux ennemis proches et la MOITIÉ à ceux à 3 cases (via « Subir »). '
-          + 'En état Âme fendue (5 charges) : étourdit les cibles touchées jusqu\'à leur prochain tour.' },
+        counterSet: { glaciation: 0 } },
       { id: 'ailes_givre', name: 'Ailes de Givre', mana: 100, manaFixed: true, cd: 0, kind: 'day',
-        dmg: () => null,
-        note: 'Transformation 3 tours (1×/jour). Rathael déploie une aile de glace, peut léviter, et émet une brume '
-          + 'noire (rayon 4) qui inflige à TOUTES les unités (alliées comprises) une combinaison de débuffs au choix '
-          + '(fixée au lancement) : ① Brisé & Érosion Magique (−50% Armure / −50% AP) ou ② Choc Magique & '
-          + 'Affaiblissement (−50% Rés. mag / −50% AD). Si la transformation devait finir mais qu\'il affecte encore '
-          + '≥2 unités en fin de tour, elle persiste. Aura/débuffs/persistance gérés en table.' },
+        dmg: () => null },
       { id: 'souverain_glacial', name: 'Souverain Glacial', mana: 100, manaFixed: true, cd: 0, kind: 'day',
         dmg: () => null,
         transform: { turns: 4 },
-        selfBuffFlat: (eff, c) => { const hp = rathaelUltHpBonus((c.counters && c.counters.glaciation) || 0, c.hpMax || 0); return hp ? { hp } : {}; },
-        note: 'Ultime : version améliorée des Ailes de Givre (transformation 4 tours, 1×/jour). Chaque charge de '
-          + 'Glaciation accorde +20% de PV de BASE (avant équipement), max +100% — snapshot au lancement. Génère 2 '
-          + 'charges par attaque subie (au lieu de 1). Tu peux infliger 2% de tes PV max TOTAUX (avec équipement) en '
-          + 'dégâts bruts à toutes les unités de la zone, et te soigner de 10% des dégâts ainsi infligés (géré en '
-          + 'table via « Subir » + soin). Aura/débuffs/persistance gérés en table.' },
+        selfBuffFlat: (eff, c) => { const hp = rathaelUltHpBonus((c.counters && c.counters.glaciation) || 0, c.hpMax || 0); return hp ? { hp } : {}; } },
     ],
   },
 };
-
 Object.assign(window, {
   CHARACTERS, BUFFS,
-  LEVELS, CREATION_BONUS, ATTRIBUTES, JOURNAL, RUNES, ITEM_CATALOG, SKILLS,
+  LEVELS, CREATION_BONUS, ATTRIBUTES, JOURNAL, RUNES, ITEM_CATALOG, SKILLS, SKILL_DESC,
   PORTRAITS, MEMORIAL,
 });

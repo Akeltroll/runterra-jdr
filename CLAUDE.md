@@ -267,7 +267,7 @@ sujet, lire son entrée** : c'est là que sont les ⚠️, les « ne pas faire �
 **Nouvelle livraison = nouveau fichier `docs/journal/<date>.md`** + une ligne dans l'index ci-dessous,
 jamais une nouvelle section ici.
 
-**Dernier état** : cache `20261010-1`, **324 tests verts** (game-logic 313 + auth 11).
+**Dernier état** : cache `20261010-2`, **324 tests verts** (game-logic 313 + auth 11).
 ⚠️ **Rééquilibrage des compétences : lots A à F codés le 2026-10-10** — attaque de base à 60 %
 (`BASIC_ATTACK_RATIO`), mana par niveau (`skillManaCost`, ⚠️ `sk.mana` = coût du NIVEAU 2), kits au
 rang 1, passifs, C4 une fois par jour, C3/C4 de Jett. **À annoncer à la table.** Règles RTDB
