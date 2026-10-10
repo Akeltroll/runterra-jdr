@@ -3244,15 +3244,18 @@
     return patch;
   }
   /* Copie à poser dans `combat/enemies` (forme de `makeEnemy`, sans l'id). `index`/`count`
-     numérotent les copies. ⚠️ La vue MJ n'a qu'UN champ `atk` : il reçoit la plus élevée de
-     AD / AP, comme `npcStatsFromAttrs`. */
+     numérotent les copies. ⚠️ La vue MJ n'a qu'UN champ `atk`, et son bouton « ⚔ Attaque » le
+     propose tel quel comme montant du coup (crit roulé par-dessus) : il reçoit donc le coup
+     NORMAL de l'attaque de base de la fiche (lot 3), PAS la stat AD/AP — une attaque de base
+     n'en fait que ~60 %. Sans attaque de base chiffrée, repli sur la plus élevée de AD / AP. */
   function npcToEnemy(monster, index, count) {
     var m = monster || {}, n = function (v) { return Math.max(0, Math.round(Number(v) || 0)); };
     var ally = m.side === 'ally';
+    var basic = npcMonsterAttacks(m).filter(function (a) { return a.kind === 'basic' && n(a.dmg) > 0; })[0];
     return {
       name: (m.name || 'Monstre') + (count > 1 ? ' ' + ((index | 0) + 1) : ''),
       hpCur: Math.max(1, n(m.hpMax)), hpMax: Math.max(1, n(m.hpMax)), manaCur: 0, manaMax: 0,
-      atk: Math.max(n(m.ad), n(m.ap)), armure: n(m.armure), resmag: n(m.resmag),
+      atk: basic ? n(basic.dmg) : Math.max(n(m.ad), n(m.ap)), armure: n(m.armure), resmag: n(m.resmag),
       crit: n(m.crit), dcrit: n(m.dcrit) || 200, rescrit: n(m.rescrit),
       lethaAD: n(m.lethaAD), lethaAP: n(m.lethaAP), note: '',
       side: ally ? 'ally' : 'enemy', reveal: ally ? 'exact' : 'hidden', revealPct: 100,
@@ -3352,6 +3355,38 @@
     });
   }
 
+  /* Attaques d'une fiche, triées. ⚠️ `attacks` ABSENT = jamais touchées : on rend le gabarit
+     de l'archétype chiffré sur le budget COURANT, si bien qu'il suit niveau, rang, archétype
+     et curseur. La première retouche les écrit en base (elles deviennent absolues) ; la jauge
+     de budget dit alors l'écart et `npcFitAttacks` les recale d'un clic. */
+  function npcMonsterAttacks(m) {
+    m = m || {};
+    if (!m.attacks || typeof m.attacks !== 'object')
+      return npcBuildAttacks(npcParams(m).archetype, m, npcRoundDmgFromStats(m));
+    return Object.keys(m.attacks).map(function (k) { return m.attacks[k]; })
+      .filter(function (a) { return a && a.id; })
+      .sort(function (a, b) { return (a.order | 0) - (b.order | 0) || (a.id < b.id ? -1 : 1); });
+  }
+  /* Recale TOUTES les attaques comptées au budget, en gardant leurs proportions. */
+  function npcFitAttacks(attacks, stats, budget) {
+    var u = npcBudgetUsage(attacks, stats, budget);
+    if (!(u.used > 0) || !(u.budget > 0)) return (attacks || []).slice();
+    var f = u.budget / u.used;
+    return attacks.map(function (a) {
+      return a.once ? a : Object.assign({}, a, { dmg: Math.max(0, Math.round((Number(a.dmg) || 0) * f)) });
+    });
+  }
+  /* Nouvelle compétence : délai 2, monocible, chiffrée sur ce qui reste du budget (au moins 10 %). */
+  function npcNewAttack(attacks, stats, budget, main) {
+    var u = npcBudgetUsage(attacks, stats, budget), cd = 2;
+    var share = Math.max(0.1 * u.budget, u.left);
+    var order = 0;
+    (attacks || []).forEach(function (a) { order = Math.max(order, (a.order | 0) + 1); });
+    return { id: 'att_' + Date.now().toString(36) + '_' + order, order: order, name: 'Nouvelle compétence', kind: 'skill',
+      type: main === 'ap' ? 'magique' : 'physique', targets: 1, cd: cd, note: '',
+      dmg: Math.round(share * cd / critAverage(stats && stats.crit, stats && stats.dcrit)) };
+  }
+
   /* --- Rencontres ---
      Budget = somme des puissances, chacune ramenée au niveau du GROUPE. ⚠️ Approximation :
      exacte tant que le groupe tue les monstres un par un, optimiste dès que les zones jouent. */
@@ -3414,6 +3449,7 @@
     NPC_STAT_KEYS, NPC_LEVEL_MAX, npcDefaultTilt, npcParams, npcSuggestSheet, npcNewMonster, npcReparam, npcToEnemy,
     npcArchetype, npcTiltFactor, npcRoundDmgFromStats, npcSuggestStats, npcPowerOf, npcPowerAtLevel,
     npcAoeShare, npcAttackAvg, npcAttackCost, npcBudgetUsage, npcAttackView, npcBuildAttacks,
+    npcMonsterAttacks, npcFitAttacks, npcNewAttack,
     npcEncounterBudget, npcDifficulty, npcXpForLevel, npcMonsterXp, npcEncounterXp,
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,

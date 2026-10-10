@@ -127,6 +127,140 @@ function BstTilt({ tilt, rankId, onCommit }) {
   );
 }
 
+/* Attaques et compétences : plages de dégâts INDICATIVES pour le MJ, sans lien avec la vue MJ
+   (seul le coup normal de l'attaque de base part dans `atk` à la pose).
+   ⚠️ Tant que la fiche n'a pas de nœud `attacks`, on affiche le gabarit de l'archétype chiffré
+   sur le budget courant (`npcMonsterAttacks`) : la première retouche écrit la liste ENTIÈRE. */
+const BST_TYPES = [['physique', 'Physique', 'var(--stat-phys)'], ['magique', 'Magique', 'var(--stat-mag)'], ['brut', 'Brut', 'var(--ink-dim)']];
+function BstAttackCard({ a, m, def, view, share, onEdit, onRemove }) {
+  const v = npcAttackView(a, m, def, view === 'own' ? undefined : view);
+  const zone = v.targets > 1;
+  const sel = { ...BST_FLD, width:'auto', padding:'5px 6px', fontSize:12 };
+  const tcol = (BST_TYPES.find(t => t[0] === v.type) || BST_TYPES[2])[2];
+  return (
+    <div className="col gap-2" style={{ padding:'11px 12px', borderRadius:8, background:'var(--bg-inset)', border:'1px solid var(--line)' }}>
+      <div className="row gap-2">
+        <BstField value={a.name || ''} onCommit={(x) => onEdit({ name: x })} placeholder="Nom de l'attaque"
+          style={{ flex:1, fontSize:13.5, color:'var(--gold-pale)' }} />
+        <select value={a.kind === 'basic' ? 'basic' : 'skill'} onChange={e => onEdit({ kind: e.target.value })} style={sel}>
+          <option value="basic">Attaque de base</option><option value="skill">Compétence</option>
+        </select>
+        <button className="btn btn-sm btn-ghost" onClick={onRemove} title="Retirer cette attaque" style={{ padding:'4px 9px', color:'var(--debuff-bright)' }}>✗</button>
+      </div>
+      <div className="row gap-3 wrap" style={{ alignItems:'flex-end' }}>
+        <label className="col gap-1" style={{ width:96 }}>
+          <span className="overline">Dégâts{zone ? ' / cible' : ''}</span>
+          <BstField numeric value={a.dmg || 0} onCommit={(x) => onEdit({ dmg: x })} />
+        </label>
+        <div className="col gap-1">
+          <span className="overline">Type</span>
+          <div className="row gap-1">
+            {BST_TYPES.map(([t, lbl, c]) => (
+              <button key={t} className={'btn btn-sm ' + ((a.type || 'physique') === t ? 'btn-gold' : 'btn-ghost')}
+                onClick={() => onEdit({ type: t })} style={{ padding:'5px 9px', color: (a.type || 'physique') === t ? c : undefined }}>{lbl}</button>
+            ))}
+          </div>
+        </div>
+        <label className="col gap-1">
+          <span className="overline">Cibles</span>
+          <select value={v.targets} onChange={e => onEdit({ targets: parseInt(e.target.value, 10) })} style={sel}>
+            {NPC_AOE_SHARE.map((s, i) => <option key={i} value={i + 1}>{i === 0 ? '1 (monocible)' : `${i + 1} (zone)`}</option>)}
+          </select>
+        </label>
+        <label className="col gap-1">
+          <span className="overline">Délai</span>
+          <select value={Math.max(1, Math.min(10, a.cd | 0))} onChange={e => onEdit({ cd: parseInt(e.target.value, 10) })} style={sel} disabled={!!a.once}>
+            {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n === 1 ? 'chaque tour' : `${n} tours`}</option>)}
+          </select>
+        </label>
+        <label className="row gap-1" style={{ fontSize:12, cursor:'pointer', paddingBottom:7 }}>
+          <input type="checkbox" checked={a.crit !== false} onChange={e => onEdit({ crit: e.target.checked ? null : false })} /> peut criter
+        </label>
+        <label className="row gap-1" style={{ fontSize:12, cursor:'pointer', paddingBottom:7 }} title="Une fois par combat : hors du budget par round">
+          <input type="checkbox" checked={!!a.once} onChange={e => onEdit({ once: e.target.checked ? true : null })} /> 1×/combat
+        </label>
+      </div>
+      <div className="mono" style={{ fontSize:11.5, lineHeight:1.75, color:'var(--ink-dim)' }}>
+        <span style={{ color: tcol }}>{v.type}</span> · à annoncer <b style={{ color:'var(--ink)', fontSize:13 }}>{bstNum(v.normal)}</b> ({bstNum(v.low)} à {bstNum(v.high)})
+        {v.crit != null && <span> · critique <b style={{ color:'var(--ink)' }}>{bstNum(v.crit)}</b></span>}
+        {' '}· moyenne {bstNum(v.avg)}{zone && <span> par cible, <b style={{ color:'var(--ink)' }}>{bstNum(v.total)}</b> sur {v.targets} cibles</span>}
+        <br />
+        encaissé par le PJ de référence : <b style={{ color:'var(--ink)' }}>{bstNum(v.taken.normal)}</b>
+        {v.taken.crit != null && <span> · critique {bstNum(v.taken.crit)}</span>}
+        {def.hp > 0 && <span> · soit {Math.round(v.taken.normal / def.hp * 100)} % de ses PV</span>}
+        <span className="faint"> · {a.once ? 'hors budget (1×/combat)' : `${Math.round(share)} % du budget par round`}</span>
+      </div>
+      <BstField value={a.note || ''} onCommit={(x) => onEdit({ note: x })} multiline rows={1}
+        placeholder="Notes : effet, portée, condition, idée de mise en scène…" style={{ resize:'vertical', fontFamily:'inherit', fontSize:12, lineHeight:1.5 }} />
+    </div>
+  );
+}
+
+function BstAttacks({ m, patch }) {
+  const [view, setView] = useState('own');
+  const p = npcParams(m), ref = refPlayer(p.level);
+  const budget = npcRoundDmgFromStats(m);
+  const atts = npcMonsterAttacks(m);
+  const virtual = !m.attacks;
+  const use = npcBudgetUsage(atts, m, budget);
+  const write = (list) => { const map = {}; list.forEach((a, i) => { map[a.id] = Object.assign({}, a, { order: i }); }); patch({ attacks: list.length ? map : null }); };
+  const edit = (id, change) => write(atts.map(a => {
+    if (a.id !== id) return a;
+    const n = Object.assign({}, a, change);
+    Object.keys(n).forEach(k => { if (n[k] == null) delete n[k]; });   // crit / once : absent = défaut
+    return n;
+  }));
+  const off = Math.abs(use.pct - 100) > 3;
+  const barCol = use.pct > 110 ? 'var(--debuff-bright)' : use.pct < 90 ? 'var(--ink-dim)' : 'var(--gold)';
+  return (
+    <div className="panel col gap-3" style={{ padding:'14px 16px' }}>
+      <div className="row gap-2 wrap" style={{ justifyContent:'space-between' }}>
+        <span className="overline">Attaques et compétences</span>
+        <span className="row gap-1" title="Type de dégâts utilisé pour le calcul de l'encaissé">
+          <span className="faint" style={{ fontSize:11, marginRight:4 }}>Afficher en</span>
+          {[['own', 'type de l\'attaque']].concat(BST_TYPES.map(t => [t[0], t[1].toLowerCase()])).map(([k, lbl]) => (
+            <button key={k} className={'btn btn-sm ' + (view === k ? 'btn-gold' : 'btn-ghost')} onClick={() => setView(k)}
+              style={{ padding:'3px 9px', fontSize:11 }}>{lbl}</button>
+          ))}
+        </span>
+      </div>
+
+      {/* Jauge de budget */}
+      <div className="col gap-1">
+        <div className="row" style={{ justifyContent:'space-between', fontSize:12 }}>
+          <span>Budget de dégâts par round : <b className="mono" style={{ color: barCol }}>{bstNum(use.used)}</b>
+            <span className="mono faint"> / {bstNum(budget)}</span> <b style={{ color: barCol }}>({Math.round(use.pct)} %)</b></span>
+          <span className="row gap-1">
+            {off && use.used > 0 && <button className="btn btn-sm btn-ghost" style={{ padding:'2px 9px', fontSize:11 }}
+              title="Recale toutes les attaques sur le budget, en gardant leurs proportions"
+              onClick={() => write(npcFitAttacks(atts, m, budget))}>⇆ Ajuster au budget</button>}
+            {!virtual && <button className="btn btn-sm btn-ghost" style={{ padding:'2px 9px', fontSize:11 }}
+              title="Efface tes attaques et revient au gabarit de l'archétype, qui suit le niveau et le rang"
+              onClick={() => { if (confirm('Revenir au gabarit de l\'archétype ? Tes attaques, leurs noms et leurs notes seront effacés.')) patch({ attacks: null }); }}>↺ Gabarit</button>}
+          </span>
+        </div>
+        <div style={{ height:7, borderRadius:4, background:'var(--bg-inset)', border:'1px solid var(--line)', overflow:'hidden' }}>
+          <div style={{ width: Math.min(100, use.pct) + '%', height:'100%', background: barCol, transition:'width .15s' }} />
+        </div>
+        <span className="faint" style={{ fontSize:11 }}>
+          {virtual
+            ? 'Gabarit de l\'archétype : il suit le niveau, le rang et le curseur. Dès que tu retouches une attaque, la liste devient la tienne et ne bouge plus seule.'
+            : 'Liste retouchée : elle ne suit plus les paramètres. La jauge dit l\'écart, « Ajuster au budget » la recale.'}
+          {' '}Le budget vient de la stat d'attaque et du crit de la fiche. Le monstre joue comme un PJ : attaque de base + C1 + C2 ou C3 par tour.
+        </span>
+      </div>
+
+      {atts.map(a => (
+        <BstAttackCard key={a.id} a={a} m={m} def={ref} view={view}
+          share={budget > 0 ? npcAttackCost(a, m) / budget * 100 : 0}
+          onEdit={(change) => edit(a.id, change)} onRemove={() => write(atts.filter(x => x.id !== a.id))} />
+      ))}
+      <button className="btn btn-sm btn-ghost" style={{ alignSelf:'flex-start' }}
+        onClick={() => write(atts.concat([npcNewAttack(atts, m, budget, npcArchetype(p.archetype).main)]))}>+ Ajouter une attaque</button>
+    </div>
+  );
+}
+
 function BstEditor({ m, patch, onDuplicate, onRemove, go }) {
   const toast = useToast();
   const [count, setCount] = useState(1);
@@ -261,6 +395,8 @@ function BstEditor({ m, patch, onDuplicate, onRemove, go }) {
         </span>
       </div>
 
+      <BstAttacks m={m} patch={patch} />
+
       {/* Notes */}
       <label className="col gap-1">
         <span className="overline">Notes</span>
@@ -279,7 +415,7 @@ function BstEditor({ m, patch, onDuplicate, onRemove, go }) {
         <button className="btn btn-sm btn-gold" onClick={place}>⚔ Poser dans la vue MJ</button>
         {go && <button className="btn btn-sm btn-ghost" onClick={() => go('mj')}>Ouvrir la vue MJ →</button>}
         <span className="faint" style={{ fontSize:11, flexBasis:'100%' }}>
-          Chaque copie est indépendante de cette fiche. Attaque posée : {bstNum(Math.max(m.ad || 0, m.ap || 0))} (la plus élevée de AD et AP).
+          Chaque copie est indépendante de cette fiche. Attaque posée dans la vue MJ : {bstNum(npcToEnemy(m, 0, 1).atk)} (le coup normal de l'attaque de base).
         </span>
       </div>
     </div>

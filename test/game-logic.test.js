@@ -3159,10 +3159,52 @@ test('npcToEnemy : forme de la vue MJ, atk = max(AD, AP), copies numérotées', 
   const e = L.npcToEnemy(m, 1, 3);
   assert.equal(e.name, 'Liche 2');
   assert.equal(e.hpCur, m.hpMax); assert.equal(e.hpMax, m.hpMax);
-  assert.equal(e.atk, m.ap);
+  // atk = coup NORMAL de l'attaque de base de la fiche, pas la stat (gabarit mage : 20 % du budget)
+  assert.equal(e.atk, L.npcMonsterAttacks(m)[0].dmg);
+  assert.ok(e.atk > 0 && e.atk < m.ap);
+  // sans attaque de base chiffrée : repli sur la stat
+  assert.equal(L.npcToEnemy(Object.assign({}, m, { attacks: { x: { id: 'x', kind: 'skill', dmg: 50 } } }), 0, 1).atk, m.ap);
   assert.equal(e.side, 'enemy'); assert.equal(e.reveal, 'hidden');
   assert.equal(e.npcLevel, 6); assert.equal(e.rank, 'elite'); assert.equal(e.bestiaryId, 'mon_1');
   assert.equal(L.npcToEnemy(m, 0, 1).name, 'Liche');
   const a = L.npcToEnemy(Object.assign({}, m, { side: 'ally' }), 0, 1);
   assert.equal(a.side, 'ally'); assert.equal(a.reveal, 'exact');
+});
+
+/* --- Bestiaire, attaques (lot 3) --- */
+test('npcMonsterAttacks : sans attaques en base, le gabarit SUIT les paramètres', () => {
+  const m = L.npcNewMonster({ level: 6, rank: 'standard', archetype: 'bruiser' });
+  const a6 = L.npcMonsterAttacks(m);
+  assert.equal(a6.length, 4);
+  assert.ok(Math.abs(L.npcBudgetUsage(a6, m, L.npcRoundDmgFromStats(m)).pct - 100) < 1.5);
+  const m10 = Object.assign({}, m, L.npcReparam(m, { level: 10 }));
+  assert.ok(L.npcMonsterAttacks(m10)[0].dmg > a6[0].dmg);
+  // changer d'archétype change de gabarit
+  const ass = Object.assign({}, m, L.npcReparam(m, { archetype: 'assassin' }));
+  assert.equal(L.npcMonsterAttacks(ass).length, 3);
+});
+
+test('npcMonsterAttacks : une fois en base, les attaques sont absolues et triées', () => {
+  const m = L.npcNewMonster({ level: 6, rank: 'standard', archetype: 'bruiser' });
+  m.attacks = { b: { id: 'b', order: 1, name: 'B', dmg: 10 }, a: { id: 'a', order: 0, name: 'A', dmg: 20 } };
+  assert.deepEqual(L.npcMonsterAttacks(m).map(x => x.id), ['a', 'b']);
+  const m10 = Object.assign({}, m, L.npcReparam(m, { level: 10 }));
+  assert.equal(L.npcMonsterAttacks(m10)[0].dmg, 20);     // ne suit plus
+});
+
+test('npcFitAttacks : recale au budget en gardant les proportions, sans toucher le 1x/combat', () => {
+  const st = { crit: 0, dcrit: 200 };
+  const atts = [{ id: 'a', dmg: 100, cd: 1, targets: 1 }, { id: 'b', dmg: 300, cd: 3, targets: 1 }, { id: 'u', dmg: 999, cd: 1, targets: 1, once: true }];
+  const out = L.npcFitAttacks(atts, st, 400);            // utilisé 200 -> x2
+  assert.deepEqual(out.map(a => a.dmg), [200, 600, 999]);
+  assert.ok(Math.abs(L.npcBudgetUsage(out, st, 400).pct - 100) < 0.01);
+  assert.deepEqual(L.npcFitAttacks([{ id: 'z', dmg: 0, cd: 1 }], st, 400).map(a => a.dmg), [0]);   // rien à recaler
+});
+
+test('npcNewAttack : chiffrée sur le reste du budget, 10 % au minimum', () => {
+  const st = { crit: 0, dcrit: 200 };
+  const a = L.npcNewAttack([{ id: 'a', order: 0, dmg: 60, cd: 1, targets: 1 }], st, 100, 'ap');
+  assert.equal(a.dmg, 80);                               // reste 40 par round x délai 2
+  assert.equal(a.type, 'magique'); assert.equal(a.order, 1); assert.equal(a.cd, 2);
+  assert.equal(L.npcNewAttack([{ id: 'a', order: 0, dmg: 100, cd: 1, targets: 1 }], st, 100, 'ad').dmg, 20);
 });

@@ -106,9 +106,16 @@ Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDe
         hpMax, ad, ap, armure, resmag, crit, dcrit, rescrit, lethaAD, lethaAP, xp
                ↑ valeurs FINALES, source de vérité ; un champ égal à la suggestion (npcSuggestSheet)
                  suit les changements de paramètres (npcReparam), un champ retouché reste
+        attacks/{id}: { id, order, name, kind ('basic'|'skill'), type ('physique'|'magique'|'brut'),
+                        targets (1-5), cd (1-10), dmg (coup NORMAL, par cible), note,
+                        crit (false = ne crite pas ; ABSENT = peut criter), once (true = 1×/combat, hors budget) }
+               ↑ ABSENT = jamais retouchées → gabarit de l'archétype chiffré sur le budget courant
+                 (npcMonsterAttacks), qui SUIT les paramètres. La 1re retouche écrit la liste ENTIÈRE,
+                 qui devient absolue. `attacks: null` (bouton « ↺ Gabarit ») rend le suivi.
 ```
 Copie posée en combat (`placeMonster` → `npcToEnemy`) : forme de `combat/enemies` + `npcLevel`, `rank`,
-`bestiaryId` (informatifs). `atk` = max(ad, ap).
+`bestiaryId` (informatifs). `atk` = coup normal de l'attaque de base de la fiche (repli : max(ad, ap)).
+Les attaques ne sont PAS copiées : elles restent une aide du MJ dans le bestiaire.
 ```
 /users/{uid}/   ← rôles & attribution (écrit par l'admin ; auto-inscription « en attente » à la 1re connexion)
     username, role (joueur|mj|admin), charId (si joueur)
