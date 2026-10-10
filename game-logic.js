@@ -1860,6 +1860,40 @@
     return Math.max(0, Math.round(Math.max(0, power || 0) * basicMode(id).mult));
   }
 
+  /* Verrous « une fois par… », rangés dans `cooldowns/<skillId>` comme un readyAt inatteignable.
+       SKILL_CD_COMBAT — 1×/combat : levé par « ⟲ Combat » (qui purge les cooldowns).
+       SKILL_CD_DAY    — 1×/JOUR (règle G4 du 2026-10-10 : toutes les C4) : « ⟲ Combat » le
+                         GARDE, seul le bouton MJ « ☀ Nouveau jour » le lève.
+     ⚠️ Deux valeurs distinctes exprès : c'est la valeur qui dit quel bouton lève le verrou,
+     aucun autre champ en base. `WEAPON_CD_LOCKED` (propriétés d'armes) vaut SKILL_CD_COMBAT
+     et reste 1×/combat. Le remboursement d'une action annulée (`cdPrev`) marche tel quel. */
+  var SKILL_CD_COMBAT = 999999;
+  var SKILL_CD_DAY = 999998;
+  /* Verrou à poser au cast selon `sk.kind`. */
+  function skillLockValue(sk, turn) {
+    if (sk && sk.kind === 'day') return SKILL_CD_DAY;
+    if (sk && sk.kind === 'combat') return SKILL_CD_COMBAT;
+    return nextReadyAt(turn, sk && sk.kind === 'turn' ? 1 : ((sk && sk.cd) || 0));
+  }
+  /* Cooldowns qui SURVIVENT à « ⟲ Combat » : les verrous du jour, et eux seuls.
+     → objet à écrire, ou null s'il ne reste rien (null = suppression du nœud). */
+  function cooldownsAfterCombat(cooldowns) {
+    var out = {}, n = 0;
+    Object.keys(cooldowns || {}).forEach(function (k) {
+      if (cooldowns[k] === SKILL_CD_DAY) { out[k] = SKILL_CD_DAY; n++; }
+    });
+    return n ? out : null;
+  }
+  /* « ☀ Nouveau jour » : patch qui lève les verrous du jour sans toucher aux autres
+     cooldowns (un combat peut être en cours). → { skillId: null }, ou null s'il n'y a rien. */
+  function dayUnlockPatch(cooldowns) {
+    var out = {}, n = 0;
+    Object.keys(cooldowns || {}).forEach(function (k) {
+      if (cooldowns[k] === SKILL_CD_DAY) { out[k] = null; n++; }
+    });
+    return n ? out : null;
+  }
+
   /* Cooldown stocké comme « n° de tour de disponibilité » (readyAt). */
   function cooldownReady(readyAt, currentTurn) {
     if (readyAt == null) return true;
@@ -2902,6 +2936,7 @@
     combatantJoinRound, initiativeJoinOnValidate, initiativeSlots, slotParticipants, initiativeState,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     EFFECT_LABEL, hasSelfEffect, skillTargeting, castSelectionValid, buildSelfEffect,
+    SKILL_CD_COMBAT, SKILL_CD_DAY, skillLockValue, cooldownsAfterCombat, dayUnlockPatch,
     buildCastPlan, actionRefundPlan, refundManaValue, skillManaCost, skillManaPer, MANA_COST_PER_LEVEL,
     BASIC_MODES, basicMode, basicModeDamage,
     WEAPON_MODES, WEAPON_TIER_MODS, WEAPON_TIERS, WEAPON_PROPERTIES, WEAPON_CATEGORIES,

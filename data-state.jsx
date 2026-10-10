@@ -153,7 +153,9 @@ function useSharedTurn() {
       const baseMax = computeEffective(cbase, st.modifiers, [],
         mergeMods(mergeMods(itemMods, runeMods), passiveMods));
       // weaponCombat = cibles désignées par Duel / Concentration : elles ne survivent pas au combat.
-      const patch = { counters: null, cooldowns: null, skillBuffs: null, weaponCombat: null };
+      // ⚠️ Les verrous « 1×/JOUR » (toutes les C4 depuis le 2026-10-10) SURVIVENT au combat :
+      // seul « ☀ Nouveau jour » les lève. `cooldownsAfterCombat` ne garde qu'eux.
+      const patch = { counters: null, cooldowns: cooldownsAfterCombat(st.cooldowns), skillBuffs: null, weaponCombat: null };
       if (st.hpCur != null) patch.hpCur = Math.min(st.hpCur, baseMax.hp);
       patch.shield = Math.min(st.shield || 0, c.shieldMax || 0);
       window.RTDB.updatePath(p, patch);
@@ -199,7 +201,22 @@ function useSharedTurn() {
     }
     return { doneCleared };
   }, [turn]);
-  return { turn, nextTurn, prevTurn: () => persist(turn - 1), resetCombat };
+  /* « ☀ Nouveau jour » : rend les compétences 1×/jour à tout le monde. Ne touche à RIEN
+     d'autre (ni le tour, ni les PV, ni les autres cooldowns) : ce n'est pas un nouveau combat.
+     Renvoie le nombre de compétences rendues. */
+  const newDay = useCallback(async () => {
+    let freed = 0;
+    for (const c of CHARACTERS) {
+      const p = charPath(c.id);
+      const st = (await window.RTDB.getSnapshot(p)) || {};
+      const patch = dayUnlockPatch(st.cooldowns);
+      if (!patch) continue;
+      freed += Object.keys(patch).length;
+      await window.RTDB.updatePath(`${p}/cooldowns`, patch);
+    }
+    return { freed };
+  }, []);
+  return { turn, nextTurn, prevTurn: () => persist(turn - 1), resetCombat, newDay };
 }
 
 /* PV courants des 5 PJ, lisibles par TOUT inscrit.

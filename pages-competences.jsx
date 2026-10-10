@@ -90,7 +90,8 @@ function runeModsOf(state, level) {
   return sumRuneMods(Object.keys(rs.selected || {}).filter(id => rs.selected[id]), rs.choices || {}, buildRuneIndex(RUNES), level);
 }
 
-const CD_LOCKED = 999999; // sentinelle « 1×/combat » (débloqué par Nouveau combat)
+// Verrous « 1×/combat » et « 1×/jour » : `SKILL_CD_COMBAT` / `SKILL_CD_DAY` (game-logic).
+// ⚠️ Toutes les C4 sont 1×/JOUR depuis le 2026-10-10 : « ⟲ Combat » ne les rend pas.
 
 /* Libellé d'une compétence sans AUCUN effet chiffré (Fondu au noir, Voile dimensionnel,
    Ailes de Givre). `buildCastPlan` en fait une instance NARRATIVE, sans quoi ces comps
@@ -407,8 +408,11 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
   // Coût au niveau du lanceur (le `mana` de SKILLS est le coût du niveau 2, +8 %/niveau).
   const manaCost = skillManaCost(sk, baseCtx.level);
   const enoughMana = manaCur >= manaCost;
-  const cdLabel = ready ? 'Prêt' : (readyAt === CD_LOCKED ? '1×/combat utilisé' : `prêt tour ${readyAt}`);
+  const cdLabel = ready ? 'Prêt'
+    : readyAt === SKILL_CD_DAY ? '1×/jour utilisé'
+    : readyAt === SKILL_CD_COMBAT ? '1×/combat utilisé' : `prêt tour ${readyAt}`;
   const cdInfo = sk.kind === 'turn' ? '1×/tour'
+    : sk.kind === 'day' ? '1×/jour'
     : sk.kind === 'combat' ? '1×/combat'
     : (sk.cd ? `CD ${sk.cd} tour${sk.cd > 1 ? 's' : ''}` : 'Sans CD');
 
@@ -758,7 +762,7 @@ function CompetencesBody({ char, staff }) {
       { turn, base, selfId: char.id, wType, cdPrev, buffs: activeBuffs, narrative: narrativeLabel(sk, ctx), level });
     // Paiement AVANT dépôt : sinon la compétence est relançable pendant que le MJ arbitre.
     setField('manaCur', manaCur - cost);
-    setCooldown(sk.id, sk.kind === 'combat' ? CD_LOCKED : nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));
+    setCooldown(sk.id, skillLockValue(sk, turn));
     addAction({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
       source: 'skill', round: turn, cost: plan.cost }, plan.instances);
     const sum = instanceSummary(plan.instances, targetName);

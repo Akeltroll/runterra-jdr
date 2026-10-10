@@ -618,6 +618,23 @@ test('cooldownReady : prêt si pas de readyAt ou tour atteint', () => {
   assert.equal(L.cooldownReady(5, 4), false);
 });
 
+test('verrous 1x/combat et 1x/jour : « Combat » garde ceux du jour, « Nouveau jour » ne leve qu eux', () => {
+  assert.notEqual(L.SKILL_CD_DAY, L.SKILL_CD_COMBAT);
+  assert.equal(L.skillLockValue({ kind: 'day' }, 4), L.SKILL_CD_DAY);
+  assert.equal(L.skillLockValue({ kind: 'combat' }, 4), L.SKILL_CD_COMBAT);
+  assert.equal(L.skillLockValue({ kind: 'turn', cd: 1 }, 4), 5);
+  assert.equal(L.skillLockValue({ kind: 'cd', cd: 3 }, 4), 7);
+  assert.equal(L.cooldownReady(L.SKILL_CD_DAY, 500), false);
+  const cds = { salve_corsaire: L.SKILL_CD_DAY, dash_tactique: 7, w_decimation: L.SKILL_CD_COMBAT };
+  // « ⟲ Combat » : tout part SAUF le verrou du jour (la Decimation d arme reste 1x/combat)
+  assert.deepEqual(L.cooldownsAfterCombat(cds), { salve_corsaire: L.SKILL_CD_DAY });
+  assert.equal(L.cooldownsAfterCombat({ dash_tactique: 7 }), null);   // null = noeud supprime
+  assert.equal(L.cooldownsAfterCombat(undefined), null);
+  // « ☀ Nouveau jour » : ne touche pas aux cooldowns d un combat en cours
+  assert.deepEqual(L.dayUnlockPatch(cds), { salve_corsaire: null });
+  assert.equal(L.dayUnlockPatch({ dash_tactique: 7 }), null);
+});
+
 test('nextReadyAt = tour + cd', () => {
   assert.equal(L.nextReadyAt(3, 3), 6);
   assert.equal(L.nextReadyAt(7, 1), 8);

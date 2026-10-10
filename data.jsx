@@ -433,7 +433,8 @@ const ITEM_CATALOG = [
 
 /* --- Compétences (actif/passif) par perso. Formules = fns pures de game-logic.js
    (résolues via window). dmg(eff, ctx) -> nombre ou null (utilitaire). kind :
-   'turn' = 1×/tour (cd 1), 'cd' = CD en tours (cd:0 = sans cooldown), 'combat' = 1×/combat.
+   'turn' = 1×/tour (cd 1), 'cd' = CD en tours (cd:0 = sans cooldown), 'combat' = 1×/combat,
+   'day' = 1×/JOUR (toutes les C4 depuis le 2026-10-10 : « ⟲ Combat » ne les rend pas, « ☀ Jour » si).
    selfBuff = % de la stat de base ; selfBuffFlat = mods plats littéraux. counterBump = incrément
    conditionnel de compteur au cast. Source : info-mj/Codes App Script.md (le script prime).
    ⚠️ `mana` = coût AU NIVEAU 2 (rééquilibrage du 2026-10-10) : le coût réel monte de 8 % par niveau
@@ -458,12 +459,12 @@ const SKILLS = {
           : 'À distance : repousse de 4 cases',
         note: 'À distance : 96 % AD, repousse de 4 cases. En mêlée : 84 % AD, marque la cible (+25 % de dégâts subis, toutes sources) '
           + 'jusqu\'à la fin du prochain créneau d\'Elias.' },
-      { id: 'salve_corsaire', name: 'Salve du Corsaire', mana: 60, manaFixed: true, cd: 0, kind: 'combat', noCrit: true,
+      { id: 'salve_corsaire', name: 'Salve du Corsaire', mana: 60, manaFixed: true, cd: 0, kind: 'day', noCrit: true,
         targeting: { damage: { max: null } },
         dmg: (eff) => dmgEliasC4(eff), selfHeal: (eff, c, n) => eliasC4Heal(eff, n),
         info: (eff) => [`Soin : ${eliasC4Heal(eff, 1)} PV par cible touchée (8 % de tes PV max)`],
         note: 'Arme à distance. 78 % AD par cible, sans critique. Soin de 8 % de tes PV max par cible touchée. '
-          + 'Chaque NOUVELLE cible blessée donne une charge du passif. 1×/combat.' },
+          + 'Chaque NOUVELLE cible blessée donne une charge du passif. 1×/jour.' },
     ],
   },
   smith: {
@@ -487,10 +488,10 @@ const SKILLS = {
         note: 'Cône de 8 cases. Cible choisie : 72 % AD + saignement de 20 % AD par tour en dégâts bruts. Toutes les cibles du cône '
           + 'portent la chaîne (exécutées en arrivant à 10 % de PV). À chaque tour du porteur, après le saignement : 2 chances sur 5 '
           + 'de s\'en défaire (un seul test pour les deux). Un allié peut retirer l\'effet par une action mineure. Peut critiquer.' },
-      { id: 'voile', name: 'Voile dimensionnel', mana: 80, manaFixed: true, cd: 0, kind: 'combat',
+      { id: 'voile', name: 'Voile dimensionnel', mana: 80, manaFixed: true, cd: 0, kind: 'day',
         dmg: () => null, note: 'Smith et sa cible sont isolés 1 tour (3 en ultime) : il ne rate aucune compétence et ne subit que 50 % des '
           + 'dégâts. Si la cible y meurt : +10 % crit et +25 % dégâts crit (+40 % / +100 % en ultime) pour tout le combat, et soin de '
-          + '10 % PV/mana (50 % en ultime).' },
+          + '10 % PV/mana (50 % en ultime). 1×/jour.' },
     ],
   },
   urskaar: {
@@ -513,12 +514,12 @@ const SKILLS = {
         note: 'Bond. 90 % AD + 15 % par tranche, portée 3 + 1 par tranche, zone adjacente. Pas d\'attaque d\'opportunité.' },
       { id: 'ralliement', name: 'Ralliement', mana: 50, cd: 5, kind: 'cd',
         dmg: () => null, shield: (eff, c) => urskaarC3Shield(eff, c.hpMax), note: 'Bouclier (30 % des PV max + 20 % par 50 AP) + Peau de Fer ; alliés : Bravoure 2 tours. +1 charisme (permanent).' },
-      { id: 'demi_ours', name: 'On ne m\'arrêtera pas', mana: 100, manaFixed: true, cd: 0, kind: 'combat',
+      { id: 'demi_ours', name: 'On ne m\'arrêtera pas', mana: 100, manaFixed: true, cd: 0, kind: 'day',
         targeting: { damage: { max: null } },
         dmg: (eff, c) => dmgUrskaarC4(eff, c.moved), selfBuff: { hp: 0.30, ad: 0.30, armure: 0.30 },
         info: (eff, c) => [`Allié adjacent qui rate sa sauvegarde : ${dmgUrskaarC4Ally(eff, c.moved)} (le quart)`],
         note: 'Transfo 5 tours : +30 % PV/AD/Armure. Piétinement : 42 % AD + 12 % par tranche par unité traversée, une fois par tour. '
-          + 'Un allié adjacent qui rate sa sauvegarde subit le quart. 1×/combat.' },
+          + 'Un allié adjacent qui rate sa sauvegarde subit le quart. 1×/jour.' },
     ],
   },
   jett: {
@@ -531,7 +532,6 @@ const SKILLS = {
         heal: (eff, c) => jettC1Heal(eff, c.config),
         boon: (eff, c) => jettC1Boon(eff, c.config),
         narrative: (c) => { const e = jettC1Effect(c.config); return e ? `Configuration : ${e.label} (effet en table)` : 'Configuration à tirer en table'; },
-        info: (eff, c) => { const b = jettC1Boon(eff, c.config); return b ? [b.label] : []; },
         note: 'Configuration ALÉATOIRE, chance égale pour chacun des 10 effets : Champ électrique, Poison (15 + 30 % AP, magique), '
           + 'Duplication, Flash, Repoussement et Attraction (15 + 30 % AD), Fumigène, Soin (20 + 40 % AP), Bouclier (25 + 50 % AP), '
           + 'Mana (15 % du mana max de la cible + 1 % par 40 AP). Tire la configuration (🎲) avant de choisir la cible.' },
@@ -572,18 +572,18 @@ const SKILLS = {
           + '(45 % +9 %/2 niv) (Armure+RM) ; chaque charge ajoute +50% de la base (max +250%, soit ×3,5 à 5 charges). '
           + 'Le MJ applique le nombre affiché aux ennemis proches et la MOITIÉ à ceux à 3 cases (via « Subir »). '
           + 'En état Âme fendue (5 charges) : étourdit les cibles touchées jusqu\'à leur prochain tour.' },
-      { id: 'ailes_givre', name: 'Ailes de Givre', mana: 100, manaFixed: true, cd: 0, kind: 'combat',
+      { id: 'ailes_givre', name: 'Ailes de Givre', mana: 100, manaFixed: true, cd: 0, kind: 'day',
         dmg: () => null,
-        note: 'Transformation 3 tours (1×/combat). Rathael déploie une aile de glace, peut léviter, et émet une brume '
+        note: 'Transformation 3 tours (1×/jour). Rathael déploie une aile de glace, peut léviter, et émet une brume '
           + 'noire (rayon 4) qui inflige à TOUTES les unités (alliées comprises) une combinaison de débuffs au choix '
           + '(fixée au lancement) : ① Brisé & Érosion Magique (−50% Armure / −50% AP) ou ② Choc Magique & '
           + 'Affaiblissement (−50% Rés. mag / −50% AD). Si la transformation devait finir mais qu\'il affecte encore '
           + '≥2 unités en fin de tour, elle persiste. Aura/débuffs/persistance gérés en table.' },
-      { id: 'souverain_glacial', name: 'Souverain Glacial', mana: 100, manaFixed: true, cd: 0, kind: 'combat',
+      { id: 'souverain_glacial', name: 'Souverain Glacial', mana: 100, manaFixed: true, cd: 0, kind: 'day',
         dmg: () => null,
         transform: { turns: 4 },
         selfBuffFlat: (eff, c) => { const hp = rathaelUltHpBonus((c.counters && c.counters.glaciation) || 0, c.hpMax || 0); return hp ? { hp } : {}; },
-        note: 'Ultime : version améliorée des Ailes de Givre (transformation 4 tours, 1×/combat). Chaque charge de '
+        note: 'Ultime : version améliorée des Ailes de Givre (transformation 4 tours, 1×/jour). Chaque charge de '
           + 'Glaciation accorde +20% de PV de BASE (avant équipement), max +100% — snapshot au lancement. Génère 2 '
           + 'charges par attaque subie (au lieu de 1). Tu peux infliger 2% de tes PV max TOTAUX (avec équipement) en '
           + 'dégâts bruts à toutes les unités de la zone, et te soigner de 10% des dégâts ainsi infligés (géré en '

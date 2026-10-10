@@ -179,7 +179,7 @@ function MJCompactCard({ c, st, turn, onFull }) {
             {ctr && <span className="mono" style={{ fontSize:11, color:'var(--gold-pale)' }}>{ctr.label} : {counters[ctr.key] || 0}</span>}
             {onCd.map(sk => (
               <span key={sk.id} className="mono faint" style={{ fontSize:11 }}>
-                {sk.name} : {cooldowns[sk.id] === 999999 ? '1×/combat ✓' : 'tour ' + cooldowns[sk.id]}
+                {sk.name} : {cooldowns[sk.id] === SKILL_CD_DAY ? '1×/jour ✓' : cooldowns[sk.id] === SKILL_CD_COMBAT ? '1×/combat ✓' : 'tour ' + cooldowns[sk.id]}
               </span>
             ))}
           </div>
@@ -1256,7 +1256,7 @@ function MJPage({ go }) {
   const [selected, setSelected] = useState('rathael');
   const [full, setFull] = useState(null);
   const { enemies, addEnemy, updateEnemy, removeEnemy } = useMJEnemies();
-  const { turn, nextTurn, prevTurn, resetCombat } = useSharedTurn();
+  const { turn, nextTurn, prevTurn, resetCombat, newDay } = useSharedTurn();
   const [attacker, setAttacker] = useState(null); // ennemi en cours d'attaque (Task 4)
   const stOf = (id) => (all && all[id] && all[id].state) || null;
   // Combattants NORMALISES pour le moteur d'initiative : PJ (etat Firebase) + PNJ des
@@ -1314,7 +1314,12 @@ function MJPage({ go }) {
                 if (r && !r.logCleared) toast('Combat réinitialisé, mais le journal n’a pas pu être vidé : droits insuffisants', 'debuff');
                 if (r && !r.initCleared) toast('Combat réinitialisé, mais l’initiative n’a pas pu être vidée : droits insuffisants', 'debuff');
                 if (r && !r.queueCleared) toast('Combat réinitialisé, mais les actions en attente n’ont pas pu être vidées : droits insuffisants', 'debuff');
-              }); }} title="Nouveau combat (reset charges + cooldowns)" style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>⟲ Combat</button>
+              }); }} title="Nouveau combat (reset charges + cooldowns). Les compétences 1×/jour ne sont PAS rendues." style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>⟲ Combat</button>
+              {/* Toutes les C4 sont 1×/JOUR (2026-10-10) : c'est le seul bouton qui les rend. */}
+              <button className="btn btn-sm btn-ghost" onClick={() => { if (confirm('Nouveau jour : rendre à tous les compétences « une fois par jour » ?')) newDay().then((r) => {
+                toast(r && r.freed ? `Nouveau jour : ${r.freed} compétence${r.freed > 1 ? 's' : ''} 1×/jour rendue${r.freed > 1 ? 's' : ''}` : 'Nouveau jour : aucune compétence 1×/jour n’était utilisée', 'buff');
+              }).catch(() => toast('Nouveau jour refusé : droits insuffisants', 'debuff')); }}
+                title="Rend les compétences « une fois par jour » (les C4). Ne touche ni au tour, ni aux PV, ni aux autres cooldowns." style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>☀ Jour</button>
             </div>
             <ExportImportPanel />
           </div>
