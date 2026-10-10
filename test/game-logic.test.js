@@ -3246,3 +3246,43 @@ test('npcEncounterSummary : niveau du groupe, fiche supprimée, essaim, retouche
   assert.ok(L.npcEncounterSummary({ partyLevel: 10, entries: { m: 1 } }, { m: fat }).budget > 1.6);
   assert.equal(L.npcEncounterSummary({}, {}).budget, 0);
 });
+
+/* --- Bestiaire, référentiel « ma table » (lot 5) --- */
+test('npcTableRef : une table identique au référentiel ne change rien', () => {
+  const th = L.refPlayer(6);
+  const t = L.npcTableRef([{ level: 6, hp: th.hp, ad: th.atk, ap: 0, armure: th.armure, resmag: th.resmag, crit: th.crit, dcrit: th.dcrit, rescrit: th.rescrit }]);
+  assert.equal(t.level, 6); assert.equal(t.n, 1);
+  assert.ok(Math.abs(t.ratios.hp - 1) < 1e-9 && Math.abs(t.ratios.armure - 1) < 1e-9);
+  const r = L.refPlayer(6, t);
+  assert.ok(Math.abs(r.hp - th.hp) < 1e-6 && Math.abs(r.ehp - th.ehp) < 1e-6);
+  assert.ok(Math.abs(r.roundDmg / th.roundDmg - 1) < 0.02);   // un seul profil au lieu de cinq : crit moyen
+  assert.equal(L.npcTableRef([]), null);
+  assert.equal(L.npcTableRef([{ level: 2, hp: 0 }]), null);    // fiche pas encore chargée
+});
+
+test('npcTableRef : une table mieux équipée fait baisser la puissance réelle d un monstre', () => {
+  const th = L.refPlayer(2);
+  const strong = L.npcTableRef([{ level: 2, hp: th.hp * 1.2, ad: th.atk * 1.3, ap: 0, armure: th.armure * 2, resmag: th.resmag, crit: th.crit, dcrit: th.dcrit, rescrit: th.rescrit }]);
+  assert.ok(Math.abs(strong.ratios.atk - 1.3) < 1e-9 && Math.abs(strong.ratios.armure - 2) < 1e-9);
+  const m = L.npcNewMonster({ level: 2, rank: 'standard', archetype: 'bruiser', tilt: 0 });
+  assert.ok(Math.abs(L.npcPowerOf(m, 2) - 1) < 0.02);
+  assert.ok(L.npcPowerOf(m, 2, null, strong) < 0.85);
+  // les rapports s'appliquent à tout niveau : un monstre niv 10 est jugé contre la table « ramenée » au 10
+  const r10 = L.refPlayer(10, strong), t10 = L.refPlayer(10);
+  assert.ok(Math.abs(r10.hp / t10.hp - 1.2) < 1e-9);
+  assert.ok(Math.abs(r10.armure / t10.armure - 2) < 1e-9);
+  // le théorique n'est pas pollué par le cache
+  assert.ok(Math.abs(L.refPlayer(10).hp - t10.hp) < 1e-9);
+});
+
+test('npcEncounterSummary : la table change budget et durée, pas l effectif', () => {
+  const th = L.refPlayer(6);
+  const strong = L.npcTableRef([{ level: 6, hp: th.hp * 1.5, ad: th.atk * 1.5, ap: 0, armure: th.armure, resmag: th.resmag, crit: th.crit, dcrit: th.dcrit, rescrit: th.rescrit }]);
+  const m = Object.assign(L.npcNewMonster({ level: 6, rank: 'standard', archetype: 'bruiser', tilt: 0 }), { id: 'm' });
+  const enc = { partyLevel: 6, partySize: 5, entries: { m: 5 } };
+  const a = L.npcEncounterSummary(enc, { m }), b = L.npcEncounterSummary(enc, { m }, strong);
+  assert.equal(a.difficulty.id, 'dure');
+  assert.ok(b.budget < a.budget * 0.7);
+  assert.ok(b.rounds <= a.rounds);
+  assert.equal(b.count, 5);
+});

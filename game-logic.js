@@ -3067,9 +3067,50 @@
     return Math.max(0, Number(stats.hpMax != null ? stats.hpMax : stats.hp) || 0) * npcEhpFactor(stats.armure, stats.resmag);
   }
 
+  /* --- Référentiel « ma table » (lot 5) ---
+     Le référentiel théorique reste le DÉFAUT (décision MJ). `table` est un jeu de RAPPORTS :
+     de combien la vraie table s'écarte du référentiel théorique de SON niveau (équipement,
+     runes, répartitions réelles). On applique ces rapports au référentiel de n'importe quel
+     niveau, ce qui permet de juger un monstre niveau 10 contre une table niveau 2.
+     ⚠️ Il ne sert qu'à MESURER (puissance réelle, encaissé, bilan de rencontre). Les valeurs
+     SUGGÉRÉES d'une fiche restent théoriques : sinon basculer l'option ferait passer toutes
+     les fiches pour retouchées.
+     `players` = stats effectives des PJ présents : { level, hp, ad, ap, armure, resmag, crit, dcrit, rescrit }. */
+  var NPC_TABLE_KEYS = ['hp', 'atk', 'armure', 'resmag', 'crit', 'dcrit', 'rescrit', 'hit'];
+  function npcTableRef(players) {
+    var list = (players || []).filter(function (p) { return p && Number(p.hp) > 0; });
+    if (!list.length) return null;
+    var acc = { level: 0 }, n = list.length;
+    NPC_TABLE_KEYS.forEach(function (k) { acc[k] = 0; });
+    list.forEach(function (p) {
+      var atk = Math.max(Number(p.ad) || 0, Number(p.ap) || 0);
+      acc.level += Math.max(1, p.level | 0);
+      acc.hp += Number(p.hp) || 0; acc.atk += atk;
+      acc.armure += Number(p.armure) || 0; acc.resmag += Number(p.resmag) || 0;
+      acc.crit += Number(p.crit) || 0; acc.dcrit += Number(p.dcrit) || 0; acc.rescrit += Number(p.rescrit) || 0;
+      acc.hit += atk * critAverage(p.crit, p.dcrit);
+    });
+    var level = Math.max(1, Math.round(acc.level / n)), th = refPlayer(level);
+    var thHit = th.roundDmg / REF_ROUND_RATIO, ratios = {}, avg = {};
+    NPC_TABLE_KEYS.forEach(function (k) {
+      avg[k] = acc[k] / n;
+      var base = k === 'hit' ? thHit : th[k];
+      ratios[k] = base > 0 ? avg[k] / base : 1;
+    });
+    return { n: n, level: level, ratios: ratios, avg: avg };
+  }
+
   var REF_PLAYER_CACHE = {};
-  function refPlayer(level) {
+  function refPlayer(level, table) {
     level = Math.max(1, level | 0);
+    if (table && table.ratios) {
+      var th = refPlayer(level), q = table.ratios, out = { level: level, table: true };
+      ['hp', 'atk', 'armure', 'resmag', 'crit', 'dcrit', 'rescrit'].forEach(function (k) { out[k] = th[k] * (q[k] > 0 ? q[k] : 1); });
+      out.hpMax = out.hp;
+      out.ehp = npcEhp(out);
+      out.roundDmg = th.roundDmg * (q.hit > 0 ? q.hit : 1);
+      return out;
+    }
     if (REF_PLAYER_CACHE[level]) return REF_PLAYER_CACHE[level];
     var pb = npcPointBudget(level), n = NPC_REF_PROFILES.length;
     var acc = { hp: 0, atk: 0, armure: 0, resmag: 0, crit: 0, dcrit: 0, rescrit: 0, hit: 0 };
@@ -3189,8 +3230,8 @@
   /* Puissance RÉELLE de stats (éventuellement retouchées à la main), au niveau donné.
      `roundDmg` optionnel = dégâts par round réellement posés par ses attaques ; absent, on
      les déduit de la stat d'attaque. Renvoie n (1 = un standard). */
-  function npcPowerOf(stats, level, roundDmg) {
-    var ref = refPlayer(level);
+  function npcPowerOf(stats, level, roundDmg, table) {
+    var ref = refPlayer(level, table);
     var dmg = roundDmg != null ? Math.max(0, Number(roundDmg) || 0) : npcRoundDmgFromStats(stats);
     if (!(ref.ehp > 0) || !(ref.roundDmg > 0)) return 0;
     return npcPowerFromProduct((npcEhp(stats) / ref.ehp) * (dmg / ref.roundDmg));
@@ -3423,18 +3464,19 @@
      niveau du groupe. `rounds` = durée si le groupe reste au complet et concentre ses coups,
      sans soins ni contrôles : une estimation BASSE (le simulateur donne ~1 round de plus dès
      que des PJ tombent). `swarm` = beaucoup de petits monstres, cas où le budget sous-évalue. */
-  function npcEncounterSummary(enc, monsters) {
+  function npcEncounterSummary(enc, monsters, table) {
     enc = enc || {}; monsters = monsters || {};
     var partyLevel = Math.max(1, Math.min(NPC_LEVEL_MAX, (enc.partyLevel | 0) || 1));
     var partySize = Math.max(1, Math.min(10, (enc.partySize | 0) || 5));
-    var ref = refPlayer(partyLevel);
+    var ref = refPlayer(partyLevel, table);
     var rows = [], budget = 0, mxp = 0, ehp = 0, dmg = 0, n = 0;
     Object.keys(enc.entries || {}).forEach(function (id) {
       var count = Math.max(0, enc.entries[id] | 0);
       if (!count) return;
       var m = monsters[id];
       if (!m) { rows.push({ id: id, missing: true, count: count, powerAtParty: 0 }); return; }
-      var p = npcParams(m), power = npcPowerOf(m, p.level), at = npcPowerAtLevel(power, p.level, partyLevel);
+      // `table` ne joue que dans npcPowerOf : ses rapports s'annulent dans le passage d'un niveau à l'autre.
+      var p = npcParams(m), power = npcPowerOf(m, p.level, null, table), at = npcPowerAtLevel(power, p.level, partyLevel);
       rows.push({ id: id, monster: m, count: count, level: p.level, power: power, powerAtParty: at });
       budget += count * at; n += count;
       mxp += count * (m.xp != null ? Math.max(0, Number(m.xp) || 0) : npcSuggestSheet(m).xp);
@@ -3481,7 +3523,7 @@
   return {
     NPC_REF_PROFILES, NPC_RANKS, NPC_ARCHETYPES, NPC_AOE_SHARE, NPC_DMG_SPREAD, NPC_ATTACK_TEMPLATES,
     NPC_DIFFICULTY, NPC_XP_CURVE, REF_ROUND_RATIO,
-    npcPointBudget, npcScaleProfile, critAverage, npcEhpFactor, npcEhp, refPlayer,
+    npcPointBudget, npcScaleProfile, critAverage, npcEhpFactor, npcEhp, refPlayer, npcTableRef,
     npcRank, npcPowerMults, npcPowerProduct, npcPowerFromProduct, npcRankForPower,
     NPC_STAT_KEYS, NPC_LEVEL_MAX, npcDefaultTilt, npcParams, npcSuggestSheet, npcNewMonster, npcReparam, npcToEnemy,
     npcArchetype, npcTiltFactor, npcRoundDmgFromStats, npcSuggestStats, npcPowerOf, npcPowerAtLevel,

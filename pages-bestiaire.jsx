@@ -185,7 +185,7 @@ function BstAttackCard({ a, m, def, view, share, onEdit, onRemove }) {
         {v.crit != null && <span> · critique <b style={{ color:'var(--ink)' }}>{bstNum(v.crit)}</b></span>}
         {' '}· moyenne {bstNum(v.avg)}{zone && <span> par cible, <b style={{ color:'var(--ink)' }}>{bstNum(v.total)}</b> sur {v.targets} cibles</span>}
         <br />
-        encaissé par le PJ de référence : <b style={{ color:'var(--ink)' }}>{bstNum(v.taken.normal)}</b>
+        encaissé par {def.table ? 'un PJ de ta table' : 'le PJ de référence'} : <b style={{ color:'var(--ink)' }}>{bstNum(v.taken.normal)}</b>
         {v.taken.crit != null && <span> · critique {bstNum(v.taken.crit)}</span>}
         {def.hp > 0 && <span> · soit {Math.round(v.taken.normal / def.hp * 100)} % de ses PV</span>}
         <span className="faint"> · {a.once ? 'hors budget (1×/combat)' : `${Math.round(share)} % du budget par round`}</span>
@@ -196,9 +196,9 @@ function BstAttackCard({ a, m, def, view, share, onEdit, onRemove }) {
   );
 }
 
-function BstAttacks({ m, patch }) {
+function BstAttacks({ m, patch, table }) {
   const [view, setView] = useState('own');
-  const p = npcParams(m), ref = refPlayer(p.level);
+  const p = npcParams(m), ref = refPlayer(p.level, table);
   const budget = npcRoundDmgFromStats(m);
   const atts = npcMonsterAttacks(m);
   const virtual = !m.attacks;
@@ -261,13 +261,13 @@ function BstAttacks({ m, patch }) {
   );
 }
 
-function BstEditor({ m, patch, onDuplicate, onRemove, go }) {
+function BstEditor({ m, patch, onDuplicate, onRemove, go, table }) {
   const toast = useToast();
   const [count, setCount] = useState(1);
-  const p = npcParams(m), sug = npcSuggestSheet(m), ref = refPlayer(p.level);
+  const p = npcParams(m), sug = npcSuggestSheet(m), ref = refPlayer(p.level, table);
   const rank = npcRank(p.rank);
   const reparam = (change) => patch(npcReparam(m, change));
-  const power = npcPowerOf(m, p.level);
+  const power = npcPowerOf(m, p.level, null, table);
   const near = npcRankForPower(power);
   const ehp = npcEhp(m), round = npcRoundDmgFromStats(m);
   const edited = [...NPC_STAT_KEYS, 'xp'].filter(k => m[k] != null && Number(m[k]) !== sug[k]);
@@ -342,14 +342,15 @@ function BstEditor({ m, patch, onDuplicate, onRemove, go }) {
           <span className="overline">Puissance réelle</span>
           <span style={{ fontFamily:'var(--font-display)', fontSize:24, color:'var(--gold-bright)' }}>{bstPct(power)}</span>
           <span className="dim" style={{ fontSize:13 }}>
-            d'un PJ de niveau {p.level} — {near.id === rank.id ? `un ${rank.label.toLowerCase()}` : `plus proche d'un ${near.label.toLowerCase()} que d'un ${rank.label.toLowerCase()}`}
+            {table ? `d'un PJ de ta table, ramenée au niveau ${p.level}` : `d'un PJ de niveau ${p.level}`} — {near.id === rank.id ? `un ${rank.label.toLowerCase()}` : `plus proche d'un ${near.label.toLowerCase()} que d'un ${rank.label.toLowerCase()}`}
           </span>
         </div>
         <div className="mono faint" style={{ fontSize:11.5, lineHeight:1.7 }}>
           PV effectifs <b style={{ color:'var(--ink)' }}>{bstNum(ehp)}</b> ({bstMult(ehp / ref.ehp)} du référentiel) ·
           dégâts par round <b style={{ color:'var(--ink)' }}>{bstNum(round)}</b> ({bstMult(round / ref.roundDmg)})<br />
-          Référentiel niveau {p.level} : {bstNum(ref.hp)} PV · {bstNum(ref.atk)} AD/AP · {bstNum(ref.armure)} armure · {bstNum(ref.resmag)} RM ·
+          {table ? 'Ta table ramenée au niveau' : 'Référentiel niveau'} {p.level} : {bstNum(ref.hp)} PV · {bstNum(ref.atk)} AD/AP · {bstNum(ref.armure)} armure · {bstNum(ref.resmag)} RM ·
           crit {bstNum(ref.crit)} % · {bstNum(ref.roundDmg)} dégâts par round
+          {table && <span><br />Mesuré contre ta table. Les valeurs suggérées ci-dessous restent calculées sur le référentiel théorique.</span>}
         </div>
       </div>
 
@@ -395,7 +396,7 @@ function BstEditor({ m, patch, onDuplicate, onRemove, go }) {
         </span>
       </div>
 
-      <BstAttacks m={m} patch={patch} />
+      <BstAttacks m={m} patch={patch} table={table} />
 
       {/* Notes */}
       <label className="col gap-1">
@@ -427,8 +428,8 @@ function BstEditor({ m, patch, onDuplicate, onRemove, go }) {
    se recalcule donc dès qu'une fiche est retouchée. */
 const BST_DIFF_COLOR = { faible:'var(--buff-bright)', moyenne:'var(--gold-bright)', dure:'#e0a33a', extreme:'var(--debuff-bright)' };
 
-function BstEncounterRow({ enc, monsters, active, onClick }) {
-  const r = npcEncounterSummary(enc, monsters);
+function BstEncounterRow({ enc, monsters, active, onClick, table }) {
+  const r = npcEncounterSummary(enc, monsters, table);
   return (
     <button onClick={onClick} className="col"
       style={{ textAlign:'left', width:'100%', padding:'7px 9px', borderRadius:6, cursor:'pointer', gap:2,
@@ -442,10 +443,10 @@ function BstEncounterRow({ enc, monsters, active, onClick }) {
   );
 }
 
-function BstEncounterEditor({ enc, monsters, patch, onDuplicate, onRemove, onOpenMonster, go }) {
+function BstEncounterEditor({ enc, monsters, patch, onDuplicate, onRemove, onOpenMonster, go, table }) {
   const toast = useToast();
   const [pick, setPick] = useState('');
-  const r = npcEncounterSummary(enc, monsters);
+  const r = npcEncounterSummary(enc, monsters, table);
   const setCount = (id, n) => patch({ ['entries/' + id]: n > 0 ? Math.min(20, n) : null });
   const rankOrder = {}; NPC_RANKS.forEach((k, i) => { rankOrder[k.id] = i; });
   const free = Object.values(monsters).filter(m => m && m.id && !(enc.entries && enc.entries[m.id]))
@@ -479,7 +480,14 @@ function BstEncounterEditor({ enc, monsters, patch, onDuplicate, onRemove, onOpe
         </label>
         <span className="faint" style={{ fontSize:11, flex:1, minWidth:220, lineHeight:1.5 }}>
           La difficulté se lit par joueur : le miroir (un standard par joueur) est une rencontre dure.
+          {table && ' Mesurée contre ta table.'}
         </span>
+        {table && (r.partyLevel !== table.level || r.partySize !== table.n) && (
+          <button className="btn btn-sm btn-ghost" onClick={() => patch({ partyLevel: table.level, partySize: table.n })}
+            title="Reprend le niveau moyen et le nombre de joueurs présents de ta table">
+            ↧ Reprendre ma table (niv. {table.level}, {table.n} joueur{table.n > 1 ? 's' : ''})
+          </button>
+        )}
       </div>
 
       {/* Bilan */}
@@ -567,6 +575,64 @@ function BstEncounterEditor({ enc, monsters, patch, onDuplicate, onRemove, onOpe
   );
 }
 
+/* ---------- Référentiel « ma table » (lot 5) ----------
+   Stats PERMANENTES d'un PJ : base + modificateurs MJ + équipement + runes. Ni buffs, ni
+   passifs à compteurs, ni buffs de compétence — on veut la force de fond de la table, pas
+   l'état du combat en cours. */
+function bstPlayerStats(c, st) {
+  const level = (st && st.level != null ? st.level : c.level) || 1;
+  const runesSt = (st && st.runes) || {};
+  const itemMods = st ? sumItemMods(st.equipment, st.inventory, st.masteries, level) : {};
+  const runeMods = st ? sumRuneMods(Object.keys(runesSt.selected || {}).filter(id => runesSt.selected[id]),
+    runesSt.choices || {}, buildRuneIndex(RUNES), level) : {};
+  const eff = computeEffective(charBaseStats(c, st), st ? st.modifiers : c.modifiers, [], mergeMods(itemMods, runeMods));
+  return { level, hp: eff.hp, ad: eff.ad, ap: eff.ap, armure: eff.armure, resmag: eff.resmag, crit: eff.crit, dcrit: eff.dcrit, rescrit: eff.rescrit };
+}
+/* Monté SEULEMENT en mode « ma table » : c'est lui qui s'abonne aux fiches des PJ (hook de
+   staff, sans risque ici — la page est réservée au MJ). Remonte le référentiel par `onTable`. */
+function BstTableLoader({ absent, onTable }) {
+  const all = useAllCharStates();
+  const players = all ? CHARACTERS.filter(c => !absent[c.id]).map(c => bstPlayerStats(c, all[c.id] && all[c.id].state)) : null;
+  const key = players ? JSON.stringify(players) : 'chargement';
+  useEffect(() => { onTable(players ? npcTableRef(players) : null, !players); }, [key]);
+  useEffect(() => () => onTable(null, false), []);
+  return null;
+}
+function BstRefControl({ mode, setMode, absent, setAbsent, table, loading }) {
+  const q = table && table.ratios;
+  return (
+    <div className="col gap-2" style={{ padding:10, borderTop:'1px solid var(--line)' }}>
+      <div className="row" style={{ justifyContent:'space-between' }}>
+        <span className="overline">Référentiel</span>
+        <span className="row gap-1">
+          <button className={'btn btn-sm ' + (mode !== 'table' ? 'btn-gold' : 'btn-ghost')} style={{ padding:'3px 9px', fontSize:11 }}
+            onClick={() => setMode('theorique')} title="Moyenne des 5 profils, sans équipement ni runes">Théorique</button>
+          <button className={'btn btn-sm ' + (mode === 'table' ? 'btn-gold' : 'btn-ghost')} style={{ padding:'3px 9px', fontSize:11 }}
+            onClick={() => setMode('table')} title="Tes vrais PJ : équipement, runes et répartitions actuels">Ma table</button>
+        </span>
+      </div>
+      {mode === 'table' && (
+        <React.Fragment>
+          <div className="row gap-1 wrap">
+            {CHARACTERS.map(c => (
+              <button key={c.id} className={'btn btn-sm ' + (absent[c.id] ? 'btn-ghost' : 'btn-gold')}
+                title={absent[c.id] ? 'Absent : cliquer pour le compter' : 'Présent : cliquer pour le retirer'}
+                onClick={() => setAbsent(Object.assign({}, absent, { [c.id]: !absent[c.id] }))}
+                style={{ padding:'2px 8px', fontSize:10.5, opacity: absent[c.id] ? 0.55 : 1 }}>{c.name}</button>
+            ))}
+          </div>
+          <div className="mono faint" style={{ fontSize:10.5, lineHeight:1.6 }}>
+            {loading ? 'Chargement des fiches…' : !table ? 'Aucun joueur présent : retour au théorique.' : (
+              <span>Niv. {table.level} · {table.n} joueur{table.n > 1 ? 's' : ''} · face au théorique :<br />
+                PV {bstMult(q.hp)} · attaque {bstMult(q.atk)} · armure {bstMult(q.armure)} · RM {bstMult(q.resmag)}</span>
+            )}
+          </div>
+        </React.Fragment>
+      )}
+    </div>
+  );
+}
+
 function BestiairePage({ go }) {
   const toast = useToast();
   const { monsters, denied, addMonster, patchMonster, removeMonster } = useBestiary();
@@ -576,6 +642,14 @@ function BestiairePage({ go }) {
   const [sel, setSel] = useState(() => localStorage.getItem('runeterra_bestiaire_sel') || null);
   const [selEnc, setSelEnc] = useState(() => localStorage.getItem('runeterra_bestiaire_enc') || null);
   const [q, setQ] = useState('');
+  // Référentiel : théorique par défaut ; « ma table » ne fait que MESURER (cf. npcTableRef).
+  const [refMode, setRefModeRaw] = useState(() => localStorage.getItem('runeterra_bestiaire_ref') === 'table' ? 'table' : 'theorique');
+  const setRefMode = (v) => { setRefModeRaw(v); localStorage.setItem('runeterra_bestiaire_ref', v); };
+  const [absent, setAbsentRaw] = useState(() => { try { return JSON.parse(localStorage.getItem('runeterra_bestiaire_absents')) || {}; } catch (e) { return {}; } });
+  const setAbsent = (v) => { setAbsentRaw(v); localStorage.setItem('runeterra_bestiaire_absents', JSON.stringify(v)); };
+  const [tableState, setTableState] = useState({ table: null, loading: false });
+  const onTable = useCallback((t, loading) => setTableState({ table: t, loading: !!loading }), []);
+  const table = refMode === 'table' ? tableState.table : null;
   const select = (id) => { setSel(id); if (id) localStorage.setItem('runeterra_bestiaire_sel', id); };
   const selectEnc = (id) => { setSelEnc(id); if (id) localStorage.setItem('runeterra_bestiaire_enc', id); };
 
@@ -668,7 +742,7 @@ function BestiairePage({ go }) {
         {rencontres ? (
           <div className="col gap-1" style={{ padding:10, overflowY:'auto', flex:1, minHeight:0 }}>
             {encList.length === 0 && <div className="faint" style={{ fontSize:12, padding:6 }}>Aucune rencontre pour l'instant.</div>}
-            {encList.map(e => <BstEncounterRow key={e.id} enc={e} monsters={monsters} active={curEnc && curEnc.id === e.id} onClick={() => selectEnc(e.id)} />)}
+            {encList.map(e => <BstEncounterRow key={e.id} enc={e} monsters={monsters} active={curEnc && curEnc.id === e.id} onClick={() => selectEnc(e.id)} table={table} />)}
           </div>
         ) : (
           <div className="col gap-1" style={{ padding:10, overflowY:'auto', flex:1, minHeight:0 }}>
@@ -676,19 +750,21 @@ function BestiairePage({ go }) {
             {shown.map(m => <BstMonsterRow key={m.id} m={m} active={cur && cur.id === m.id} onClick={() => select(m.id)} />)}
           </div>
         )}
+        {refMode === 'table' && <BstTableLoader absent={absent} onTable={onTable} />}
+        <BstRefControl mode={refMode} setMode={setRefMode} absent={absent} setAbsent={setAbsent} table={table} loading={refMode === 'table' && tableState.loading} />
         <div style={{ padding:10, borderTop:'1px solid var(--line)' }}><BstExportImport /></div>
       </aside>
       <main style={{ minHeight:0, overflow:'auto' }}>
         {rencontres ? (curEnc
           ? <BstEncounterEditor key={curEnc.id} enc={curEnc} monsters={monsters} patch={(pt) => patchEncounter(curEnc.id, pt)}
-              onDuplicate={duplicateEnc} onRemove={removeEnc} go={go}
+              onDuplicate={duplicateEnc} onRemove={removeEnc} go={go} table={table}
               onOpenMonster={(id) => { select(id); setTab('fiches'); }} />
           : <div className="dim" style={{ padding:32, maxWidth:560, lineHeight:1.6 }}>
               {encList.length ? 'Choisis une rencontre à gauche, ou crée-en une nouvelle.' :
                 'Une rencontre regroupe des fiches du bestiaire avec leurs effectifs. Elle en estime la difficulté, la durée et l\'XP, et se pose en combat d\'un clic.'}
             </div>)
         : cur
-          ? <BstEditor key={cur.id} m={cur} patch={(pt) => patchMonster(cur.id, pt)} onDuplicate={duplicate} onRemove={remove} go={go} />
+          ? <BstEditor key={cur.id} m={cur} patch={(pt) => patchMonster(cur.id, pt)} onDuplicate={duplicate} onRemove={remove} go={go} table={table} />
           : <div className="dim" style={{ padding:32, maxWidth:560, lineHeight:1.6 }}>
               {list.length ? 'Choisis une fiche à gauche, ou crée-en une nouvelle.' :
                 'Le bestiaire est vide. Crée une première fiche : choisis un niveau, un rang et un archétype, les statistiques attendues se calculent seules, puis ajuste-les.'}

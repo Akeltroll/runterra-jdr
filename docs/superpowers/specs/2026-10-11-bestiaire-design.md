@@ -1,7 +1,6 @@
 # Bestiaire — atelier de création d'ennemis et de PNJ (design)
 
-Date : 2026-10-11. Statut : **design validé ; lots 1 à 4 codés le 2026-10-11** (journal du jour),
-lot 5 à faire.
+Date : 2026-10-11. Statut : **design validé ; les 5 lots sont codés (2026-10-11)**, détail dans le journal du jour.
 Décisions prises en discussion avec le MJ les 2026-10-10 et 2026-10-11.
 
 Cet onglet est aussi la réponse au point resté ouvert du plan des compétences :
@@ -52,9 +51,10 @@ Tout se mesure par rapport à un **PJ de référence** au niveau du monstre.
   lisent pas `data.jsx`.
 - **Au-delà du niveau 18** (« endgame ») : le budget de points est prolongé à la pente moyenne de
   `LEVELS` ; `escalationFactor` gère déjà la zone PNJ au-delà de 20 points.
-- **Option « ma table actuelle »** : remplace le référentiel théorique par la moyenne des stats
-  effectives réelles des PJ présents (`useAllCharStates`, hook de staff — sans risque ici, la page
-  est réservée au MJ). Le théorique reste le défaut.
+- **Option « ma table actuelle »** : mesure contre la moyenne des stats permanentes réelles des PJ
+  présents (`useAllCharStates`, hook de staff — sans risque ici, la page est réservée au MJ). Le
+  théorique reste le défaut. Précision arrêtée au lot 5 : l'option **mesure** (puissance réelle,
+  encaissé, bilan de rencontre) mais ne change pas les valeurs suggérées des fiches.
 
 Valeurs calculées avec le moteur du 2026-10-10 :
 
