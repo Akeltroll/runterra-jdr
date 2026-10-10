@@ -1667,15 +1667,32 @@
     return 1 + Math.floor(r * INIT_DIE);
   }
 
-  /* Une entree de score : { d6, bonus, ok, reroll }.
+  /* Une entree de score : { d6, bonus, ok, reroll } (+ `kit`, jamais en base).
      `d6`     = le jet (1..6), ecrit par le JOUEUR pour son perso, par le MJ pour les PNJ
-     `bonus`  = preparation au combat (-2..+2) + bonus personnels, ecrit par le MJ
+     `bonus`  = preparation au combat (-2..+2), ecrit par le MJ
      `ok`     = validation du MJ ; tant qu'elle manque le score n'entre pas en jeu
-     `reroll` = le MJ a refuse le jet et en demande un autre */
+     `reroll` = le MJ a refuse le jet et en demande un autre
+     `kit`    = bonus PERSONNEL porte par le kit (Urskaar, Voie de l'ours : +1). Il n'est
+                JAMAIS ecrit en base : `withKitInitiative` le pose a la lecture, depuis
+                `SKILLS[id].passive.initBonus`. Aucune regle RTDB n'a donc change. */
+  function initiativeBonus(entry) { return entry ? (entry.bonus | 0) + (entry.kit | 0) : 0; }
   function initiativeTotal(entry) {
     if (!entry || entry.d6 == null) return null;
     var d6 = Math.max(1, Math.min(INIT_DIE, entry.d6 | 0));
-    return d6 + (entry.bonus | 0);
+    return d6 + initiativeBonus(entry);
+  }
+  /* Scores lus en base + bonus de kit `{ id: n }` → scores enrichis de `kit`. Un combattant
+     sans entree en recoit une (vide) des qu'il a un bonus de kit, pour que le MJ le voie
+     AVANT le jet. Pur : ne modifie pas `scores`. */
+  function withKitInitiative(scores, kitBonus) {
+    scores = scores || {}; kitBonus = kitBonus || {};
+    var out = {};
+    Object.keys(scores).forEach(function (id) { out[id] = scores[id]; });
+    Object.keys(kitBonus).forEach(function (id) {
+      var n = kitBonus[id] | 0;
+      if (n) out[id] = Object.assign({}, scores[id] || {}, { kit: n });
+    });
+    return out;
   }
 
   /* 'idle'   : pas encore lance          'pending' : lance, attend le MJ
@@ -1860,7 +1877,7 @@
      le rejet exact : il n'y a jamais rien à défaire.
      ============================================================ */
 
-  var EFFECT_LABEL = { damage: 'Dégâts', heal: 'Soin', status: 'Effet' };
+  var EFFECT_LABEL = { damage: 'Dégâts', heal: 'Soin', status: 'Effet', boon: 'Bienfait' };
 
   /* Une compétence a-t-elle un effet sur son lanceur ? (buff, bouclier, compteur,
      transformation) — c'est ce qui donne son instance `status`. */
@@ -1885,6 +1902,9 @@
     var heal = typeof sk.heal === 'function' ? sk.heal(eff || {}, ctx || {}) : null;
     if (dmg != null) out.damage = Object.assign({ camp: 'any', min: 1, max: 1 }, over.damage);
     if (heal != null) out.heal = Object.assign({ camp: 'allies', min: 1, max: 1 }, over.heal);
+    // « Bienfait » : bouclier ou mana donné à UN AUTRE (C1 de Jett) — voir `buildCastPlan`.
+    var boon = typeof sk.boon === 'function' ? sk.boon(eff || {}, ctx || {}) : null;
+    if (boon != null) out.boon = Object.assign({ camp: 'allies', min: 1, max: 1 }, over.boon);
     if (hasSelfEffect(sk)) out.status = Object.assign({ camp: 'self', min: 1, max: 1 }, over.status);
     return out;
   }
@@ -1994,6 +2014,14 @@
   /* Le plan complet d'un cast : ce qu'il coûte, et la liste des instances à déposer
      dans la file du MJ. Pur — `opts.rng` rend les jets de critique déterministes.
      opts = { turn, base, wType, selfId, cdPrev, rng, narrative, level }
+     Champs optionnels d'une compétence lus ici (rangs 1 du 2026-10-10) :
+       noCrit            — la compétence ne roule pas le dé (Tir Ciblé, Salve) ;
+       critBonus(eff,ctx)— points de crit ajoutés pour CE cast (Attaque sournoise camouflée) ;
+       dmgType(eff,ctx)  — type de dégâts imposé, sinon celui de l'arme (poison de Jett) ;
+       dmgLabel(eff,ctx) — rappel porté par chaque instance de dégâts, lu par le MJ ;
+       selfHeal(eff,ctx,n) — soin du LANCEUR, n = nombre de cibles de dégâts (Salve) ;
+       boon(eff,ctx)     — bouclier `{shield}` ou mana `{manaPct}` donné à une cible alliée :
+                           instance `status` marquée `boon`, convertie par `resolveBoon`.
      ⚠️ Le coût dépend du NIVEAU (`opts.level`, à défaut `ctx.level`) : c'est le seul endroit
      où le plan le lit, et l'appelant doit payer exactement `cost.mana`. */
   function buildCastPlan(sk, eff, ctx, selection, opts) {
@@ -2003,20 +2031,27 @@
     var castLevel = opts.level != null ? opts.level : ctx.level;
     var instances = [], seq = 0;
     var dmg = typeof sk.dmg === 'function' ? sk.dmg(eff, ctx) : null;
+    var noCrit = !!(opts.noCrit || sk.noCrit);
+    var critPct = (eff.crit || 0) + (typeof sk.critBonus === 'function' ? (Number(sk.critBonus(eff, ctx)) || 0) : 0);
+    var dmgType = (typeof sk.dmgType === 'function' && sk.dmgType(eff, ctx)) || (magic ? 'magique' : 'physique');
+    var dmgLabel = typeof sk.dmgLabel === 'function' ? sk.dmgLabel(eff, ctx) : '';
+    var nDmg = dmg != null ? (selection.damage || []).length : 0;
     if (dmg != null) (selection.damage || []).forEach(function (tid) {
       // Un jet de critique PAR instance : trois cibles = trois jets, comme la salve
       // le faisait déjà. `opts.noCrit` sert aux modes d'attaque réduits (une gifle
-      // ne roule pas le dé — ruling MJ du 2026-09-06).
-      var cr = opts.noCrit ? { didCrit: false, multiplier: 1 }
-        : rollCrit(eff.crit || 0, eff.dcrit || 0, opts.rng);
-      instances.push({ seq: ++seq, kind: 'damage', targetId: tid,
+      // ne roule pas le dé — ruling MJ du 2026-09-06), `sk.noCrit` aux compétences sans crit.
+      var cr = noCrit ? { didCrit: false, multiplier: 1 }
+        : rollCrit(critPct, eff.dcrit || 0, opts.rng);
+      var inst = { seq: ++seq, kind: 'damage', targetId: tid,
         computedDmg: dmg, critDmg: Math.round(dmg * cr.multiplier),
         didCrit: cr.didCrit, critMult: cr.multiplier,
-        type: magic ? 'magique' : 'physique',
+        type: dmgType,
         letha: eff.letha || 0, lethaMag: eff.lethaMag || 0,
-        crit: opts.noCrit ? 0 : (eff.crit || 0), dcrit: eff.dcrit || 0,
+        crit: noCrit ? 0 : critPct, dcrit: eff.dcrit || 0,
         vol: eff.vol || 0, sapience: eff.sapience || 0, omni: eff.omni || 0,
-        hpMax: eff.hp || 0 });
+        hpMax: eff.hp || 0 };
+      if (dmgLabel) inst.label = dmgLabel;
+      instances.push(inst);
     });
     var heal = typeof sk.heal === 'function' ? sk.heal(eff, ctx) : null;
     if (heal != null) (selection.heal || []).forEach(function (tid) {
@@ -2025,6 +2060,19 @@
          ⚠️ Sur soi, le producteur compte seul (`sameActor`) : pas de double compte. */
       instances.push({ seq: ++seq, kind: 'heal', targetId: tid, amount: Math.max(0, Math.round(heal)),
         healBonus: eff.soins || 0, sameActor: tid === selfId, producerBuffs: opts.buffs || [] });
+    });
+    /* Soin du LANCEUR proportionnel au nombre de cibles (Salve du Corsaire). Producteur =
+       receveur : `soins` compté une fois. Le MJ ajuste le montant si une cible est manquée. */
+    var selfHeal = typeof sk.selfHeal === 'function' && nDmg > 0 ? sk.selfHeal(eff, ctx, nDmg) : null;
+    if (selfHeal) instances.push({ seq: ++seq, kind: 'heal', targetId: selfId, amount: Math.max(0, Math.round(selfHeal)),
+      healBonus: eff.soins || 0, sameActor: true, producerBuffs: opts.buffs || [],
+      label: 'pour ' + nDmg + ' cible' + (nDmg > 1 ? 's' : '') + ' touchée' + (nDmg > 1 ? 's' : '') + ' (ajuster si une cible est manquée)' });
+    /* Bienfait donné à un AUTRE (bouclier, mana). Côté producteur snapshoté, comme un soin ;
+       le côté receveur — et le mana max de la cible — sont lus par le MJ (`resolveBoon`). */
+    var boon = typeof sk.boon === 'function' ? sk.boon(eff, ctx) : null;
+    if (boon != null) (selection.boon || []).forEach(function (tid) {
+      instances.push(Object.assign({ seq: ++seq, kind: 'status', targetId: tid, boon: true,
+        healBonus: eff.soins || 0, sameActor: tid === selfId, producerBuffs: opts.buffs || [] }, boon));
     });
     var self = buildSelfEffect(sk, eff, ctx, opts);
     if (self) instances.push(Object.assign({ seq: ++seq, kind: 'status', targetId: selfId }, self));
@@ -2038,6 +2086,29 @@
       cost: { mana: skillManaCost(sk, castLevel), manaPer: skillManaPer(sk, castLevel),
         manaMax: Math.max(0, eff.mana | 0),
         cdPrev: opts.cdPrev != null ? opts.cdPrev : null } };
+  }
+
+  /* Convertit un BIENFAIT (instance `status` marquée `boon`) en ce que
+     `applyStatusToCharacter` sait écrire. Appelée par le MJ à la résolution : lui seul
+     connaît le receveur. receiver = { soins, buffs:[], manaMax }.
+       bouclier → `soins` producteur + receveur (une seule fois si c'est le même), comme un soin ;
+       mana     → `manaPct` % du mana max DU RECEVEUR, plafonné à ce max par l'orchestrateur. */
+  function resolveBoon(inst, receiver) {
+    inst = inst || {}; receiver = receiver || {};
+    var out = { label: inst.label || '' };
+    if (inst.shield) {
+      out.shield = applyHealBonus(Math.max(0, inst.shield | 0), { producerSoins: inst.healBonus || 0,
+        receiverSoins: receiver.soins || 0, sameActor: !!inst.sameActor,
+        producerBuffs: inst.producerBuffs || [], receiverBuffs: receiver.buffs || [] });
+      out.label = 'Bouclier de ' + out.shield;
+    }
+    if (inst.manaPct) {
+      var max = Math.max(0, receiver.manaMax | 0);
+      out.manaGain = Math.floor(max * inst.manaPct / 100 + 1e-9);
+      out.manaMax = max;
+      out.label = '+' + out.manaGain + ' mana';
+    }
+    return out;
   }
 
   /* Remboursement d'une action rejetée. `mode` :
@@ -2097,57 +2168,82 @@
     return (Number(level) || 0) >= (Number(index) || 0) + 1;
   }
 
-  /* --- Elias (Fab.gs) : passif Instinct du Chasseur (AD plat par charge) --- */
-  function eliasPassiveAD(level) { return 10 + 5 * ((level || 1) - 1); }
-  function eliasMaxStacks(level) { return 5 + Math.floor(((level || 1) - 1) / 3); }
-  function dmgEliasC1(wType, eff, firstHit) {
-    let d = skillBaseDamage(wType, eff);
-    if (firstHit) d = Math.floor(d * 1.25);
-    return d;
+  /* --- Elias : passif Instinct du Chasseur (réécrit le 2026-10-10) ---
+     6 % de son AD de BASE par charge (c'était 10 + 5/niveau en plat : +121 % d'AD au niveau 18).
+     Charges max : 5 + 1 tous les 4 niveaux (5 / 6 / 7 / 8 / 9 aux niveaux 1 / 5 / 9 / 13 / 17).
+     ⚠️ AD de BASE (`charBaseStats`), pas l'AD effective : le passif ne se nourrit ni de
+     l'équipement ni de lui-même. Non amélioré par les rangs. */
+  var ELIAS_PASSIVE_PCT = 6;
+  function eliasMaxStacks(level) { return 5 + Math.floor(((level || 1) - 1) / 4); }
+  function eliasPassiveAD(baseAd, stacks) {
+    return Math.floor((Number(baseAd) || 0) * ELIAS_PASSIVE_PCT * Math.max(0, stacks | 0) / 100 + 1e-9);
   }
-  function dmgEliasC2(eff) { return Math.floor(50 + (eff.ad || 0)); }
-  function dmgEliasC3(eff) { return Math.floor(100 + 1.5 * (eff.ad || 0)); }
-  function dmgEliasC4(eff, nbTargets) { return Math.floor(50 + 2.0 * (eff.ad || 0)); }
+  /* ⚠️ RANGS 1 DU RÉÉQUILIBRAGE (2026-10-10, plan `2026-10-10-competences-patchs-a-appliquer.md` §2).
+     Les dégâts de compétence sont en % d'AD/AP, SANS bonus fixe : les ratios ci-dessous ont
+     DÉJÀ reçu la conversion ×0,6. Quatre exceptions voulues par le MJ : Attaque sournoise,
+     Frappe Irritée, Flétrissement (non converties) et Éclat de l'âme (×0,9). Ne pas les
+     « réaligner ». `pctOf` calcule en pourcentages ENTIERS : `ad × (0.72 + 0.18)` en flottant
+     peut rendre 89,99 et perdre un point au `floor`. */
+  function pctOf(v, pct) { return Math.floor((Number(v) || 0) * pct / 100 + 1e-9); }
+
+  function dmgEliasC1(eff, firstHit) {          // Tir Ciblé : 66 % AD, sans crit ; 1er coup +25 %
+    const d = pctOf(eff.ad, 66);
+    return firstHit ? Math.floor(d * 1.25) : d;
+  }
+  function dmgEliasC2(eff) { return pctOf(eff.ad, 66); }                          // Dash : s'il finit au corps à corps
+  function dmgEliasC3(eff, melee) { return pctOf(eff.ad, melee ? 84 : 96); }     // Frappe Duale : mêlée / distance
+  function dmgEliasC4(eff) { return pctOf(eff.ad, 78); }                          // Salve : par cible, sans crit
+  /* Salve : soin de 8 % de SES PV max par cible touchée (remplace « 5 % du total »). */
+  function eliasC4Heal(eff, nbTargets) { return pctOf((eff.hp || 0) * Math.max(0, nbTargets | 0), 8); }
   function skillHeal(total, pct) { return Math.floor((total || 0) * (pct || 0)); }
 
   /* --- Smith (Erwan.gs) --- */
-  function dmgSmithPassif(eff) { return Math.floor(50 + 0.5 * (eff.ap || 0)); }
-  function dmgSmithC1(wType, eff, furtif) {
-    let d = skillBaseDamage(wType, eff);
-    if (furtif) d = Math.floor(d * 1.5);
-    return d;
+  function dmgSmithPassif(eff) { return Math.floor(50 + 0.5 * (eff.ap || 0)); }   // Flétrissement : NON converti
+  /* Attaque sournoise : un MULTIPLE DE L'ATTAQUE DE BASE (60 % des dégâts d'arme), pas un ratio
+     propre. ×1 normale · ×1,5 camouflé · ×2 cible marquée · ×4,5 marquée ET camouflée (le
+     produit serait ×3 : le ×4,5 est une décision MJ, pas une erreur).
+     ⚠️ Elle passe par `skillBaseDamage`, pas par le profil d'arme : elle ne subit ni le ratio
+     des mini-armes ni le malus de maîtrise, comme avant. */
+  function smithC1Mult(furtif, marked) { return furtif && marked ? 4.5 : (marked ? 2 : (furtif ? 1.5 : 1)); }
+  function dmgSmithC1(wType, eff, furtif, marked) {
+    return Math.floor(skillBaseDamage(wType, eff) * BASIC_ATTACK_RATIO * smithC1Mult(furtif, marked) + 1e-9);
   }
-  function dmgSmithC3(eff) { return Math.floor(50 + (eff.ad || 0)); }
-  function smithBleedPct(eff) { return 5 + Math.floor((eff.ad || 0) / 100) * 5; }
+  function smithC1CritBonus(furtif) { return furtif ? 30 : 0; }   // +30 points de crit sous camouflage
+  function dmgSmithC3(eff) { return pctOf(eff.ad, 72); }           // Chaînes : la cible choisie
+  /* Saignement des Chaînes : 20 % de l'AD par tour, en dégâts BRUTS (un NOMBRE, plus un % :
+     l'ancien `smithBleedPct` « 5 % + 5 %/100 AD » est abandonné). Non converti. */
+  function smithBleed(eff) { return pctOf(eff.ad, 20); }
 
-  /* --- Urskaar (Baptiste.gs + kit C3/C4) : Voie de l'ours --- */
+  /* --- Urskaar (Baptiste.gs + kit C3/C4) : Voie de l'ours ---
+     ⚠️ La TRANCHE se compte sur le déplacement ANNONCÉ (« a l'intention de parcourir X cases »),
+     partout : 1 tranche à 5 cases, +1 par 3 cases (règle G7). */
+  /* Passif : bonus de l'ATTAQUE DE BASE, en % de l'attaque de base (pas de l'AD) —
+     +50 % à 5 cases annoncées, +25 % par tranche de 3 cases en plus. */
   function bearBonusPct(moved) {
     if (moved < 5) return 0;
-    return 150 + Math.floor((moved - 5) / 3) * 25;
+    return 50 + Math.floor((moved - 5) / 3) * 25;
   }
   function bearTranches(moved) {
     if (moved < 5) return 0;
     return 1 + Math.floor((moved - 5) / 3);
   }
+  /* C1 : la gauche est le coup de dégâts (72 % AD + 18 %/tranche), la droite le coup de
+     contrôle (54 % AD + 6 %/tranche, étourdit à 50 % + 10 %/tranche). */
   function dmgUrskaarC1(eff, side, moved) {
-    const base = Math.floor(eff.ad || 0);
-    if (side === 'droite') {
-      const pct = Math.max(150, bearBonusPct(moved));
-      return Math.floor(base * (pct / 100));
-    }
-    return base;
-  }
-  function dmgUrskaarC2(eff, moved) {
     const t = bearTranches(moved);
-    return Math.floor((eff.ad || 0) * (1.5 + 0.25 * t));
+    return side === 'droite' ? pctOf(eff.ad, 54 + 6 * t) : pctOf(eff.ad, 72 + 18 * t);
   }
+  function urskaarStunPct(moved) { return Math.min(100, 50 + 10 * bearTranches(moved)); }
+  function dmgUrskaarC2(eff, moved) { return pctOf(eff.ad, 90 + 15 * bearTranches(moved)); }
+  /* C3 : bouclier de 30 % des PV max + 20 % par 50 AP — calcul CONTINU (0,4 % par point d'AP),
+     non converti. */
   function urskaarC3Shield(eff, hpMax) {
-    return Math.floor((0.30 + 0.10 * ((eff.ap || 0) / 50)) * (hpMax || 0));
+    return Math.floor((0.30 + 0.20 * ((eff.ap || 0) / 50)) * (hpMax || 0) + 1e-9);
   }
-  function dmgUrskaarC4(eff, moved) {
-    const t = bearTranches(moved);
-    return Math.floor((eff.ad || 0) * (1 + 0.25 * t));
-  }
+  /* C4 : piétinement par unité traversée. Un allié adjacent qui rate sa sauvegarde subit le
+     QUART de ce qu'un ennemi subirait (10,5 % AD + 3 %/tranche). */
+  function dmgUrskaarC4(eff, moved) { return pctOf(eff.ad, 42 + 12 * bearTranches(moved)); }
+  function dmgUrskaarC4Ally(eff, moved) { return pctOf(eff.ad, 10.5 + 3 * bearTranches(moved)); }
 
   /* --- Jett (Steph.gs) : Nano-hextech --- */
   function jettEngins(eff, isCrit) {
@@ -2159,40 +2255,86 @@
     if (ad >= 375) n++;
     return isCrit ? n * 2 : n;
   }
-  function dmgJettPoison(eff) { return Math.floor(25 + 0.5 * (eff.ap || 0)); }
-  function dmgJettForce(eff) { return Math.floor(25 + 0.5 * (eff.ad || 0)); }
-  function dmgJettC2(eff) { return Math.floor(50 + 0.5 * (eff.ad || 0)); }
-  function healJettC2(eff) { return Math.floor(50 + 1.0 * (eff.ap || 0)); }
+  function dmgJettPoison(eff) { return 15 + pctOf(eff.ap, 30); }
+  function dmgJettForce(eff) { return 15 + pctOf(eff.ad, 30); }
+  function dmgJettC2(eff) { return pctOf(eff.ad, 36); }
+  function healJettC2(eff) { return 40 + pctOf(eff.ap, 80); }
+  /* C1 Remodulation : trois tirages de SOUTIEN (non convertis). */
+  function healJettC1(eff) { return 20 + pctOf(eff.ap, 40); }
+  function shieldJettC1(eff) { return 25 + pctOf(eff.ap, 50); }
+  /* Mana rendu : 15 % du mana max DE LA CIBLE + 1 % par 40 AP (continu). Le lanceur ne connaît
+     pas le mana max d'un autre PJ (fiches cloisonnées) : il n'envoie que le POURCENTAGE, le MJ
+     le convertit à la résolution (`resolveBoon`). */
+  function jettC1ManaPct(eff) { return 15 + (Number(eff.ap) || 0) / 40; }
+  /* Les 10 configurations, tirées à chance ÉGALE (réglage provisoire du MJ, 2026-10-10).
+     `kind` : narrative (effet en table) · damage · heal · shield · mana. */
+  var JETT_C1_EFFECTS = [
+    { id: 'champ',        label: 'Champ électrique', kind: 'narrative' },
+    { id: 'poison',       label: 'Poison',           kind: 'damage', stat: 'ap', dmgType: 'magique' },
+    { id: 'duplication',  label: 'Duplication',      kind: 'narrative' },
+    { id: 'flash',        label: 'Flash',            kind: 'narrative' },
+    { id: 'repoussement', label: 'Repoussement',     kind: 'damage', stat: 'ad', dmgType: 'physique' },
+    { id: 'attraction',   label: 'Attraction',       kind: 'damage', stat: 'ad', dmgType: 'physique' },
+    { id: 'fumigene',     label: 'Fumigène',         kind: 'narrative' },
+    { id: 'soin',         label: 'Soin',             kind: 'heal' },
+    { id: 'bouclier',     label: 'Bouclier',         kind: 'shield' },
+    { id: 'mana',         label: 'Mana',             kind: 'mana' },
+  ];
+  function jettC1Effect(id) {
+    for (var i = 0; i < JETT_C1_EFFECTS.length; i++) if (JETT_C1_EFFECTS[i].id === id) return JETT_C1_EFFECTS[i];
+    return null;
+  }
+  function jettC1Roll(rng) {
+    var r = (rng || Math.random)();
+    return JETT_C1_EFFECTS[Math.min(JETT_C1_EFFECTS.length - 1, Math.floor(r * JETT_C1_EFFECTS.length))].id;
+  }
+  /* Ce que vaut la configuration tirée, effet par effet (null = cet effet n'existe pas). */
+  function jettC1Damage(eff, config) {
+    var e = jettC1Effect(config);
+    if (!e || e.kind !== 'damage') return null;
+    return e.stat === 'ap' ? dmgJettPoison(eff) : dmgJettForce(eff);
+  }
+  function jettC1Heal(eff, config) { return config === 'soin' ? healJettC1(eff) : null; }
+  function jettC1Boon(eff, config) {
+    if (config === 'bouclier') { var sh = shieldJettC1(eff); return { shield: sh, label: 'Bouclier de ' + sh }; }
+    if (config === 'mana') {
+      var p = Math.round(jettC1ManaPct(eff) * 10) / 10;
+      return { manaPct: p, label: 'Mana : ' + String(p).replace('.', ',') + ' % de son mana max' };
+    }
+    return null;
+  }
 
-  /* --- Rathael : Chair gelée, âme fendue (le SCRIPT prime sur la description) ---
-     C1 Frappe Irritée (rééquilibrée) =
-       25 + (30% + 5%/4 niv) AD + (40% + 5%/2 niv) (Armure+RM), × (1 + 0,20 × charges).
-     charges = compteur de Glaciation (0..5) ; +100% à 5 charges. Paliers = floor(niv/N). */
-  function dmgRathaelC1(eff, charges, level) {
+  /* --- Rathael : Chair gelée, âme fendue ---
+     C1 Frappe Irritée (rang 1 du 2026-10-10, NON convertie) =
+       50 % AD × (1 + 0,01 × %PV manquants + 0,20 × charges).
+     Plus de terme Armure+RM, plus de bonus fixe, plus de scaling par niveau : « fiable mais
+     faible, modérée quand il est mal en point ». À froid elle fait MOINS qu'une attaque de
+     base (0,5 contre 0,6), c'est voulu. charges = Glaciation (0..5). */
+  function missingHpPct(hpCur, hpMax) {
+    hpMax = Number(hpMax) || 0;
+    if (hpCur == null || hpMax <= 0) return 0;
+    return Math.max(0, Math.min(100, 100 * (1 - (Number(hpCur) || 0) / hpMax)));
+  }
+  function dmgRathaelC1(eff, charges, missingPct) {
     const ad = (eff && eff.ad) || 0;
-    const armure = (eff && eff.armure) || 0;
-    const rm = (eff && eff.resmag) || 0;
-    const lv = Math.max(1, level | 0);
-    const adRatio = 0.30 + 0.05 * Math.floor(lv / 4);
-    const arRatio = 0.40 + 0.05 * Math.floor(lv / 2);
-    const base = 25 + Math.floor(ad * adRatio) + Math.floor((armure + rm) * arRatio);
-    const mult = 1 + 0.20 * Math.max(0, Math.min(5, charges | 0));
-    return Math.floor(base * mult);
+    const miss = Math.max(0, Math.min(100, Number(missingPct) || 0));
+    const mult = 1 + 0.01 * miss + 0.20 * Math.max(0, Math.min(5, charges | 0));
+    return Math.floor(ad * 0.5 * mult + 1e-9);
   }
 
   /* C2 Mur de Givre : Armure/RM accordés = 15 + 5/2 niv (floor(niv/2)). Valeur unique pour AR et RM. */
   function rathaelC2Buff(level) { return 15 + 5 * Math.floor(Math.max(1, level | 0) / 2); }
 
   /* C3 Éclat de l'âme : dégâts magiques AoE qui consomment toutes les charges de Glaciation.
-     base = 50 + 60% AP + (50% + 10%/2 niv) (Armure+RM) ;
+     base = 54 % AP + (45 % + 9 %/2 niv) (Armure+RM) — rang 1 du 2026-10-10 : bonus fixe retiré,
+     puis conversion ×0,9 (exception MJ, pas ×0,6) ;
      chaque charge ajoute +50% de la base (max +250% à 5 charges → ×3,5). */
   function dmgRathaelC3(eff, charges, level) {
     const ap = (eff && eff.ap) || 0;
     const armure = (eff && eff.armure) || 0;
     const rm = (eff && eff.resmag) || 0;
     const lv = Math.max(1, level | 0);
-    const arRatio = 0.50 + 0.10 * Math.floor(lv / 2);
-    const base = 50 + Math.floor(ap * 0.60) + Math.floor((armure + rm) * arRatio);
+    const base = pctOf(ap, 54) + pctOf(armure + rm, 45 + 9 * Math.floor(lv / 2));
     const mult = 1 + 0.50 * Math.max(0, Math.min(5, charges | 0));
     return Math.floor(base * mult);
   }
@@ -2231,13 +2373,16 @@
   }
 
   /* Passif calculable → mods plats (mergés dans computeEffective).
-     Elias (AD/charge, plat) et Rathael (Armure/RM +10%/charge des stats de BASE). */
+     Elias (6 % de l'AD de BASE par charge) et Rathael (Armure/RM +10%/charge des stats de BASE). */
   function sumPassiveMods(charId, counters, level, base) {
     counters = counters || {};
     if (charId === 'lunick') { // Elias — Instinct du Chasseur
-      const stacks = Math.max(0, counters.chasseur | 0);
-      if (!stacks) return {};
-      return { ad: stacks * eliasPassiveAD(level) };
+      // Charges plafonnées au max du NIVEAU : le plafond a baissé le 2026-10-10, un compteur
+      // resté au-dessus en base ne doit pas donner plus que la règle.
+      const stacks = Math.min(eliasMaxStacks(level), Math.max(0, counters.chasseur | 0));
+      if (!stacks || !base) return {};
+      const ad = eliasPassiveAD(base.ad, stacks);
+      return ad ? { ad: ad } : {};
     }
     if (charId === 'rathael') { // Chair gelée — +10%/charge des AR/RM de BASE
       const charges = Math.max(0, Math.min(5, counters.glaciation | 0));
@@ -2753,7 +2898,7 @@
     runePickOptions, runeHasPick, runePickCount, runePickKeys, runePickedOptions, runePickToggle, runePickGroup,
     mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, critMultAfterResist, enemyPublicView,
     combatantSide, isAlly, splitCombatants,
-    INIT_DIE, rollInitiative, initiativeTotal, initiativeStatus, initiativeReady,
+    INIT_DIE, rollInitiative, initiativeTotal, initiativeBonus, withKitInitiative, initiativeStatus, initiativeReady,
     combatantJoinRound, initiativeJoinOnValidate, initiativeSlots, slotParticipants, initiativeState,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     EFFECT_LABEL, hasSelfEffect, skillTargeting, castSelectionValid, buildSelfEffect,
@@ -2765,8 +2910,10 @@
     equipSlotCheck, weaponCatLabel,
     LOT2_ATTACK_PROPS, weaponCdKey, weaponPropSources, weaponActiveSource, weaponActiveProps,
     weaponAttackTargeting, buildWeaponAttack, buildFocalisation, LOT3_ASSISTED_PROPS, buildParade,
-    eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, skillHeal,
-    dmgSmithPassif, dmgSmithC1, dmgSmithC3, smithBleedPct,
+    eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, eliasC4Heal, skillHeal,
+    dmgSmithPassif, dmgSmithC1, smithC1Mult, smithC1CritBonus, dmgSmithC3, smithBleed,
+    urskaarStunPct, dmgUrskaarC4Ally, missingHpPct, resolveBoon,
+    healJettC1, shieldJettC1, jettC1ManaPct, JETT_C1_EFFECTS, jettC1Effect, jettC1Roll, jettC1Damage, jettC1Heal, jettC1Boon,
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,

@@ -230,7 +230,16 @@ function useAllHp() {
 function useInitiative(combatants, round) {
   const [node, setNode] = useState(null);
   useEffect(() => window.RTDB.subscribePath(INITIATIVE, (v) => setNode(v || {})), []);
-  const scores = (node && node.scores) || {};
+  /* Bonus d'initiative PORTÉS PAR LE KIT (Urskaar, Voie de l'ours : +1), ajoutés à la lecture
+     par `withKitInitiative` — jamais écrits : un joueur n'a le droit d'écrire que son `d6`,
+     et le MJ garde `bonus` pour les circonstances. Tout ce qui lit `scores` (créneaux, cartes,
+     éditeur du MJ) voit donc le bonus sans rien savoir du kit. */
+  const kitInit = {};
+  Object.keys(window.SKILLS || {}).forEach(id => {
+    const n = ((window.SKILLS[id] || {}).passive || {}).initBonus;
+    if (n) kitInit[id] = n;
+  });
+  const scores = withKitInitiative((node && node.scores) || {}, kitInit);
   const done = (node && node.done) || {};
   const ko = (node && node.ko) || {};
   const joinRound = (node && node.joinRound) || {};

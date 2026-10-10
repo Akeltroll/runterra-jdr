@@ -14,7 +14,9 @@
    plus de désaccord possible entre un « 3 » tapé et une seule cible réellement choisie. */
 const SKILL_VARS = {
   tir_cible: ['firstHit'],
-  attaque_sournoise: ['furtif'],
+  attaque_sournoise: ['furtif', 'marked'],
+  frappe_duale: ['melee'],
+  remodulation: ['config'],
   pugilat: ['side', 'moved'],
   ecrasement: ['moved'],
   demi_ours: ['moved'],
@@ -25,6 +27,7 @@ const EFFECT_TONE = {
   damage: { ic: '🔴', ink: 'var(--hp)' },
   heal:   { ic: '🟢', ink: 'var(--buff)' },
   status: { ic: '🟠', ink: 'var(--skillbuff)' },
+  boon:   { ic: '🟠', ink: 'var(--skillbuff)' },   // bouclier / mana donné à un autre
 };
 
 /* Une ligne de ciblage : un effet, ses cibles choisies, un « + ajouter » filtré par camp.
@@ -93,7 +96,9 @@ const CD_LOCKED = 999999; // sentinelle « 1×/combat » (débloqué par Nouveau
    Ailes de Givre). `buildCastPlan` en fait une instance NARRATIVE, sans quoi ces comps
    — 40 à 100 mana, cooldown long — écriraient une action vide et resteraient hors du
    contrôle du MJ, ce qui serait pire qu'avant la refonte. */
-function narrativeLabel(sk) {
+function narrativeLabel(sk, ctx) {
+  // Une compétence peut nommer elle-même son effet en table (configuration tirée de Jett).
+  if (sk && typeof sk.narrative === 'function') return sk.narrative(ctx || {});
   const first = String((sk && sk.note) || '').split('.')[0].trim();
   return first ? (first.length > 110 ? first.slice(0, 110) + '…' : first) : (sk && sk.name) || 'Effet géré en table';
 }
@@ -108,7 +113,9 @@ function instanceSummary(instances, nameOf) {
   const parts = [];
   if (dmg.length) parts.push(`${dmg[0].computedDmg} dégâts → ${dmg.map(i => nameOf(i.targetId)).join(', ')}`);
   if (heal.length) parts.push(`${heal[0].amount} soin → ${heal.map(i => nameOf(i.targetId)).join(', ')}`);
-  if (st.length) parts.push(st[0].narrative ? 'effet en table' : `sur soi : ${st[0].label}`);
+  if (st.length) parts.push(st[0].narrative ? 'effet en table'
+    : st[0].boon ? `${st[0].label} → ${st.map(i => nameOf(i.targetId)).join(', ')}`
+    : `sur soi : ${st[0].label}`);
   return parts.join(' · ');
 }
 
@@ -348,13 +355,22 @@ function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
             ) : null}
           </div>
         )}
+        {/* Aide-mémoire du passif (Elias : « toutes les cibles touchées ») : un simple drapeau dans
+            `counters`, donc remis à zéro par « ⟲ Combat ». AUCUN effet sur le calcul. */}
+        {p.flag && (
+          <label className="row gap-2" style={{ alignItems: 'center', marginTop: 10, fontSize: 12.5, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!counters[p.flag.key]} onChange={e => setCounter(p.flag.key, e.target.checked ? 1 : 0)} />
+            {p.flag.label}
+            <span className="faint" style={{ fontSize: 11.5 }}>· aide-mémoire, sans effet sur le calcul</span>
+          </label>
+        )}
       </div>
     </div>
   );
 }
 
 function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast, locked, minLevel, pools }) {
-  const [vars, setVars] = useState({ firstHit: false, furtif: false, side: 'droite', moved: 0, duration: (sk.duration ? sk.duration.min : 1) });
+  const [vars, setVars] = useState({ firstHit: false, furtif: false, marked: false, melee: false, config: '', side: 'droite', moved: 0, duration: (sk.duration ? sk.duration.min : 1) });
   /* Sélection de cibles PAR EFFET, état LOCAL et non persisté : c'est un choix par
      lancement, comme les variables d'attaque. Vidée après chaque cast réussi. */
   const [sel, setSel] = useState({});
@@ -377,6 +393,9 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
   const dmg = sk.dmg ? sk.dmg(eff, ctx) : null;
   const shield = sk.shield ? sk.shield(eff, ctx) : null;
   const heal = sk.heal ? sk.heal(eff, ctx) : null;
+  const boon = sk.boon ? sk.boon(eff, ctx) : null;
+  // Rappels chiffrés propres à la compétence (saignement, chance d'étourdir, soin par cible…).
+  const infos = typeof sk.info === 'function' ? (sk.info(eff, ctx) || []).filter(Boolean) : [];
   // Ciblage : dérivé des champs de la compétence, surchargeable par `sk.targeting`.
   // Recalculé à chaque rendu parce qu'il dépend de `ctx` (une comp dont les dégâts
   // tombent à null selon une variable perd sa ligne « Dégâts »).
@@ -409,7 +428,20 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
         {(needed.length > 0 || sk.duration) && (
           <div className="row gap-3" style={{ flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
             {needed.includes('firstHit') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={vars.firstHit} onChange={e => setVars(s => ({ ...s, firstHit: e.target.checked }))} /> 1er coup (+25%)</label>}
-            {needed.includes('furtif') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={vars.furtif} onChange={e => setVars(s => ({ ...s, furtif: e.target.checked }))} /> Camouflé (×1,5)</label>}
+            {needed.includes('furtif') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={vars.furtif} onChange={e => setVars(s => ({ ...s, furtif: e.target.checked }))} /> Camouflé</label>}
+            {needed.includes('marked') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={vars.marked} onChange={e => setVars(s => ({ ...s, marked: e.target.checked }))} /> Cible marquée</label>}
+            {needed.includes('melee') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}><input type="checkbox" checked={vars.melee} onChange={e => setVars(s => ({ ...s, melee: e.target.checked }))} /> En mêlée (marque)</label>}
+            {needed.includes('config') && (
+              <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Configuration
+                {/* Le tirage change les effets, donc les cibles possibles : la sélection repart de zéro. */}
+                <select value={vars.config} onChange={e => { const v = e.target.value; setVars(s => ({ ...s, config: v })); setSel({}); }} style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }}>
+                  <option value="">— à tirer —</option>
+                  {JETT_C1_EFFECTS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
+                </select>
+                <button className="btn btn-sm btn-ghost" title="Tire une des 10 configurations, à chance égale"
+                  onClick={() => { const v = jettC1Roll(); setVars(s => ({ ...s, config: v })); setSel({}); }}>🎲 Tirer</button>
+              </label>
+            )}
             {needed.includes('side') && (
               <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Frappe
                 <select value={vars.side} onChange={e => setVars(s => ({ ...s, side: e.target.value }))} style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }}>
@@ -417,7 +449,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
                 </select>
               </label>
             )}
-            {needed.includes('moved') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Cases <input type="number" min="0" value={vars.moved} onChange={e => setVars(s => ({ ...s, moved: Math.max(0, e.target.value | 0) }))} style={{ width: 56, background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }} /></label>}
+            {needed.includes('moved') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }} title="Déplacement ANNONCÉ pour ce tour : 1 tranche à 5 cases, +1 par 3 cases">Cases annoncées <input type="number" min="0" value={vars.moved} onChange={e => setVars(s => ({ ...s, moved: Math.max(0, e.target.value | 0) }))} style={{ width: 56, background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }} /></label>}
             {sk.duration && (
               <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Durée
                 <select value={vars.duration} onChange={e => setVars(s => ({ ...s, duration: Math.max(sk.duration.min, Math.min(sk.duration.max, e.target.value | 0)) }))} style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }}>
@@ -437,7 +469,8 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
                 selected={sel[k] || []} onChange={(next) => setSel(s => Object.assign({}, s, { [k]: next }))}
                 detail={k === 'damage' && dmg != null
                   ? `${dmg} par cible${total != null ? ` · total ${total}` : ''}`
-                  : (k === 'heal' && heal != null ? `${heal} par cible` : '')} />
+                  : (k === 'heal' && heal != null ? `${heal} par cible`
+                    : (k === 'boon' && boon ? boon.label : ''))} />
             ))}
           </div>
         )}
@@ -456,13 +489,15 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
               </span>
             ) : shield != null ? (
               <span className="mono" style={{ fontSize: 22, color: 'var(--gold)', fontWeight: 700 }}>{shield}<span style={{ fontSize: 12, color: 'var(--faint)' }}> bouclier</span></span>
-            ) : (
+            ) : heal != null || boon ? null : (
               <span className="faint" style={{ fontSize: 13 }}>Utilitaire (pas de dégât direct)</span>
             )}
             {heal != null && <span className="mono" style={{ fontSize: 12.5, color: 'var(--buff)' }}>soin allié {heal}</span>}
+            {boon && <span className="mono" style={{ fontSize: 12.5, color: 'var(--skillbuff)' }}>{boon.label}</span>}
+            {infos.map((t, i) => <span key={i} className="mono faint" style={{ fontSize: 11.5 }}>{t}</span>)}
           </div>
           <button className="btn btn-gold"
-            onClick={() => { if (onCast(ctx, sel)) setSel({}); }}
+            onClick={() => { if (onCast(ctx, sel)) { setSel({}); if (vars.config) setVars(s => ({ ...s, config: '' })); } }}
             disabled={!ready || !enoughMana || !check.ok}
             title={!enoughMana ? 'Pas assez de mana' : (!ready ? 'En cooldown' : (check.ok ? '' : check.reason))}>Lancer</button>
         </div>
@@ -668,7 +703,9 @@ function CompetencesBody({ char, staff }) {
   const profile = basicAttackProfile(weaponLoadout(state.equipment, state.inventory),
     state.masteries, eff, weaponChoice);
   const wType = profile.wType;
-  const baseCtx = { counters, level, wType, hpMax: base.hp };
+  // `hpCur` : PV actuels du lanceur, pour la Frappe Irritée de Rathäel (% de PV manquants,
+  // rapportés à `eff.hp`). `hpMax` reste le PV de BASE (bouclier d'Urskaar, ultime de Rathäel).
+  const baseCtx = { counters, level, wType, hpMax: base.hp, hpCur: state.hpCur != null ? state.hpCur : null };
   // Setters de ressources : même contrat que la fiche (valeur ou updater), pour que
   // ConsumablesRow soit branchable des deux côtés sans variante.
   const setHp   = (v) => setField('hpCur',   typeof v === 'function' ? v(state.hpCur || 0) : v);
@@ -718,7 +755,7 @@ function CompetencesBody({ char, staff }) {
     // Cooldown d'AVANT le cast : snapshoté pour le remboursement si le MJ annule.
     const cdPrev = cooldowns[sk.id] != null ? cooldowns[sk.id] : null;
     const plan = buildCastPlan(sk, eff, ctx, selection,
-      { turn, base, selfId: char.id, wType, cdPrev, buffs: activeBuffs, narrative: narrativeLabel(sk), level });
+      { turn, base, selfId: char.id, wType, cdPrev, buffs: activeBuffs, narrative: narrativeLabel(sk, ctx), level });
     // Paiement AVANT dépôt : sinon la compétence est relançable pendant que le MJ arbitre.
     setField('manaCur', manaCur - cost);
     setCooldown(sk.id, sk.kind === 'combat' ? CD_LOCKED : nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));

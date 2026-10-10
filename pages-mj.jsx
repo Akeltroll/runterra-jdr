@@ -216,7 +216,8 @@ const INI_SIDE_COLOR = { pj: 'var(--gold)', ally: 'var(--buff)', enemy: 'var(--d
 /* Score en clair : « 4+1 » / « 4−1 » / « 4 » (spec §2.1 — deux champs, total dérivé). */
 function iniScoreLabel(entry) {
   if (!entry || entry.d6 == null) return '—';
-  const b = entry.bonus | 0;
+  // Bonus du MJ + bonus de kit (Urskaar +1), confondus : c'est ce qui s'ajoute au dé.
+  const b = initiativeBonus(entry);
   return String(entry.d6) + (b > 0 ? '+' + b : b < 0 ? '−' + Math.abs(b) : '');
 }
 
@@ -269,15 +270,18 @@ function IniRow({ id, meta, entry, isDone, participant, onToggle, onDragStart, o
 function IniScoreEditor({ entry, onSetBonus, onCancel, joinRound, round, onSetJoinRound }) {
   const d6 = entry && entry.d6 != null ? entry.d6 : null;
   const bonus0 = (entry && entry.bonus | 0) || 0;
+  // Bonus de KIT (Urskaar +1) : compté tout seul, jamais écrit. Le champ « Bonus » reste la
+  // seule part du MJ ; le créneau affiché et le placement direct en tiennent compte.
+  const kit = (entry && entry.kit | 0) || 0;
   const join0 = joinRound == null ? '' : String(Math.max(1, joinRound | 0));
   const [b, setB] = useState(String(bonus0));
-  const [slot, setSlot] = useState(String(d6 != null ? d6 + bonus0 : ''));
+  const [slot, setSlot] = useState(String(d6 != null ? d6 + bonus0 + kit : ''));
   const [j, setJ] = useState(join0);
   const bn = parseInt(b, 10);
   const sn = parseInt(slot, 10);
   const jn = parseInt(j, 10);
   const commitBonus = () => { onSetBonus(Number.isFinite(bn) ? bn : 0); };
-  const commitSlot  = () => { if (d6 != null && Number.isFinite(sn)) onSetBonus(sn - d6); else onCancel(); };
+  const commitSlot  = () => { if (d6 != null && Number.isFinite(sn)) onSetBonus(sn - d6 - kit); else onCancel(); };
   // Champ vide (ou <= round courant) = present des le debut : on efface la cle plutot
   // que d'ecrire un round depasse, pour que le noeud reste propre.
   const commitJoin  = () => { onSetJoinRound(Number.isFinite(jn) && jn > 1 ? jn : null); };
@@ -291,7 +295,8 @@ function IniScoreEditor({ entry, onSetBonus, onCancel, joinRound, round, onSetJo
           style={fld} />
         <button className="btn btn-sm btn-ghost" onClick={commitBonus} style={{ padding:'1px 5px', fontSize:11, color:'var(--buff-bright)' }}>✓</button>
         <span className="mono faint" style={{ fontSize:9.5 }}>
-          {d6 != null ? `→ créneau ${d6 + (Number.isFinite(bn) ? bn : 0)}` : 'dé non lancé'}
+          {d6 != null ? `→ créneau ${d6 + (Number.isFinite(bn) ? bn : 0) + kit}` : 'dé non lancé'}
+          {kit ? ` · passif ${kit > 0 ? '+' : '−'}${Math.abs(kit)} inclus` : ''}
         </span>
       </div>
       {d6 != null && (
@@ -302,7 +307,7 @@ function IniScoreEditor({ entry, onSetBonus, onCancel, joinRound, round, onSetJo
             style={fld} />
           <button className="btn btn-sm btn-ghost" onClick={commitSlot} style={{ padding:'1px 5px', fontSize:11, color:'var(--buff-bright)' }}>✓</button>
           <span className="mono faint" style={{ fontSize:9.5 }}>
-            dé {d6} → bonus {Number.isFinite(sn) ? (sn - d6 >= 0 ? '+' : '−') + Math.abs(sn - d6) : bonus0}
+            dé {d6} → bonus {Number.isFinite(sn) ? (sn - d6 - kit >= 0 ? '+' : '−') + Math.abs(sn - d6 - kit) : bonus0}
           </span>
         </div>
       )}
@@ -351,7 +356,7 @@ function InitiativePanel({ ini, meta, ids, turn }) {
     if (!drag) return;
     const e = scores[drag] || {};
     if (e.d6 == null) { toast('Ce combattant n’a pas encore lancé son dé', 'gold'); setDrag(null); return; }
-    setBonus(drag, init - e.d6);
+    setBonus(drag, init - e.d6 - (e.kit | 0));
     setDrag(null);
   };
 
@@ -408,7 +413,7 @@ function InitiativePanel({ ini, meta, ids, turn }) {
                           borderRadius:4, padding:'1px 4px', color:'var(--gold-pale)', cursor:'pointer' }}>
                         {st === 'ok'
                           ? iniScoreLabel(e)
-                          : (e.bonus | 0) > 0 ? '+' + (e.bonus | 0) : (e.bonus | 0) < 0 ? '−' + Math.abs(e.bonus | 0) : '±0'}
+                          : initiativeBonus(e) > 0 ? '+' + initiativeBonus(e) : initiativeBonus(e) < 0 ? '−' + Math.abs(initiativeBonus(e)) : '±0'}
                       </button>
                       {st !== 'ok' && (
                         <button className="btn btn-sm btn-ghost" style={{ padding:'1px 6px', fontSize:10.5 }}
@@ -1072,11 +1077,25 @@ function PendingActionsPanel({ enemies, stampKo, stOf, turn }) {
   };
 
   const applyStatus = async (action, inst, target) => {
+    /* BIENFAIT (bouclier ou mana donné à un autre, C1 de Jett) : le lanceur n'a envoyé que
+       sa part — le receveur (sa stat `soins`, son mana max) n'est lisible que d'ici.
+       ⚠️ Sur un PNJ rien n'est écrit : `applyStatusToCharacter` vise `characters/<id>`, et
+       un PNJ n'y vit pas. Le journal donne le chiffre, le MJ le reporte sur sa carte. */
+    let payload = inst, manual = false;
+    if (inst.boon) {
+      const L = target.kind === 'pj' ? (target.live || {}) : null;
+      payload = resolveBoon(inst, L
+        ? { soins: (L.eff || {}).soins || 0, buffs: Object.keys((target.st || {}).buffs || {}), manaMax: (L.eff || {}).mana || 0 }
+        : { manaMax: (target.enemy || {}).manaMax || 0 });
+      manual = target.kind !== 'pj';
+    }
     // Une instance narrative n'écrit rien : « Valider » vaut accusé de réception.
-    if (!inst.narrative) await applyStatusToCharacter(target.id, action.skillId, inst);
+    if (!inst.narrative && !manual) await applyStatusToCharacter(target.id, action.skillId, payload);
     const txt = inst.narrative
       ? `<b>${action.attackerName}</b> — <b>${action.skillName}</b> : ${inst.label}`
-      : `<b>${target.name}</b> gagne <b>${action.skillName}</b> — ${inst.label}`;
+      : inst.boon
+        ? `<b>${action.attackerName}</b> — <b>${action.skillName}</b> → <b>${target.name}</b> : ${payload.label}${manual ? ' (PNJ : à reporter à la main)' : ''}`
+        : `<b>${target.name}</b> gagne <b>${action.skillName}</b> — ${inst.label}`;
     toast(txt, 'buff');
     pushLog(txt, 'buff');
   };

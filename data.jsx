@@ -441,49 +441,84 @@ const ITEM_CATALOG = [
 const SKILLS = {
   lunick: { // Elias Crowe
     passive: { name: 'Instinct du Chasseur', counter: { key: 'chasseur', label: 'Charges', max: (lvl) => eliasMaxStacks(lvl) },
-      note: '+AD par charge (calculé sur tes stats). 1 charge par nouvelle cible blessée, reset entre combats.', statHint: 'ad' },
+      flag: { key: 'chasseurTous', label: 'J\'ai touché toutes les cibles présentes' },
+      note: '+6 % de ton AD de base par charge (5 charges max, +1 tous les 4 niveaux). +1 charge par NOUVELLE cible blessée. '
+        + 'Quand tu as touché toutes les cibles présentes, coche la case : ensuite, +1 charge à la fin de ton tour si tu as '
+        + 'touché deux cibles différentes dans le tour — ou, s\'il n\'y a qu\'une cible, si tu as concentré sur elle au moins '
+        + 'deux compétences (l\'attaque de base ne compte pas). Remis à zéro entre les combats.', statHint: 'ad' },
     actives: [
-      { id: 'tir_cible', name: 'Tir Ciblé', mana: 10, cd: 1, kind: 'turn',
-        dmg: (eff, c) => dmgEliasC1(c.wType, eff, c.firstHit), note: 'Arme à distance. 1er coup : +25% & +2 au jet. Soin 5% des dégâts. Pas de crit.' },
+      { id: 'tir_cible', name: 'Tir Ciblé', mana: 10, cd: 1, kind: 'turn', noCrit: true,
+        dmg: (eff, c) => dmgEliasC1(eff, c.firstHit),
+        note: 'Arme à distance. 66 % AD, sans critique. 1er coup sur une cible : +25 % et +2 au jet. Soin de 5 % des dégâts infligés (en table).' },
       { id: 'dash_tactique', name: 'Dash Tactique', mana: 28, cd: 3, kind: 'cd',
-        dmg: (eff) => dmgEliasC2(eff), note: 'Rayon 6. Si fin au corps à corps : 50 + 100% AD et −1 CD. Sinon repositionnement (0 dégât).' },
+        dmg: (eff) => dmgEliasC2(eff), note: 'Rayon 6. S\'il finit au corps à corps : 66 % AD et −1 tour de délai. Sinon repositionnement (0 dégât).' },
       { id: 'frappe_duale', name: 'Frappe Duale', mana: 28, cd: 3, kind: 'cd',
-        dmg: (eff) => dmgEliasC3(eff), note: 'À distance : repousse 4 cases. Mêlée : marque la cible (+25% dégâts subis).' },
-      { id: 'salve_corsaire', name: 'Salve du Corsaire', mana: 60, manaFixed: true, cd: 0, kind: 'combat',
+        dmg: (eff, c) => dmgEliasC3(eff, c.melee),
+        dmgLabel: (eff, c) => c.melee ? 'Mêlée : marque la cible (+25 % de dégâts subis) jusqu\'à la fin du prochain créneau d\'Elias'
+          : 'À distance : repousse de 4 cases',
+        note: 'À distance : 96 % AD, repousse de 4 cases. En mêlée : 84 % AD, marque la cible (+25 % de dégâts subis, toutes sources) '
+          + 'jusqu\'à la fin du prochain créneau d\'Elias.' },
+      { id: 'salve_corsaire', name: 'Salve du Corsaire', mana: 60, manaFixed: true, cd: 0, kind: 'combat', noCrit: true,
         targeting: { damage: { max: null } },
-        dmg: (eff) => dmgEliasC4(eff), note: 'Arme à distance. Dégâts par cible ; soin 5% du total. Pas de crit. 1×/combat.' },
+        dmg: (eff) => dmgEliasC4(eff), selfHeal: (eff, c, n) => eliasC4Heal(eff, n),
+        info: (eff) => [`Soin : ${eliasC4Heal(eff, 1)} PV par cible touchée (8 % de tes PV max)`],
+        note: 'Arme à distance. 78 % AD par cible, sans critique. Soin de 8 % de tes PV max par cible touchée. '
+          + 'Chaque NOUVELLE cible blessée donne une charge du passif. 1×/combat.' },
     ],
   },
   smith: {
     passive: { name: 'Flétrissement de la rose', counter: { key: 'marques', label: 'Marques', max: 9 },
-      note: 'Focalise l\'arcane : 50 + 0,5 AP magiques + marque (1×/combat). Propagation à la mort de la cible.' },
+      note: 'Focalise l\'arcane : 50 + 50 % AP magiques + marque (1×/combat). Marque : reprise possible au plus tôt 2 tours après '
+        + 'la pose, reposable au tour suivant. Si Smith tue une cible marquée, la marque passe sur DEUX cibles ; si elle tombe '
+        + 'autrement, elle se propage à la plus proche. L\'Attaque sournoise ne consomme pas la marque.' },
     actives: [
       { id: 'attaque_sournoise', name: 'Attaque sournoise', mana: 13, cd: 1, kind: 'turn',
-        dmg: (eff, c) => dmgSmithC1(c.wType, eff, c.furtif), note: 'Dégâts d\'arme. Si camouflé/invisible : ×1,5 (+30% crit). Peut critiquer.' },
+        dmg: (eff, c) => dmgSmithC1(c.wType, eff, c.furtif, c.marked), critBonus: (eff, c) => smithC1CritBonus(c.furtif),
+        info: (eff, c) => [`×${String(smithC1Mult(c.furtif, c.marked)).replace('.', ',')} l'attaque de base${c.furtif ? ' · +30 % de chance de critique' : ''}`],
+        note: 'Multiple de l\'attaque de base (60 % des dégâts d\'arme) : ×1 normale · ×1,5 camouflé · ×2 cible marquée · ×4,5 marquée ET '
+          + 'camouflé. +30 % de chance de critique sous camouflage. Attaquer fait perdre le camouflage ; sur un échec (d20 de 1 à 5) : '
+          + 'test d\'Habileté DD 13 (d20 + ⌊Habileté / 4⌋), réussi il le garde.' },
       { id: 'fondu_au_noir', name: 'Fondu au noir', mana: 21, cd: 3, kind: 'cd',
         dmg: () => null, note: 'Camouflage 3 tours, +3 mobilité 2 tours. Peut se troquer en fumigène 5×5.' },
       { id: 'chaines', name: 'Chaînes estropiantes', mana: 26, cd: 4, kind: 'cd',
-        targeting: { damage: { max: null } },
-        dmg: (eff) => dmgSmithC3(eff), note: 'Cône 8 cases. Exécute < 10% HP. Cible : 50 + 100% AD + saignement. Peut critiquer.' },
+        dmg: (eff) => dmgSmithC3(eff),
+        dmgLabel: (eff) => `Saignement : ${smithBleed(eff)} dégâts BRUTS par tour · chaîne sur toutes les cibles du cône (exécutées à 10 % de PV)`,
+        info: (eff) => [`Saignement : ${smithBleed(eff)} bruts par tour (20 % AD)`],
+        note: 'Cône de 8 cases. Cible choisie : 72 % AD + saignement de 20 % AD par tour en dégâts bruts. Toutes les cibles du cône '
+          + 'portent la chaîne (exécutées en arrivant à 10 % de PV). À chaque tour du porteur, après le saignement : 2 chances sur 5 '
+          + 'de s\'en défaire (un seul test pour les deux). Un allié peut retirer l\'effet par une action mineure. Peut critiquer.' },
       { id: 'voile', name: 'Voile dimensionnel', mana: 80, manaFixed: true, cd: 0, kind: 'combat',
-        dmg: () => null, note: 'Dimension A×B. Immunité 50%. Si cible supprimée : soin 10% (50% ult) PV/mana cible + bonus crit.' },
+        dmg: () => null, note: 'Smith et sa cible sont isolés 1 tour (3 en ultime) : il ne rate aucune compétence et ne subit que 50 % des '
+          + 'dégâts. Si la cible y meurt : +10 % crit et +25 % dégâts crit (+40 % / +100 % en ultime) pour tout le combat, et soin de '
+          + '10 % PV/mana (50 % en ultime).' },
     ],
   },
   urskaar: {
-    passive: { name: 'Voie de l\'ours', counter: { key: 'tranches', label: 'PM bonus', max: 3 },
-      note: '+2 init. Après 5 cases : prochaine AA +150% (+25%/3 cases) et +1 PM (max 3). Les tranches boostent C2/C4.' },
+    passive: { name: 'Voie de l\'ours', counter: { key: 'tranches', label: 'PM bonus', max: 3 }, initBonus: 1,
+      note: '+1 en initiative (compté automatiquement). Quand tu ANNONCES 5 cases de déplacement : attaque de base +50 % '
+        + '(+25 % par tranche de 3 cases en plus) et +1 PM par tranche (max 3). Une tranche = 5 cases annoncées, puis +1 par 3 cases ; '
+        + 'les tranches renforcent aussi C1, C2 et C4.' },
     actives: [
       { id: 'pugilat', name: 'Maîtrise du pugilat', mana: 15, cd: 1, kind: 'turn',
-        dmg: (eff, c) => dmgUrskaarC1(eff, c.side, c.moved), note: 'Gauche : AA classique, pas d\'attaque d\'opportunité. Droite : AA améliorée (min 150%), 50% étourdir.' },
+        dmg: (eff, c) => dmgUrskaarC1(eff, c.side, c.moved),
+        dmgLabel: (eff, c) => c.side === 'droite' ? `Droite : ${urskaarStunPct(c.moved)} % d'étourdir` : '',
+        info: (eff, c) => c.side === 'droite' ? [`Étourdit à ${urskaarStunPct(c.moved)} %`]
+          : [(c.moved | 0) >= 5 ? 'Pas d\'attaque d\'opportunité' : 'Attaque d\'opportunité possible (moins de 5 cases annoncées)'],
+        note: 'Gauche (dégâts) : 72 % AD + 18 % par tranche, pas d\'attaque d\'opportunité s\'il annonce 5 cases ou plus. '
+          + 'Droite (contrôle) : 54 % AD + 6 % par tranche, étourdit à 50 % + 10 % par tranche. Peut critiquer.' },
       { id: 'ecrasement', name: 'Écrasement', mana: 27, cd: 3, kind: 'cd',
         targeting: { damage: { max: null } },
-        dmg: (eff, c) => dmgUrskaarC2(eff, c.moved), note: 'Bond. Dégâts AD·(1,5 + 0,25·tranches), portée 3+tranches, zone adjacente. Pas d\'attaque d\'opportunité.' },
+        dmg: (eff, c) => dmgUrskaarC2(eff, c.moved),
+        info: (eff, c) => [`Portée ${3 + bearTranches(c.moved | 0)}`],
+        note: 'Bond. 90 % AD + 15 % par tranche, portée 3 + 1 par tranche, zone adjacente. Pas d\'attaque d\'opportunité.' },
       { id: 'ralliement', name: 'Ralliement', mana: 50, cd: 5, kind: 'cd',
-        dmg: () => null, shield: (eff, c) => urskaarC3Shield(eff, c.hpMax), note: 'Bouclier (30% +10%/50 AP des PV) + Peau de Fer ; alliés : Bravoure 2 tours. +1 charisme (permanent).' },
+        dmg: () => null, shield: (eff, c) => urskaarC3Shield(eff, c.hpMax), note: 'Bouclier (30 % des PV max + 20 % par 50 AP) + Peau de Fer ; alliés : Bravoure 2 tours. +1 charisme (permanent).' },
       { id: 'demi_ours', name: 'On ne m\'arrêtera pas', mana: 100, manaFixed: true, cd: 0, kind: 'combat',
         targeting: { damage: { max: null } },
         dmg: (eff, c) => dmgUrskaarC4(eff, c.moved), selfBuff: { hp: 0.30, ad: 0.30, armure: 0.30 },
-        note: 'Transfo 5 tours : +30% PV/AD/Armure. Déplacement : 100% AD (+25%/tranche) par unité. 1×/combat.' },
+        info: (eff, c) => [`Allié adjacent qui rate sa sauvegarde : ${dmgUrskaarC4Ally(eff, c.moved)} (le quart)`],
+        note: 'Transfo 5 tours : +30 % PV/AD/Armure. Piétinement : 42 % AD + 12 % par tranche par unité traversée, une fois par tour. '
+          + 'Un allié adjacent qui rate sa sauvegarde subit le quart. 1×/combat.' },
     ],
   },
   jett: {
@@ -491,10 +526,20 @@ const SKILLS = {
       note: 'L\'AA ne fait plus de dégâts : crée des CN (1 + paliers AD, ×2 crit). Récupérer une CN = +10 mana.' },
     actives: [
       { id: 'remodulation', name: 'Remodulation expérimentale', mana: 32, cd: 1, kind: 'turn',
-        dmg: (eff) => dmgJettForce(eff), note: 'Config aléatoire. Poison 25+0,5 AP ; Repouss./Attract. 25+0,5 AD ; Champ élec./Flash/Dupli./Fumigène : effets.' },
+        dmg: (eff, c) => jettC1Damage(eff, c.config),
+        dmgType: (eff, c) => (jettC1Effect(c.config) || {}).dmgType || null,
+        heal: (eff, c) => jettC1Heal(eff, c.config),
+        boon: (eff, c) => jettC1Boon(eff, c.config),
+        narrative: (c) => { const e = jettC1Effect(c.config); return e ? `Configuration : ${e.label} (effet en table)` : 'Configuration à tirer en table'; },
+        info: (eff, c) => { const b = jettC1Boon(eff, c.config); return b ? [b.label] : []; },
+        note: 'Configuration ALÉATOIRE, chance égale pour chacun des 10 effets : Champ électrique, Poison (15 + 30 % AP, magique), '
+          + 'Duplication, Flash, Repoussement et Attraction (15 + 30 % AD), Fumigène, Soin (20 + 40 % AP), Bouclier (25 + 50 % AP), '
+          + 'Mana (15 % du mana max de la cible + 1 % par 40 AP). Tire la configuration (🎲) avant de choisir la cible.' },
       { id: 'alignement', name: 'Alignement de séquence', mana: 26, cd: 3, kind: 'cd',
         targeting: { damage: { min: 0, max: null }, heal: { camp: 'allies', min: 0, max: null } },
-        dmg: (eff) => dmgJettC2(eff), heal: (eff) => healJettC2(eff), note: 'Stun 2 tours + 50 + 50% AD aux ennemis. Soigne les alliés de 50 + 100% AP.' },
+        dmg: (eff) => dmgJettC2(eff), heal: (eff) => healJettC2(eff),
+        dmgLabel: () => 'Étourdi 1 tour',
+        note: 'Étourdit 1 tour + 36 % AD aux ennemis. Soigne les alliés de 40 + 80 % AP.' },
     ],
   },
   rathael: {
@@ -502,13 +547,15 @@ const SKILLS = {
       note: 'Gagne automatiquement une charge de Glaciation à chaque attaque ennemie subie (max 5, tout '
         + 'stackable en un tour). S\'il ne subit aucun dégât pendant un tour, il perd 3 charges en fin de tour '
         + '(automatique). +10% Armure et Résistance magique de base par charge. À 5 charges → Âme fendue : régén '
-        + '10% PV max/tour + aura de 10% des PV manquants (rayon 1), Rathael devient sourd (géré en table). '
+        + '10% PV max/tour + aura de 8 % des PV max de CHAQUE cible, en dégâts magiques, rayon 1, ennemis ET alliés '
+        + '(gérée en table) ; Rathael devient sourd. '
         + 'Le stepper reste dispo pour ajuster à la main.', statHint: 'armure' },
     actives: [
       { id: 'frappe_irritee', name: 'Frappe Irritée', mana: 10, cd: 0, kind: 'cd',
-        dmg: (eff, c) => dmgRathaelC1(eff, (c.counters && c.counters.glaciation) || 0, c.level),
-        note: '25 + (30% +5%/4 niv) AD + (40% +5%/2 niv) (Armure+RM), ×(1 + 20% par charge de Glaciation, max +100%). '
-          + 'Sans CD. Peut critiquer. En état Âme fendue : la cible est ralentie 1 tour.' },
+        dmg: (eff, c) => dmgRathaelC1(eff, (c.counters && c.counters.glaciation) || 0, missingHpPct(c.hpCur, eff.hp)),
+        info: (eff, c) => [`PV manquants : ${Math.round(missingHpPct(c.hpCur, eff.hp))} %`],
+        note: '50 % AD × (1 + 1 % par % de PV manquants + 20 % par charge de Glaciation). Faible à froid (moins qu\'une attaque '
+          + 'de base), elle monte quand Rathael est mal en point. Sans CD. Peut critiquer. En état Âme fendue : la cible est ralentie 1 tour.' },
       { id: 'mur_de_givre', name: 'Mur de Givre', mana: 26, cd: 3, kind: 'cd',
         dmg: () => null,
         duration: { min: 1, max: 2 },
@@ -521,8 +568,8 @@ const SKILLS = {
         targeting: { damage: { max: null } },
         dmg: (eff, c) => dmgRathaelC3(eff, (c.counters && c.counters.glaciation) || 0, c.level),
         counterSet: { glaciation: 0 },
-        note: 'Explosion magique, rayon 3 cases. CONSOMME toutes les charges de Glaciation. Base = 50 + 60% AP + '
-          + '(50% +10%/2 niv) (Armure+RM) ; chaque charge ajoute +50% de la base (max +250%, soit ×3,5 à 5 charges). '
+        note: 'Explosion magique, rayon 3 cases. CONSOMME toutes les charges de Glaciation. Base = 54 % AP + '
+          + '(45 % +9 %/2 niv) (Armure+RM) ; chaque charge ajoute +50% de la base (max +250%, soit ×3,5 à 5 charges). '
           + 'Le MJ applique le nombre affiché aux ennemis proches et la MOITIÉ à ceux à 3 cases (via « Subir »). '
           + 'En état Âme fendue (5 charges) : étourdit les cibles touchées jusqu\'à leur prochain tour.' },
       { id: 'ailes_givre', name: 'Ailes de Givre', mana: 100, manaFixed: true, cd: 0, kind: 'combat',

@@ -624,45 +624,61 @@ test('nextReadyAt = tour + cd', () => {
 });
 
 /* --- Task 2 : Elias (Fab.gs) --- */
-test('Elias passif AD/charge et max charges (niv 2/4)', () => {
-  assert.equal(L.eliasPassiveAD(2), 15);
-  assert.equal(L.eliasMaxStacks(2), 5);
-  assert.equal(L.eliasPassiveAD(4), 25);
-  assert.equal(L.eliasMaxStacks(4), 6);
+test('Elias passif : 6 % de l AD de base par charge, 5 charges + 1 tous les 4 niveaux (2026-10-10)', () => {
+  assert.equal(L.eliasPassiveAD(187, 1), 11);    // 15 avant, au niveau 2
+  assert.equal(L.eliasPassiveAD(187, 5), 56);    // +56 a pleines charges (c etait +75)
+  assert.equal(L.eliasPassiveAD(100, 0), 0);
+  assert.deepEqual([1, 4, 5, 9, 13, 17, 18].map(L.eliasMaxStacks), [5, 5, 6, 7, 8, 9, 9]);
 });
-test('Elias compétences (script Fab.gs)', () => {
-  const eff = { ad: 100, ap: 0 };
-  assert.equal(L.dmgEliasC1('Physique', eff, false), 100);
-  assert.equal(L.dmgEliasC1('Physique', eff, true), 125);
-  assert.equal(L.dmgEliasC2(eff), 150);
-  assert.equal(L.dmgEliasC3(eff), 250);
-  assert.equal(L.dmgEliasC4(eff, 1), 250);
+test('Elias competences, rang 1 du 2026-10-10 (ratios deja convertis x0,6)', () => {
+  const eff = { ad: 100, ap: 0, hp: 500 };
+  assert.equal(L.dmgEliasC1(eff, false), 66);
+  assert.equal(L.dmgEliasC1(eff, true), 82);         // +25 % au premier coup
+  assert.equal(L.dmgEliasC2(eff), 66);
+  assert.equal(L.dmgEliasC3(eff, false), 96);        // a distance
+  assert.equal(L.dmgEliasC3(eff, true), 84);         // en melee
+  assert.equal(L.dmgEliasC4(eff), 78);
+  assert.equal(L.eliasC4Heal(eff, 1), 40);           // 8 % des PV max par cible touchee
+  assert.equal(L.eliasC4Heal(eff, 4), 160);
+  assert.equal(L.eliasC4Heal(eff, 0), 0);
   assert.equal(L.skillHeal(250, 0.05), 12);
 });
 
 /* --- Task 3 : Smith (Erwan.gs) --- */
-test('Smith formules (Erwan.gs)', () => {
-  assert.equal(L.dmgSmithPassif({ ap: 100 }), 100);
-  assert.equal(L.dmgSmithC1('Physique', { ad: 80, ap: 0 }, false), 80);
-  assert.equal(L.dmgSmithC1('Physique', { ad: 80, ap: 0 }, true), 120);
-  assert.equal(L.dmgSmithC3({ ad: 150 }), 200);
-  assert.equal(L.smithBleedPct({ ad: 250 }), 15);
+test('Smith, rang 1 du 2026-10-10 : Attaque sournoise en multiple de l attaque de base', () => {
+  assert.equal(L.dmgSmithPassif({ ap: 100 }), 100);                       // Fletrissement : non converti
+  const eff = { ad: 100, ap: 0 };
+  assert.equal(L.dmgSmithC1('Physique', eff, false, false), 60);          // x1   = l attaque de base
+  assert.equal(L.dmgSmithC1('Physique', eff, true, false), 90);           // x1,5 camoufle
+  assert.equal(L.dmgSmithC1('Physique', eff, false, true), 120);          // x2   cible marquee
+  assert.equal(L.dmgSmithC1('Physique', eff, true, true), 270);           // x4,5 marquee ET camoufle (pas x3)
+  assert.equal(L.dmgSmithC1('Magique', { ad: 100, ap: 50 }, false, false), 30);   // suit le type d arme
+  assert.deepEqual([L.smithC1CritBonus(true), L.smithC1CritBonus(false)], [30, 0]);
+  assert.equal(L.dmgSmithC3({ ad: 150 }), 108);                           // 72 % AD
+  assert.equal(L.smithBleed({ ad: 150 }), 30);                            // 20 % AD, un NOMBRE de degats bruts
+  assert.equal(L.smithBleedPct, undefined);                               // l ancien pourcentage est abandonne
 });
 
 /* --- Task 4 : Urskaar (Baptiste.gs + kit C3/C4) --- */
 test('Urskaar Voie de l ours', () => {
   assert.equal(L.bearBonusPct(4), 0);
-  assert.equal(L.bearBonusPct(5), 150);
-  assert.equal(L.bearBonusPct(8), 175);
+  assert.equal(L.bearBonusPct(5), 50);      // +50 % de l attaque de base a 5 cases annoncees
+  assert.equal(L.bearBonusPct(8), 75);      // +25 % par tranche de 3 cases
+  assert.equal(L.bearBonusPct(11), 100);
   assert.equal(L.bearTranches(5), 1);
   assert.equal(L.bearTranches(8), 2);
   const eff = { ad: 100, ap: 50 };
-  assert.equal(L.dmgUrskaarC1(eff, 'gauche', 0), 100);
-  assert.equal(L.dmgUrskaarC1(eff, 'droite', 0), 150);
-  assert.equal(L.dmgUrskaarC1(eff, 'droite', 8), 175);
-  assert.equal(L.dmgUrskaarC2(eff, 5), 175);
-  assert.equal(L.urskaarC3Shield({ ap: 50 }, 1000), 400);
-  assert.equal(L.dmgUrskaarC4(eff, 5), 125);
+  // C1 gauche : 72 % AD + 18 % par tranche ; droite : 54 % + 6 %, etourdit a 50 % + 10 %
+  assert.deepEqual([0, 5, 8, 11].map(m => L.dmgUrskaarC1(eff, 'gauche', m)), [72, 90, 108, 126]);
+  assert.deepEqual([0, 5, 8, 11].map(m => L.dmgUrskaarC1(eff, 'droite', m)), [54, 60, 66, 72]);
+  assert.deepEqual([0, 5, 8, 11, 40].map(L.urskaarStunPct), [50, 60, 70, 80, 100]);
+  assert.deepEqual([0, 5, 8].map(m => L.dmgUrskaarC2(eff, m)), [90, 105, 120]);
+  assert.equal(L.urskaarC3Shield({ ap: 0 }, 1000), 300);
+  assert.equal(L.urskaarC3Shield({ ap: 50 }, 1000), 500);    // +20 % par 50 AP
+  assert.equal(L.urskaarC3Shield({ ap: 25 }, 1000), 400);    // calcul continu, pas par paliers
+  assert.deepEqual([0, 5, 8].map(m => L.dmgUrskaarC4(eff, m)), [42, 54, 66]);
+  // allie adjacent : le quart de ce qu un ennemi subirait (10,5 % AD + 3 % par tranche)
+  assert.deepEqual([0, 5].map(m => L.dmgUrskaarC4Ally({ ad: 200 }, m)), [21, 27]);
 });
 
 /* --- Task 5 : Jett (Steph.gs) --- */
@@ -670,16 +686,45 @@ test('Jett Nano-hextech', () => {
   assert.equal(L.jettEngins({ ad: 0 }, false), 1);
   assert.equal(L.jettEngins({ ad: 150 }, false), 3);
   assert.equal(L.jettEngins({ ad: 150 }, true), 6);
-  assert.equal(L.dmgJettPoison({ ap: 100 }), 75);
-  assert.equal(L.dmgJettForce({ ad: 100 }), 75);
-  assert.equal(L.dmgJettC2({ ad: 100 }), 100);
-  assert.equal(L.healJettC2({ ap: 100 }), 150);
+  assert.equal(L.dmgJettPoison({ ap: 100 }), 45);     // 15 + 30 % AP
+  assert.equal(L.dmgJettForce({ ad: 100 }), 45);      // 15 + 30 % AD
+  assert.equal(L.dmgJettC2({ ad: 100 }), 36);
+  assert.equal(L.healJettC2({ ap: 100 }), 120);       // 40 + 80 % AP = 2 x le soin de la C1
+  assert.equal(L.healJettC1({ ap: 100 }), 60);        // 20 + 40 % AP
+  assert.equal(L.shieldJettC1({ ap: 100 }), 75);      // 25 + 50 % AP
+  assert.equal(L.jettC1ManaPct({ ap: 100 }), 17.5);   // 15 % + 1 % par 40 AP
+});
+test('Jett C1 Remodulation : 10 configurations equiprobables, chacune avec son effet', () => {
+  assert.equal(L.JETT_C1_EFFECTS.length, 10);
+  // chance egale : dix tranches de 10 %
+  const seen = L.JETT_C1_EFFECTS.map((e, i) => L.jettC1Roll(() => (i + 0.5) / 10));
+  assert.deepEqual(seen, L.JETT_C1_EFFECTS.map(e => e.id));
+  assert.equal(L.jettC1Roll(() => 0.999999), 'mana');
+  const eff = { ad: 100, ap: 200 };
+  assert.equal(L.jettC1Damage(eff, 'poison'), 75);          // sur l AP
+  assert.equal(L.jettC1Damage(eff, 'attraction'), 45);      // sur l AD
+  assert.equal(L.jettC1Damage(eff, 'repoussement'), 45);
+  assert.equal(L.jettC1Damage(eff, 'flash'), null);
+  assert.equal(L.jettC1Damage(eff, ''), null);
+  assert.equal(L.jettC1Effect('poison').dmgType, 'magique');
+  assert.equal(L.jettC1Heal(eff, 'soin'), 100);
+  assert.equal(L.jettC1Heal(eff, 'poison'), null);
+  assert.deepEqual(L.jettC1Boon(eff, 'bouclier'), { shield: 125, label: 'Bouclier de 125' });
+  assert.equal(L.jettC1Boon(eff, 'mana').manaPct, 20);
+  assert.equal(L.jettC1Boon(eff, 'soin'), null);
 });
 
 /* --- Task 6 : sumPassiveMods --- */
-test('sumPassiveMods : Elias = +AD par charge (niv 2)', () => {
-  assert.deepEqual(L.sumPassiveMods('lunick', { chasseur: 3 }, 2), { ad: 45 });
-  assert.deepEqual(L.sumPassiveMods('lunick', {}, 2), {});
+test('sumPassiveMods : Elias = 6 % de l AD de BASE par charge, plafonne aux charges du niveau', () => {
+  assert.deepEqual(L.sumPassiveMods('lunick', { chasseur: 3 }, 2, { ad: 200 }), { ad: 36 });
+  assert.deepEqual(L.sumPassiveMods('lunick', { chasseur: 5 }, 2, { ad: 200 }), { ad: 60 });
+  // un compteur reste au-dessus du nouveau plafond (6 charges au niveau 4 avant le 2026-10-10)
+  assert.deepEqual(L.sumPassiveMods('lunick', { chasseur: 6 }, 4, { ad: 200 }), { ad: 60 });
+  assert.deepEqual(L.sumPassiveMods('lunick', { chasseur: 6 }, 5, { ad: 200 }), { ad: 72 });
+  assert.deepEqual(L.sumPassiveMods('lunick', { chasseur: 3 }, 2), {});          // sans stats de base : rien
+  assert.deepEqual(L.sumPassiveMods('lunick', {}, 2, { ad: 200 }), {});
+  // la case « toutes les cibles touchees » est un aide-memoire : aucun effet sur le calcul
+  assert.deepEqual(L.sumPassiveMods('lunick', { chasseur: 3, chasseurTous: 1 }, 2, { ad: 200 }), { ad: 36 });
   assert.deepEqual(L.sumPassiveMods('smith', { marques: 2 }, 2), {});
   assert.deepEqual(L.sumPassiveMods('rathael', { glaciation: 3 }, 2), {});
 });
@@ -1072,18 +1117,25 @@ test('respecValid : plancher par caracs (on ne peut pas descendre sous les valeu
   // sans plancher (staff) : même répartition acceptée tant que somme/cap OK
   assert.equal(L.respecValid({ force: 3, hab: 4, mental: 4, magie: 4 }, 15, 7), true);
 });
-test('dmgRathaelC1 (rééquilibrée) : ratios par niveau × multiplicateur de charges', () => {
-  const eff = { ad: 100, armure: 50, resmag: 30 };
-  // niveau 2 : adRatio 0,30 ; arRatio 0,45 → base = 25 + floor(30) + floor(80*0,45=36) = 91
-  assert.equal(L.dmgRathaelC1(eff, 0, 2), 91);
-  assert.equal(L.dmgRathaelC1(eff, 5, 2), Math.floor(91 * 2));   // ×2 à 5 charges
-  assert.equal(L.dmgRathaelC1(eff, 2, 2), Math.floor(91 * 1.4));
-  // niveau 4 : adRatio 0,35 ; arRatio 0,50 → base = 25 + 35 + 40 = 100
-  assert.equal(L.dmgRathaelC1(eff, 0, 4), 100);
+test('dmgRathaelC1 (rang 1 du 2026-10-10) : 50 % AD x (1 + 1 %/% de PV manquants + 20 %/charge)', () => {
+  // tableau du §8.1 de la spec, AD 112 (niveau 2)
+  const eff = { ad: 112, armure: 500, resmag: 500 };            // les resistances ne comptent plus
+  assert.equal(L.dmgRathaelC1(eff, 0, 0), 56);                   // frais : moins qu une attaque de base (67)
+  assert.equal(L.dmgRathaelC1(eff, 1, 10), 72);                  // x1,3
+  assert.equal(L.dmgRathaelC1(eff, 2, 30), 95);                  // x1,7
+  assert.equal(L.dmgRathaelC1(eff, 5, 70), 151);                 // x2,7
+  assert.equal(L.dmgRathaelC1(eff, 5, 90), 162);                 // x2,9
 });
-test('dmgRathaelC1 : charges plafonnées à 5 (pas de surplus)', () => {
-  const eff = { ad: 100, armure: 50, resmag: 30 };
-  assert.equal(L.dmgRathaelC1(eff, 9, 2), L.dmgRathaelC1(eff, 5, 2));
+test('dmgRathaelC1 : charges plafonnées à 5, PV manquants bornés a 0..100', () => {
+  const eff = { ad: 100 };
+  assert.equal(L.dmgRathaelC1(eff, 9, 0), L.dmgRathaelC1(eff, 5, 0));
+  assert.equal(L.dmgRathaelC1(eff, 0, 250), 100);               // plafond : x2 a 0 PV
+  assert.equal(L.dmgRathaelC1(eff, 0, -40), 50);
+  assert.equal(L.missingHpPct(150, 200), 25);
+  assert.equal(L.missingHpPct(260, 200), 0);                     // PV au-dessus du max (buff) : rien ne manque
+  assert.equal(L.missingHpPct(0, 200), 100);
+  assert.equal(L.missingHpPct(null, 200), 0);                    // PV inconnus : pas de bonus invente
+  assert.equal(L.missingHpPct(50, 0), 0);
 });
 test('rathaelC2Buff : 15 + 5/2 niveaux (floor)', () => {
   assert.equal(L.rathaelC2Buff(2), 20);   // 15 + 5*1
@@ -1092,9 +1144,11 @@ test('rathaelC2Buff : 15 + 5/2 niveaux (floor)', () => {
 });
 test('dmgRathaelC3 : base AP + (AR+RM) scalée × charges (max ×3,5)', () => {
   const eff = { ap: 100, armure: 50, resmag: 30 };
-  // niveau 2 : arRatio 0,60 → base = 50 + floor(60) + floor(80*0,60=48) = 158
-  assert.equal(L.dmgRathaelC3(eff, 0, 2), 158);
-  assert.equal(L.dmgRathaelC3(eff, 5, 2), Math.floor(158 * 3.5)); // +250% à 5 charges
+  // rang 1 du 2026-10-10 : bonus fixe retire, puis x0,9.
+  // niveau 2 : arRatio 0,54 → base = floor(54) + floor(80*0,54=43,2) = 97
+  assert.equal(L.dmgRathaelC3(eff, 0, 2), 97);
+  assert.equal(L.dmgRathaelC3(eff, 0, 4), 104);                   // arRatio 0,63 → 54 + 50
+  assert.equal(L.dmgRathaelC3(eff, 5, 2), Math.floor(97 * 3.5)); // +250% à 5 charges
   assert.equal(L.dmgRathaelC3(eff, 9, 2), L.dmgRathaelC3(eff, 5, 2)); // plafond 5
 });
 test('lifestealHeal : omnivamp universelle, CUMULÉE avec vol/sapience (2026-09-09)', () => {
@@ -1870,6 +1924,11 @@ test('rollInitiative : borne 1..6, rng injectable', () => {
 
 test('initiativeTotal : d6 + bonus, bonus negatif accepte', () => {
   assert.equal(L.initiativeTotal({ d6: 4, bonus: 2 }), 6);
+  // bonus de KIT (Urskaar, Voie de l ours : +1) : s ajoute au de et au bonus du MJ
+  assert.equal(L.initiativeTotal({ d6: 4, kit: 1 }), 5);
+  assert.equal(L.initiativeTotal({ d6: 4, bonus: -2, kit: 1 }), 3);
+  assert.equal(L.initiativeBonus({ bonus: 2, kit: 1 }), 3);
+  assert.equal(L.initiativeBonus(null), 0);
   assert.equal(L.initiativeTotal({ d6: 4, bonus: -2 }), 2);
   assert.equal(L.initiativeTotal({ d6: 1, bonus: -3 }), -2);   // total negatif possible
   assert.equal(L.initiativeTotal({ d6: 5 }), 5);               // bonus absent = 0
@@ -2223,6 +2282,71 @@ test('buildCastPlan : le cout suit le niveau du lanceur (opts.level, a defaut ct
   assert.equal(L.buildCastPlan(SK_MULTI, EFF, { level: 18 }, sel, OPTS).cost.mana, 137);
   const fixe = Object.assign({}, SK_MULTI, { manaFixed: true });
   assert.equal(L.buildCastPlan(fixe, EFF, { level: 18 }, sel, OPTS).cost.mana, 60);
+});
+test('withKitInitiative : le bonus de kit est pose a la lecture, jamais dans les scores lus', () => {
+  const scores = { urskaar: { d6: 3, bonus: 1, ok: true }, smith: { d6: 5, ok: true } };
+  const out = L.withKitInitiative(scores, { urskaar: 1 });
+  assert.deepEqual(out.urskaar, { d6: 3, bonus: 1, ok: true, kit: 1 });
+  assert.equal(out.smith, scores.smith);                          // intact
+  assert.equal(scores.urskaar.kit, undefined);                    // l objet lu n est pas modifie
+  assert.equal(L.initiativeTotal(out.urskaar), 5);
+  // pas encore lance : une entree vide porte le bonus, sans creer de score
+  const vide = L.withKitInitiative({}, { urskaar: 1 });
+  assert.deepEqual(vide.urskaar, { kit: 1 });
+  assert.equal(L.initiativeTotal(vide.urskaar), null);
+  assert.equal(L.initiativeStatus(vide.urskaar), 'idle');
+  // il change de creneau : 3 + 1 (MJ) + 1 (kit) = 5
+  const slots = L.initiativeSlots([{ id: 'urskaar', hp: 10 }, { id: 'smith', hp: 10 }], out, 1);
+  assert.deepEqual(slots, [{ init: 5, members: ['urskaar', 'smith'] }]);
+});
+test('buildCastPlan : champs des rangs 1 — noCrit, critBonus, dmgType, dmgLabel', () => {
+  const sel = { damage: ['g1'] };
+  const eff = Object.assign({}, EFF, { crit: 40 });
+  const jamais = Object.assign({}, OPTS, { rng: () => 0.5 });     // 0,5 : crit a 70 %, pas a 40 %
+  let p = L.buildCastPlan(SK_MULTI, eff, {}, sel, jamais);
+  assert.deepEqual([p.instances[0].didCrit, p.instances[0].crit], [false, 40]);
+  p = L.buildCastPlan(Object.assign({}, SK_MULTI, { critBonus: () => 30 }), eff, {}, sel, jamais);
+  assert.deepEqual([p.instances[0].didCrit, p.instances[0].crit], [true, 70]);
+  p = L.buildCastPlan(Object.assign({}, SK_MULTI, { noCrit: true, critBonus: () => 100 }), eff, {}, sel, jamais);
+  assert.deepEqual([p.instances[0].didCrit, p.instances[0].crit, p.instances[0].critDmg], [false, 0, 90]);
+  // type impose par la competence (poison de Jett), sinon celui de l arme
+  p = L.buildCastPlan(Object.assign({}, SK_MULTI, { dmgType: () => 'magique' }), EFF, {}, sel, OPTS);
+  assert.equal(p.instances[0].type, 'magique');
+  p = L.buildCastPlan(Object.assign({}, SK_MULTI, { dmgType: () => null }), EFF, {}, sel, OPTS);
+  assert.equal(p.instances[0].type, 'physique');
+  p = L.buildCastPlan(Object.assign({}, SK_MULTI, { dmgLabel: () => 'Saignement : 30 bruts par tour' }), EFF, {}, sel, OPTS);
+  assert.equal(p.instances[0].label, 'Saignement : 30 bruts par tour');
+});
+test('buildCastPlan : selfHeal = un soin du lanceur, proportionnel aux cibles touchees', () => {
+  const sk = Object.assign({}, SK_MULTI, { selfHeal: (eff, c, n) => 40 * n });
+  const p = L.buildCastPlan(sk, EFF, {}, { damage: ['g1', 'g2', 'g3'] }, OPTS);
+  assert.deepEqual(p.instances.map(i => i.kind), ['damage', 'damage', 'damage', 'heal']);
+  const h = p.instances[3];
+  assert.deepEqual([h.targetId, h.amount, h.sameActor], ['rathael', 120, true]);
+});
+test('buildCastPlan + resolveBoon : bouclier ou mana donne a un allie', () => {
+  const bouclier = { id: 'remod', name: 'Remodulation', mana: 32, dmg: () => null, boon: () => ({ shield: 100, label: 'Bouclier de 100' }) };
+  assert.deepEqual(L.skillTargeting(bouclier, EFF, {}).boon, { camp: 'allies', min: 1, max: 1 });
+  assert.equal(L.castSelectionValid(L.skillTargeting(bouclier, EFF, {}), {}).ok, false);    // il faut une cible
+  const eff = Object.assign({}, EFF, { soins: 10 });
+  let p = L.buildCastPlan(bouclier, eff, {}, { boon: ['urskaar'] }, OPTS);
+  assert.equal(p.instances.length, 1);                              // pas d instance narrative en plus
+  const inst = p.instances[0];
+  assert.deepEqual([inst.kind, inst.targetId, inst.boon, inst.shield, inst.healBonus, inst.sameActor],
+    ['status', 'urskaar', true, 100, 10, false]);
+  // `soins` : producteur 10 % + receveur 20 % (additif)
+  assert.equal(L.resolveBoon(inst, { soins: 20, buffs: [] }).shield, 130);
+  // sur soi : le producteur compte seul
+  p = L.buildCastPlan(bouclier, eff, {}, { boon: ['rathael'] }, OPTS);
+  assert.equal(L.resolveBoon(p.instances[0], { soins: 10, buffs: [] }).shield, 110);
+  // mana : pourcentage du mana max DU RECEVEUR, inconnu du lanceur
+  const mana = { id: 'remod', name: 'Remodulation', mana: 32, dmg: () => null, boon: () => ({ manaPct: 17.5, label: 'Mana' }) };
+  p = L.buildCastPlan(mana, EFF, {}, { boon: ['smith'] }, OPTS);
+  assert.deepEqual(L.resolveBoon(p.instances[0], { manaMax: 400 }), { label: '+70 mana', manaGain: 70, manaMax: 400 });
+  // sans configuration tiree : ni degats, ni soin, ni bienfait → une instance narrative
+  const vide = { id: 'remod', name: 'Remodulation', mana: 32, dmg: () => null, heal: () => null, boon: () => null };
+  p = L.buildCastPlan(vide, EFF, {}, {}, Object.assign({}, OPTS, { narrative: 'Configuration a tirer en table' }));
+  assert.deepEqual([p.instances.length, p.instances[0].narrative, p.instances[0].label], [1, true, 'Configuration a tirer en table']);
 });
 test('buildCastPlan : effet sur soi = une instance status sur le lanceur', () => {
   const ctx = { counters: { glaciation: 2 }, duration: 2 };
