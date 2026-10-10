@@ -3286,3 +3286,22 @@ test('npcEncounterSummary : la table change budget et durée, pas l effectif', (
   assert.ok(b.rounds <= a.rounds);
   assert.equal(b.count, 5);
 });
+
+/* --- Visibilité d'un PNJ côté joueur (2026-10-11) --- */
+test('isVisibleToPlayers : `invisible` absent = visible (aucune migration)', () => {
+  assert.equal(L.isVisibleToPlayers({ id: 'a' }), true);
+  assert.equal(L.isVisibleToPlayers({ id: 'a', invisible: false }), true);
+  assert.equal(L.isVisibleToPlayers({ id: 'a', invisible: true }), false);
+  assert.equal(L.isVisibleToPlayers({ id: 'a', invisible: 'oui' }), true);   // seul `true` masque
+  assert.equal(L.isVisibleToPlayers(null), true);
+  // indépendant de `reveal`, qui ne règle que les PV
+  assert.equal(L.isVisibleToPlayers({ id: 'a', reveal: 'hidden' }), true);
+});
+
+test('visibleCombatants : le staff voit tout, un joueur ne voit pas les masqués', () => {
+  const list = [{ id: 'a' }, { id: 'b', invisible: true }, { id: 'c', side: 'ally', invisible: true }, { id: 'd', side: 'ally' }];
+  assert.deepEqual(L.visibleCombatants(list, true).map(c => c.id), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(L.visibleCombatants(list, false).map(c => c.id), ['a', 'd']);
+  assert.deepEqual(L.visibleCombatants(null, false), []);
+  assert.notEqual(L.visibleCombatants(list, true), list);                     // copie
+});

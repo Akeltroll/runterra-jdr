@@ -67,7 +67,10 @@ chaque champ (défauts quand absent, drapeaux MJ, contrat des actions en attente
 /campaign/runeterra/combat/turn   ← compteur de tour PARTAGÉ (nombre ≥ 1) ; lecture inscrits, écriture staff
 /campaign/runeterra/combat/enemies/{id}   ← ennemis PARTAGÉS { name, hpCur, hpMax, manaCur, manaMax, atk, armure, resmag, note, crit, dcrit, rescrit, lethaAD, lethaAP, reveal, revealPct } ; lecture inscrits, écriture staff
                                               crit (%) + dcrit (% dég. crit, défaut 200) + lethaAD/lethaAP (léthalité physique/magique) = crit/léthalité ennemi→joueur (rollCrit au lancement ; léthalité AD→armure si physique, AP→rés. mag si magique, via mitigateDamage)
-                                              reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
+                                              reveal ∈ 'hidden'(défaut)|'bar'|'exact' = ce que voient les JOUEURS de ses PV ; revealPct (0-100) = % de barre figé en mode 'bar' ; absent → 'hidden'
+                                              invisible: true (2026-10-11) = le combattant LUI-MÊME est retiré de la vue des joueurs (listes, cibles, ordre des tours) ;
+                                                 ABSENT = visible (on n'écrit le champ que pour masquer, `null` pour rendre). ⚠️ ≠ reveal. Affichage seulement :
+                                                 le nœud reste lisible par tout inscrit, et le moteur d'initiative compte toujours le combattant
 /campaign/runeterra/combat/pendingActions/{actionId}/   ← ACTIONS proposées par les joueurs (remplace pendingHits depuis 2026-09-06)
     attackerId, attackerName, skillId, skillName, source:'skill'|'basic', round, ts
     weaponCat, weaponName, mastered   ← attaque de base seulement (2026-09-15) : l'arme du coup et son malus éventuel

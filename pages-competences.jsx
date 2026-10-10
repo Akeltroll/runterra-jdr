@@ -260,7 +260,11 @@ function MyTurnBar({ me, meName, ini, toast, round }) {
    non-participants (à terre avant l'ouverture) sont atténués. */
 function InitiativeBoard({ ini, meta, me }) {
   const { state, scores, done } = ini;
-  if (!state.slots.length) {
+  // Un PNJ masqué (`meta.hidden`) n'est pas affiché, et un créneau sans membre visible non
+  // plus — mais le moteur le compte : pendant qu'il joue, aucun créneau n'est « ▶ » ici.
+  const shown = (slot) => slot.members.filter(id => !(meta[id] && meta[id].hidden));
+  const slots = state.slots.filter(slot => shown(slot).length > 0);
+  if (!slots.length) {
     return (
       <div className="panel" style={{ padding: '10px 14px' }}>
         <div className="overline" style={{ marginBottom: 6 }}>Ordre des tours</div>
@@ -272,7 +276,7 @@ function InitiativeBoard({ ini, meta, me }) {
     <div className="panel" style={{ padding: '10px 14px' }}>
       <div className="overline" style={{ marginBottom: 8 }}>Ordre des tours</div>
       <div className="row gap-2 wrap" style={{ alignItems: 'stretch' }}>
-        {state.slots.map(slot => {
+        {slots.map(slot => {
           const isActive = state.activeInit === slot.init;
           return (
             <div key={slot.init} style={{ borderRadius: 8, padding: '6px 9px', minWidth: 118,
@@ -284,7 +288,7 @@ function InitiativeBoard({ ini, meta, me }) {
                   {isActive ? '▶ ' : ''}Créneau {slot.init}
                 </span>
               </div>
-              {slot.members.map(id => {
+              {shown(slot).map(id => {
                 const m = meta[id] || { name: id, side: 'enemy' };
                 const participant = slot.participants.indexOf(id) !== -1;
                 const fini = done[id] === true;
@@ -296,7 +300,7 @@ function InitiativeBoard({ ini, meta, me }) {
                       fontWeight: id === me ? 700 : 400,
                       color: fini ? 'var(--ink-faint)' : 'var(--ink)',
                       textDecoration: fini ? 'line-through' : 'none' }}>
-                      {m.name}
+                      {m.name}{m.masked ? ' (masqué)' : ''}
                     </span>
                     <span className="mono" style={{ fontSize: 10, marginLeft: 'auto',
                       color: fini ? 'var(--buff-bright)' : 'var(--ink-faint)' }}>
@@ -320,6 +324,7 @@ function CombatantChip({ c }) {
   return (
     <span className="row gap-2" style={{ alignItems: 'center', fontSize: 12 }}>
       <span className="mono" style={{ color: v.ko ? 'var(--faint)' : 'var(--ink)' }}>{c.name}</span>
+      {!isVisibleToPlayers(c) && <span className="mono faint" title="Les joueurs ne voient pas ce combattant">(masqué)</span>}
       {v.ko && <span className="mono" style={{ color: 'var(--faint)' }}>· KO</span>}
       {v.showBar && (
         <span style={{ display: 'inline-block', width: 64, height: 7, borderRadius: 99, background: 'var(--bg-inset)', border: '1px solid var(--line)', overflow: 'hidden', verticalAlign: 'middle' }}>
@@ -731,7 +736,10 @@ function CompetencesBody({ char, staff }) {
   const { state, setField, setCounter, setCooldown, setInvItem, removeInvItem, setEquipment } = useCharState(char.id);
   const { turn } = useSharedTurn();
   const { enemies } = useMJEnemies();
-  const { enemies: foes, allies } = splitCombatants(enemies);
+  // PNJ masqués par le MJ (`invisible`) : un joueur ne les voit ni en liste ni en cible.
+  // ⚠️ `enemies` (complet) reste la source du moteur d'initiative et des recherches par id.
+  const seen = visibleCombatants(enemies, staff);
+  const { enemies: foes, allies } = splitCombatants(seen);
   // Initiative. Les PV des 5 PJ viennent des FEUILLES `state/hpCur` (useAllHp) : le noeud
   // parent `characters` reste staff-only, un joueur n'y a pas acces.
   const allHp = useAllHp();
@@ -740,7 +748,9 @@ function CompetencesBody({ char, staff }) {
   const ini = useInitiative(iniCombatants, turn);
   const iniMeta = {};
   CHARACTERS.forEach(c => { iniMeta[c.id] = { name: c.name, side: 'pj' }; });
-  enemies.forEach(e => { iniMeta[e.id] = { name: e.name, side: combatantSide(e) }; });
+  // `hidden` : le créneau d'un PNJ masqué existe pour le moteur mais n'est pas affiché au joueur.
+  enemies.forEach(e => { iniMeta[e.id] = { name: e.name, side: combatantSide(e),
+    hidden: !staff && !isVisibleToPlayers(e), masked: !isVisibleToPlayers(e) }; });
   const { addAction } = usePendingActions();
   // Mode d'attaque de base (geste à ratio fixe). État LOCAL, non persisté : c'est un
   // choix par coup, pas une posture qu'on garde — il se remet à « Attaque » au rechargement.
@@ -1048,7 +1058,7 @@ function CompetencesBody({ char, staff }) {
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
           <div>
             <div className="row gap-4 wrap" style={{ alignItems: 'flex-start' }}>
-              {enemies.length === 0 ? (
+              {seen.length === 0 ? (
                 <span className="faint" style={{ fontSize: 12 }}>Aucun PNJ sur le plateau — tu peux quand même viser un joueur.</span>
               ) : (
                 <React.Fragment>

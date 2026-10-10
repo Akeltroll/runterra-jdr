@@ -621,6 +621,7 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack, stampKo }) {
       <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--line)', display:'flex', alignItems:'center', gap:8 }}>
         <span style={{ fontFamily:'var(--font-display)', fontSize:15, color:'var(--gold-pale)', flex:1, minWidth:0 }}>{enemy.name}</span>
         {ally && <span className="badge" style={{ background:'rgba(30,122,79,.16)', color:'var(--buff-bright)', border:'1px solid rgba(52,199,127,.35)' }}>Allié</span>}
+        {!isVisibleToPlayers(enemy) && <span className="badge" title="Les joueurs ne voient pas ce combattant" style={{ background:'var(--bg-inset)', color:'var(--ink-dim)', border:'1px dashed var(--line-strong)' }}>Masqué</span>}
         <button className="btn btn-sm btn-ghost" onClick={() => setEdit(true)} title="Éditer" style={{ padding:'4px 8px' }}>✎</button>
       </div>
       <div className="col gap-2" style={{ padding:'12px 14px' }}>
@@ -628,8 +629,17 @@ function EnemyCard({ enemy, onUpdate, onRemove, onAttack, stampKo }) {
         {enemy.manaMax > 0 && <ResourceBar kind="mana" cur={enemy.manaCur} max={enemy.manaMax} />}
       </div>
       <div className="col gap-2" style={{ padding:'0 14px 10px' }}>
-        <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap' }}>
-          <span className="overline" title="Ce que voient les joueurs">👁 Joueurs</span>
+        {/* Visibilité du COMBATTANT lui-même (≠ `reveal`, qui ne règle que ses PV). Décoché :
+            absent des listes, des cibles et de l'ordre des tours des joueurs. `null` = visible,
+            on n'écrit le champ que pour masquer. */}
+        <label className="row gap-2" style={{ alignItems:'center', fontSize:12, cursor:'pointer' }}
+          title="Décoché : les joueurs ne voient ce combattant ni dans leurs listes, ni dans leurs cibles, ni dans l'ordre des tours">
+          <input type="checkbox" checked={isVisibleToPlayers(enemy)}
+            onChange={e => onUpdate(enemy.id, { invisible: e.target.checked ? null : true })} />
+          Visible des joueurs
+        </label>
+        <div className="row gap-2" style={{ alignItems:'center', flexWrap:'wrap', opacity: isVisibleToPlayers(enemy) ? 1 : 0.45 }}>
+          <span className="overline" title="Ce que voient les joueurs de ses PV">👁 PV</span>
           {[['hidden','Caché'],['bar','Barre'],['exact','Exact']].map(([m, lbl]) => (
             <button key={m} className={'btn btn-sm ' + ((enemy.reveal || 'hidden') === m ? 'btn-gold' : 'btn-ghost')}
               onClick={() => onUpdate(enemy.id, { reveal: m })} style={{ padding:'3px 9px', fontSize:11 }}>{lbl}</button>

@@ -1638,6 +1638,21 @@
     return (c && c.side === 'ally') ? 'ally' : 'enemy';
   }
   function isAlly(c) { return combatantSide(c) === 'ally'; }
+  /* --- Visibilité d'un PNJ côté joueur (2026-10-11) ---
+     `invisible: true` = le MJ a retiré ce combattant de la vue des JOUEURS : ni dans leurs
+     listes, ni dans leurs cibles, ni dans leur ordre des tours. ABSENT = visible, donc aucune
+     migration et tout PNJ existant reste visible.
+     ⚠️ À ne pas confondre avec `reveal`, qui règle ce qu'on voit de ses PV une fois visible.
+     ⚠️ Le moteur d'initiative garde TOUS les combattants : le créneau d'un PNJ masqué existe
+     pour tout le monde, il n'est simplement pas AFFICHÉ aux joueurs (sinon leur créneau actif
+     divergerait de celui du MJ).
+     ⚠️ Masquage d'AFFICHAGE, pas de sécurité : `combat/enemies` reste lisible par tout inscrit. */
+  function isVisibleToPlayers(c) { return !(c && c.invisible === true); }
+  /* Les combattants que ce spectateur doit voir : le staff voit tout. */
+  function visibleCombatants(list, staff) {
+    list = list || [];
+    return staff ? list.slice() : list.filter(isVisibleToPlayers);
+  }
   /* Repartit une liste de combattants par camp en preservant l'ordre d'origine. */
   function splitCombatants(list) {
     var out = { enemies: [], allies: [] };
@@ -3548,7 +3563,7 @@
     mergeMods, ADP_KEYS, runeHasAdpChoice,
     runePickOptions, runeHasPick, runePickCount, runePickKeys, runePickedOptions, runePickToggle, runePickGroup,
     mitigateDamage, applyDamageToPools, lifestealHeal, critInfo, rollCrit, critMultAfterResist, enemyPublicView,
-    combatantSide, isAlly, splitCombatants,
+    combatantSide, isAlly, splitCombatants, isVisibleToPlayers, visibleCombatants,
     INIT_DIE, rollInitiative, initiativeTotal, initiativeBonus, withKitInitiative, initiativeStatus, initiativeReady,
     combatantJoinRound, initiativeJoinOnValidate, initiativeSlots, slotParticipants, initiativeState,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,

@@ -91,7 +91,8 @@ function HubPage({ go }) {
     statesById[myId] = own.state;
     accessibleIds = [myId];
   }
-  const combatActif = (enemies && enemies.length > 0) || turn > 1;
+  // Un PNJ masqué par le MJ ne doit pas trahir un combat aux joueurs.
+  const combatActif = visibleCombatants(enemies, staff).length > 0 || turn > 1;
   const lastRecap = (typeof RECAPS !== 'undefined' && RECAPS.length) ? RECAPS[0] : null;
 
   return (
