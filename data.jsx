@@ -555,19 +555,20 @@ const SKILL_DESC = {
   /* ---------- Jett ---------- */
   passif_jett: [
     'Avec ton arc amélioré, **l\'attaque de base n\'inflige plus de dégâts** : elle crée des cellules nano-hextech (CN), des cubes de 1 cm qui réagissent aux impulsions de l\'arc et alimentent tes compétences.',
-    '- Chaque attaque produit **1 CN, plus 1 par palier d\'AD** (50, 125, 225, 375), à placer dans un rayon de 8 cases, 1 CN par case. La quantité est **doublée sur un critique**.',
+    '- Chaque attaque produit **1 CN, plus 1 par palier d\'AD** (50, 125, 225, 375, 550), à placer dans un rayon de 8 cases, 1 CN par case. La quantité est **doublée sur un critique**.',
     '- Tu peux récupérer tes CN à 8 cases ou moins : **+10 mana par CN** retirée.',
     '- Les effets de terrain peuvent détruire les CN. Les ennemis ne les voient pas, mais les plus observateurs peuvent deviner leur fonctionnement.',
   ],
   remodulation: [
-    'Les CN du terrain se configurent **au hasard** : dix configurations, à **chance égale**. Tire la configuration (🎲) avant de choisir la cible.',
+    'Les CN du terrain se configurent **au hasard** : dix configurations, à **chance égale**. Tire la configuration (🎲) avant de choisir les cibles.',
+    'L\'effet touche **toutes les cibles à portée d\'une CN** : choisis-les toutes dans le bloc « Cibles ».',
     '**Effets en croix** — ils s\'activent à **1 case d\'une CN, horizontalement ou verticalement** :',
     '- **Poison** : **15 + 30 % AP**, dégâts magiques, pour 3 tours.',
     '- **Repoussement** : les ennemis sont repoussés de 2 cases. En cas de collision : **15 + 30 % AD**.',
     '- **Attraction** : les ennemis sont attirés au centre des CN. En cas de collision : **15 + 30 % AD**.',
-    '- **Soin** : soigne un allié de **20 + 40 % AP**.',
-    '- **Bouclier** : donne à un allié un bouclier de **25 + 50 % AP**.',
-    '- **Mana** : rend à un allié **15 % de son mana max + 1 % par 40 AP**.',
+    '- **Soin** : soigne chaque allié de **20 + 40 % AP**.',
+    '- **Bouclier** : donne à chaque allié un bouclier de **25 + 50 % AP**.',
+    '- **Mana** : rend à chaque allié **15 % de son mana max + 1 % par 40 AP**.',
     '**Effets tout autour** — ils s\'activent à **1 case d\'une CN, dans toutes les directions** (diagonales comprises) :',
     '- **Champ électrique** : immobilise pour ce tour et le suivant.',
     '- **Duplication** : les CN occupent (n+1) × (n+1) cases, n étant le nombre de duplications depuis le début du combat.',
@@ -691,7 +692,8 @@ const SKILLS = {
       { id: 'ralliement', name: 'Ralliement', mana: 50, cd: 5, kind: 'cd',
         dmg: () => null, shield: (eff, c) => urskaarC3Shield(eff, c.hpMax) },
       { id: 'demi_ours', name: 'On ne m\'arrêtera pas', mana: 100, manaFixed: true, cd: 0, kind: 'day',
-        targeting: { damage: { max: null } },
+        // min 0 : la transformation se lance aussi SANS rien piétiner au même instant.
+        targeting: { damage: { min: 0, max: null, optional: true } },
         dmg: (eff, c) => dmgUrskaarC4(eff, c.moved), selfBuff: { hp: 0.30, ad: 0.30, armure: 0.30 },
         info: (eff, c) => [`Allié adjacent qui rate sa sauvegarde : ${dmgUrskaarC4Ally(eff, c.moved)} (le quart)`] },
     ],
@@ -700,6 +702,8 @@ const SKILLS = {
     passive: { name: 'Nano-hextech', counter: { key: 'cn', label: 'Cellules (CN)', max: 99 } },
     actives: [
       { id: 'remodulation', name: 'Remodulation expérimentale', mana: 32, cd: 1, kind: 'turn',
+        // Zone autour des cellules : l'effet tiré touche TOUTES les cibles à portée d'une CN.
+        targeting: { damage: { max: null }, heal: { camp: 'allies', max: null }, boon: { camp: 'allies', max: null } },
         dmg: (eff, c) => jettC1Damage(eff, c.config),
         dmgType: (eff, c) => (jettC1Effect(c.config) || {}).dmgType || null,
         heal: (eff, c) => jettC1Heal(eff, c.config),

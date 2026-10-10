@@ -703,6 +703,8 @@ test('Jett Nano-hextech', () => {
   assert.equal(L.jettEngins({ ad: 0 }, false), 1);
   assert.equal(L.jettEngins({ ad: 150 }, false), 3);
   assert.equal(L.jettEngins({ ad: 150 }, true), 6);
+  // paliers d AD : 50 / 125 / 225 / 375 / 550 (le 5e ajoute le 2026-10-10)
+  assert.deepEqual([49, 50, 125, 225, 375, 549, 550, 900].map(ad => L.jettEngins({ ad }, false)), [1, 2, 3, 4, 5, 5, 6, 6]);
   assert.equal(L.dmgJettPoison({ ap: 100 }), 45);     // 15 + 30 % AP
   assert.equal(L.dmgJettForce({ ad: 100 }), 45);      // 15 + 30 % AD
   assert.equal(L.dmgJettC2({ ad: 100 }), 36);
@@ -2255,6 +2257,21 @@ test('castSelectionValid : min 0 laisse passer un effet non cible', () => {
 const OPTS = { turn: 3, base: { hp: 400, ad: 180, armure: 40 }, selfId: 'rathael',
   wType: 'Physique', cdPrev: null, rng: () => 0.99 };   // rng haut = jamais de crit
 
+test('castSelectionValid : sans cible, refuse — sauf si la competence a aussi un effet sur son lanceur', () => {
+  const zone = { id: 'z', dmg: () => 50, targeting: { damage: { min: 0, max: null } } };
+  assert.equal(L.castSelectionValid(L.skillTargeting(zone, EFF, {}), {}).ok, false);
+  // transformation + pietinement optionnel (C4 d Urskaar) : lancable sans rien pietiner
+  // un effet sur soi ne suffit pas (Surcharge de Jett : cellules consommees pour rien) …
+  const surcharge = Object.assign({}, zone, { counterSet: { cn: 0 } });
+  assert.equal(L.castSelectionValid(L.skillTargeting(surcharge, EFF, {}), {}).ok, false);
+  // … il faut que la competence DECLARE son ciblage optionnel
+  const transfo = Object.assign({}, zone, { selfBuff: { hp: 0.3 }, targeting: { damage: { min: 0, max: null, optional: true } } });
+  const t = L.skillTargeting(transfo, EFF, {});
+  assert.equal(L.castSelectionValid(t, {}).ok, true);
+  const p = L.buildCastPlan(transfo, EFF, {}, {}, OPTS);
+  assert.deepEqual(p.instances.map(i => [i.kind, !!i.narrative]), [['status', false]]);
+  assert.equal(L.castSelectionValid(t, { damage: ['g1', 'g2', 'g3'] }).ok, true);
+});
 test('buildCastPlan : N cibles = N instances de degats, une par cible', () => {
   const p = L.buildCastPlan(SK_MULTI, EFF, {}, { damage: ['g1', 'g2', 'g3'] }, OPTS);
   assert.equal(p.instances.length, 3);

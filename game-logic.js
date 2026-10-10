@@ -1965,7 +1965,12 @@
     // ⚠️ Garde globale : une compétence dont TOUS les effets sont optionnels (Alignement
     // de séquence peut ne blesser personne ou ne soigner personne) passerait la boucle
     // avec zéro cible et partirait en « effet en table » — 40 mana pour rien.
-    if (aimable > 0 && total === 0) return { ok: false, effect: null,
+    // Exception DÉCLARÉE par la compétence (`optional: true` sur l'effet ciblable) : la
+    // transformation d'Urskaar se lance sans rien piétiner — son instance `status` sur le
+    // lanceur garantit que l'action n'est pas vide. La Surcharge de Jett, elle, a aussi un
+    // effet sur soi (cellules remises à zéro) mais reste gardée : sans cible, elle ne fait rien.
+    var allOptional = keys.every(function (k) { return t[k].camp === 'self' || t[k].optional === true; });
+    if (aimable > 0 && total === 0 && !(allOptional && t.status)) return { ok: false, effect: null,
       reason: 'Choisis au moins une cible' };
     return { ok: true, effect: null, reason: '' };
   }
@@ -2301,6 +2306,7 @@
     if (ad >= 125) n++;
     if (ad >= 225) n++;
     if (ad >= 375) n++;
+    if (ad >= 550) n++;   // 5e palier du kit d'origine, absent du code jusqu'au 2026-10-10 (décision MJ)
     return isCrit ? n * 2 : n;
   }
   function dmgJettPoison(eff) { return 15 + pctOf(eff.ap, 30); }
