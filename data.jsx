@@ -222,17 +222,17 @@ const RUNES = [
   { key:'conquerant', name:'Conquérant', color:'#c89b3c', theme:'Être en combat depuis ≥ 2 tours',
     paths:[
       { key:'agr', name:'Agression', capstone:'−2 CDR (sauf ultime)', nodes:[
-        { id:'conq_agr_1', tier:'mineure', name:"AD/AP", title:[{ t:"AD/AP", w:'fort' }], desc:"Bonus passif permanent, au choix AD ou AP. Une seule stat, qui gagne un peu à chaque niveau : c'est la rune de référence de l'arbre.", mods:{ adp:24 }, perLevel:{ adp:3 } },
+        { id:'conq_agr_1', tier:'mineure', name:"AD/AP", title:[{ t:"AD/AP", w:'fort' }], desc:"Bonus passif permanent, au choix AD ou AP. Monte à chaque niveau.", mods:{ adp:24 }, perLevel:{ adp:3 } },
         { id:'conq_agr_2', tier:'avancee', name:'Flux', desc:"+2 JA si l'attaque précédente touche", kind:'reminder' },
         { id:'conq_agr_3', tier:'fondamentale', name:'Frénésie', desc:'+45 AD ou AP et 10 létalité par tour en combat (max 4)', kind:'reminder' },
       ]},
       { key:'sus', name:'Sustain', capstone:'40 % Omni', nodes:[
-        { id:'conq_sus_1', tier:'mineure', name:"PV · Omnivamp", title:[{ t:"PV", w:'fort' }, { t:"Omnivamp", w:'moyen' }], desc:"Bonus passif permanent. Les PV montent à chaque niveau ; l'omnivamp reste au même pourcentage toute la campagne — mais elle soigne un % de TOUS les dégâts infligés, donc elle rapporte de plus en plus.", mods:{ hp:55, omni:5 }, perLevel:{ hp:6 } },
+        { id:'conq_sus_1', tier:'mineure', name:"PV · Omnivamp", title:[{ t:"PV", w:'fort' }, { t:"Omnivamp", w:'moyen' }], desc:"Bonus passif permanent. Les PV montent à chaque niveau ; l'omnivamp reste fixe.", mods:{ hp:55, omni:5 }, perLevel:{ hp:6 } },
         { id:'conq_sus_2', tier:'avancee', name:'Réfuter la mort', desc:"Réduit les dégâts d'une attaque de moitié (CD 5)", kind:'reminder' },
         { id:'conq_sus_3', tier:'fondamentale', name:'Soif de sang', desc:'+90 AD ou AP si soin au tour précédent', kind:'reminder' },
       ]},
       { key:'ten', name:'Tenacité', capstone:'Insensible aux CC', nodes:[
-        { id:'conq_ten_1', tier:'mineure', name:"PV · AD/AP", title:[{ t:"PV", w:'moyen' }, { t:"AD/AP", w:'moyen' }], desc:"Bonus passif permanent, au choix AD ou AP. Les deux stats montent à chaque niveau et se partagent le budget : moitié offensive, moitié défensive.", mods:{ hp:37, adp:11 }, perLevel:{ hp:4, adp:2 } },
+        { id:'conq_ten_1', tier:'mineure', name:"PV · AD/AP", title:[{ t:"PV", w:'moyen' }, { t:"AD/AP", w:'moyen' }], desc:"Bonus passif permanent, au choix AD ou AP. Les deux stats montent à chaque niveau.", mods:{ hp:37, adp:11 }, perLevel:{ hp:4, adp:2 } },
         { id:'conq_ten_2', tier:'avancee', name:'Adrénaline', desc:'+60 AD ou AP si CC subi depuis au plus un tour', kind:'reminder' },
         { id:'conq_ten_3', tier:'fondamentale', name:'Détermination', desc:'Devient enragé pour 2 tours (CD 5)', kind:'reminder' },
       ]},
@@ -240,19 +240,19 @@ const RUNES = [
   { key:'domination', name:'Domination', color:'#e0463f', theme:'Avoir éliminé une cible durant la rencontre',
     paths:[
       { key:'bur', name:'Burst', capstone:'+50 Dcrit et 10 % Crit par kill (max 3)', nodes:[
-        { id:'domi_bur_1', tier:'mineure', name:"%Crit · DCrit · AD/AP", title:[{ t:"%Crit", w:'fort' }, { t:"DCrit", w:'faible' }, { t:"AD/AP", w:'faible' }], desc:"Bonus passif permanent, au choix AD ou AP. Aucune valeur ne bouge avec le niveau, et c'est voulu : un pourcentage de crit multiplie une attaque qui grandit, donc il rapporte de plus en plus sans changer de chiffre. ⚠ Rune de crit : sans chance de critique, les DCrit ne servent à rien.", mods:{ crit:15, dcrit:14, adp:3 } },
+        { id:'domi_bur_1', tier:'mineure', name:"%Crit · DCrit · AD/AP", title:[{ t:"%Crit", w:'fort' }, { t:"DCrit", w:'faible' }, { t:"AD/AP", w:'faible' }], desc:"Bonus passif permanent, au choix AD ou AP. Valeurs fixes à tous les niveaux.", mods:{ crit:15, dcrit:14, adp:3 } },
         { id:'domi_bur_2', tier:'avancee', name:'Opportunité', desc:'+45 AD ou AP, +1 JA et +10 % Crit par tour sans attaquer (infini)', kind:'reminder' },
         { id:'domi_bur_3', tier:'fondamentale', name:'Explosivité', desc:"Double les dégâts d'une compétence (CD 5)", kind:'reminder' },
       ]},
       { key:'mob', name:'Mobilité', capstone:'+2 MS par kill (max 3)', nodes:[
-        { id:'domi_mob_1', tier:'mineure', name:"PM · %Crit", title:[{ t:"PM", w:'fort' }, { t:"%Crit", w:'faible' }], desc:"Bonus passif permanent. Rien ne bouge d'un niveau à l'autre, puis tout change d'un coup : paliers 1-5, 6-11 et 12-18. Les PM se suivent à la table, l'app ne les calcule pas.",
+        { id:'domi_mob_1', tier:'mineure', name:"PM · %Crit", title:[{ t:"PM", w:'fort' }, { t:"%Crit", w:'faible' }], desc:"Bonus passif permanent. Progresse par paliers : niveaux 1-5, 6-11 et 12-18. Les PM se comptent à la table.",
           levelSteps:[ { from:1, mods:{ crit:5 } }, { from:6, mods:{ crit:6 } }, { from:12, mods:{ crit:7 } } ],
-          note:"PM : +1 aux niveaux 1-5, +2 aux niveaux 6-11, +3 aux niveaux 12-18 — suivi à la table, le PM n'est pas une stat calculée" },
+          note:"PM : +1 aux niveaux 1-5, +2 aux niveaux 6-11, +3 aux niveaux 12-18, à compter à la table" },
         { id:'domi_mob_2', tier:'avancee', name:'Altération gravitationnelle', desc:'+2 MS et 50 % esquive pour 2 tours (CD 5)', kind:'reminder' },
         { id:'domi_mob_3', tier:'fondamentale', name:'Déplacement éclair', desc:'+30 AD ou AP et +5 % Crit par MS bonus', kind:'reminder' },
       ]},
       { key:'sad', name:'Sadisme', capstone:'Effet +50 % par kill (max 3)', nodes:[
-        { id:'domi_sad_1', tier:'mineure', name:"Léthalité · AD/AP", title:[{ t:"Léthalité", w:'fort' }, { t:"AD/AP", w:'moyen' }], desc:"Bonus passif permanent, au choix AD ou AP. L'offensive monte à chaque niveau, la léthalité reste fixe. Le choix pilote aussi le type de léthalité : AD → physique (réduit l'AR), AP → magique (réduit la RM).", mods:{ adp:6, lethaAdp:12 }, perLevel:{ adp:1 } },
+        { id:'domi_sad_1', tier:'mineure', name:"Léthalité · AD/AP", title:[{ t:"Léthalité", w:'fort' }, { t:"AD/AP", w:'moyen' }], desc:"Bonus passif permanent, au choix AD ou AP. L'offensive monte à chaque niveau, la léthalité reste fixe. Le choix fixe aussi le type de léthalité : AD → physique (réduit l'AR), AP → magique (réduit la RM).", mods:{ adp:6, lethaAdp:12 }, perLevel:{ adp:1 } },
         { id:'domi_sad_2', tier:'avancee', name:'Écorchage', desc:"+30 létalité sur la cible (toute l'équipe si cible à 100 % HP)", kind:'reminder' },
         { id:'domi_sad_3', tier:'fondamentale', name:'Torture enivrante', desc:'Dégâts +50 % si cible ≤ 50 % HP, et 10 % Omni', kind:'reminder' },
       ]},
@@ -260,19 +260,19 @@ const RUNES = [
   { key:'sorcellerie', name:'Sorcellerie', color:'#9d6bff', theme:'Avoir ≥ 50 % de son mana max',
     paths:[
       { key:'man', name:'Manifestation', capstone:'Contrôle du golem', nodes:[
-        { id:'sorc_man_1', tier:'mineure', name:"Mana · AP", title:[{ t:"Mana", w:'fort' }, { t:"AP", w:'moyen' }], desc:"Bonus passif permanent. Voie du mana : la réserve domine, tout l'AP vient du niveau. Le gain de mana grandit à chaque niveau.", mods:{ mana:60 }, perLevel:{ mana:14, ap:2 }, accel:{ mana:0.5 } },
+        { id:'sorc_man_1', tier:'mineure', name:"Mana · AP", title:[{ t:"Mana", w:'fort' }, { t:"AP", w:'moyen' }], desc:"Bonus passif permanent. Le mana et l'AP montent à chaque niveau ; le gain de mana grandit avec le niveau.", mods:{ mana:60 }, perLevel:{ mana:14, ap:2 }, accel:{ mana:0.5 } },
         { id:'sorc_man_2', tier:'avancee', name:'Densité arcanique/cosmique', desc:'Applique un CC de 1 tour selon la compétence (+50 mana)', kind:'reminder' },
         { id:'sorc_man_3', tier:'fondamentale', name:'Golem', desc:"Invoque un golem (HP/résistance/attaque selon l'élément, 1 fois)", kind:'reminder' },
       ]},
       { key:'har', name:'Harmonie élémentaire', capstone:"Bonus de stats liés à l'élément", nodes:[
-        { id:'sorc_har_1', tier:'mineure', name:"AP · Mana", title:[{ t:"AP", w:'fort' }, { t:"Mana", w:'faible' }], desc:"Bonus passif permanent. Voie de l'AP : la puissance magique domine, le mana accompagne. ⚠ Donne de l'AP SEUL, pas AD/AP au choix : la rune ne vaut rien pour un personnage physique.", mods:{ ap:21, mana:3 }, perLevel:{ ap:2.5, mana:6 } },
+        { id:'sorc_har_1', tier:'mineure', name:"AP · Mana", title:[{ t:"AP", w:'fort' }, { t:"Mana", w:'faible' }], desc:"Bonus passif permanent. L'AP et le mana montent à chaque niveau.", mods:{ ap:21, mana:3 }, perLevel:{ ap:2.5, mana:6 } },
         { id:'sorc_har_2', tier:'avancee', name:'Compétence infuse', desc:"Change l'élément principal d'une compétence (CD 5)", kind:'reminder' },
         { id:'sorc_har_3', tier:'fondamentale', name:'Spécialité élémentaire accrue', desc:"Maîtrise de l'élément principal augmentée d'un rang", kind:'reminder' },
       ]},
       { key:'mai', name:'Maîtrise magique', capstone:'−1 CDR', nodes:[
-        { id:'sorc_mai_1', tier:'mineure', name:"Portée · %Crit", title:[{ t:"Portée", w:'fort' }, { t:"%Crit", w:'faible' }], desc:"Bonus passif permanent. Rien ne bouge d'un niveau à l'autre, puis tout change d'un coup : paliers 1-5, 6-11 et 12-18. La portée supplémentaire se suit à la table, l'app ne la calcule pas.",
+        { id:'sorc_mai_1', tier:'mineure', name:"Portée · %Crit", title:[{ t:"Portée", w:'fort' }, { t:"%Crit", w:'faible' }], desc:"Bonus passif permanent. Progresse par paliers : niveaux 1-5, 6-11 et 12-18. La portée supplémentaire se compte à la table.",
           levelSteps:[ { from:1, mods:{ crit:5 } }, { from:6, mods:{ crit:6 } }, { from:12, mods:{ crit:7 } } ],
-          note:'Portée supplémentaire : +1 aux niveaux 1-5, +2 aux niveaux 6-11, +3 aux niveaux 12-18 — suivi à la table, la portée n\'est pas une stat calculée (elle n\'existe que par arme, via `cat.range`)' },
+          note:'Portée supplémentaire : +1 aux niveaux 1-5, +2 aux niveaux 6-11, +3 aux niveaux 12-18, à compter à la table' },
         { id:'sorc_mai_2', tier:'avancee', name:'Aery', desc:'Compétence offensive → +10 % dégâts ; défensive → alliés affectés +10 % PV max en bouclier', kind:'reminder' },
         { id:'sorc_mai_3', tier:'fondamentale', name:'Approche versatile', desc:"Coût réduit de moitié si le sort précédent était d'un élément différent", kind:'reminder' },
       ]},
@@ -280,17 +280,17 @@ const RUNES = [
   { key:'volonte', name:'Volonté', color:'#7bd07a', theme:'Avoir ≤ 50 % de ses PV max',
     paths:[
       { key:'dur', name:'Durabilité', capstone:'+25 % PV max', nodes:[
-        { id:'vol_dur_1', tier:'mineure', name:"PV · AR · RM", title:[{ t:"PV", w:'moyen' }, { t:"AR", w:'moyen' }, { t:"RM", w:'moyen' }], desc:"Bonus passif permanent. Retenez DEUX domaines parmi Vitalité, AR et RM. Les trois se valent au milieu de la campagne : la Vitalité est meilleure au début, les résistances à la fin.",
+        { id:'vol_dur_1', tier:'mineure', name:"PV · AR · RM", title:[{ t:"PV", w:'moyen' }, { t:"AR", w:'moyen' }, { t:"RM", w:'moyen' }], desc:"Bonus passif permanent. Retenez DEUX domaines parmi Vitalité, AR et RM.",
           pick:{ count:2, options:[
             { key:'vit',    label:'Vitalité',      short:'PV', mods:{ hp:35 }, perLevel:{ hp:5 } },
             { key:'armure', label:'AR',            short:'AR', mods:{ armure:16 } },
             { key:'resmag', label:'RM',            short:'RM', mods:{ resmag:16 } },
           ]} },
-        { id:'vol_dur_2', tier:'avancee', name:'Peau épineuse', desc:'+30 AR et 30 RM, renvoie 10 % des dégâts subis (renvoi en rappel)', mods:{ armure:30, resmag:30 }, note:'Renvoie 10 % des dégâts subis' },
+        { id:'vol_dur_2', tier:'avancee', name:'Peau épineuse', desc:"+30 AR et 30 RM, renvoie 10 % des dégâts subis", mods:{ armure:30, resmag:30 }, note:'Renvoie 10 % des dégâts subis' },
         { id:'vol_dur_3', tier:'fondamentale', name:'Immortalité éphémère', desc:'Bouclier = 50 % des HP max pour 2 tours (CD 5)', kind:'reminder' },
       ]},
       { key:'cc', name:'CC', capstone:'+10 AR/RM et +50 HP par cible affectée', nodes:[
-        { id:'vol_cc_1', tier:'mineure', name:"RCrit · PV · AR/RM", title:[{ t:"RCrit", w:'moyen' }, { t:"PV", w:'moyen' }, { t:"AR/RM", w:'moyen' }], desc:"Bonus passif permanent. Retenez UNE résistance, AR ou RM. Le cœur de la rune est la RCrit — les PV et la résistance ne sont qu'un appoint. ⚠ Sa vraie valeur dépend de qui vous attaque : nulle face à un adversaire qui ne critique pas.",
+        { id:'vol_cc_1', tier:'mineure', name:"RCrit · PV · AR/RM", title:[{ t:"RCrit", w:'moyen' }, { t:"PV", w:'moyen' }, { t:"AR/RM", w:'moyen' }], desc:"Bonus passif permanent. Retenez UNE résistance, AR ou RM.",
           mods:{ rescrit:25, hp:20 }, perLevel:{ hp:3 },
           pick:{ count:1, options:[
             { key:'armure', label:'AR',           short:'AR', mods:{ armure:8 } },
@@ -300,7 +300,7 @@ const RUNES = [
         { id:'vol_cc_3', tier:'fondamentale', name:'Neutralisation affaiblissante', desc:"Les CC que vous infligez réduisent l'AR et la RM de la cible de 25 %", kind:'reminder' },
       ]},
       { key:'sac', name:'Sacrifice', capstone:'Coût en HP réduit de moitié', nodes:[
-        { id:'vol_sac_1', tier:'mineure', name:"PV", title:[{ t:"PV", w:'fort' }], desc:"Bonus passif permanent. Une seule stat, qui monte fort à chaque niveau : c'est la voie des PV purs, et la rune la plus simple de l'arbre.", mods:{ hp:70 }, perLevel:{ hp:10 } },
+        { id:'vol_sac_1', tier:'mineure', name:"PV", title:[{ t:"PV", w:'fort' }], desc:"Bonus passif permanent. Monte à chaque niveau.", mods:{ hp:70 }, perLevel:{ hp:10 } },
         { id:'vol_sac_2', tier:'avancee', name:'Compétence à risque', desc:'Coûte 10 % des PV max par compétence, dégâts +20 %', kind:'reminder' },
         { id:'vol_sac_3', tier:'fondamentale', name:'Masochisme', desc:'+10 AR, +10 RM et +15 AD ou AP par usage de « Compétence à risque »', kind:'reminder' },
       ]},
@@ -308,17 +308,17 @@ const RUNES = [
   { key:'inspiration', name:'Inspiration', color:'#8be0ff', theme:'Avoir soigné ou prévenu des dégâts sur un allié au tour précédent',
     paths:[
       { key:'ame', name:'Amélioration / Maléfice', capstone:'Buffs/debuffs : nouveaux effets améliorés (à confirmer)', nodes:[
-        { id:'insp_ame_1', tier:'mineure', name:"SB", title:[{ t:"SB", w:'fort' }], desc:"Bonus passif permanent. Augmente les soins et boucliers que vous PRODUISEZ et ceux que vous RECEVEZ, potions comprises, en additif. Le pourcentage ne bouge pas, mais les soins qu'il amplifie grandissent. ⚠ Ne touche ni au vol de vie / omnivamp, ni aux hausses de PV max.", mods:{ soins:20 } },
+        { id:'insp_ame_1', tier:'mineure', name:"SB", title:[{ t:"SB", w:'fort' }], desc:"Bonus passif permanent. Augmente les soins et boucliers que vous produisez et ceux que vous recevez, potions comprises (additif). Ne s'applique ni au vol de vie ou à l'omnivamp, ni aux hausses de PV max.", mods:{ soins:20 } },
         { id:'insp_ame_2', tier:'avancee', name:'Aléatoire maîtrisé', desc:'Au début du combat, vous accorde un buff aléatoire', kind:'reminder' },
         { id:'insp_ame_3', tier:'fondamentale', name:'Influence augmentée', desc:'Buffs/maléfices augmentés de 25 %', kind:'reminder' },
       ]},
       { key:'par', name:'Partage', capstone:'Un CC peut être réassigné à une nouvelle cible', nodes:[
-        { id:'insp_par_1', tier:'mineure', name:"PV · Mana", title:[{ t:"PV", w:'moyen' }, { t:"Mana", w:'moyen' }], desc:"Bonus passif permanent. PV et mana pèsent exactement le même poids à tous les niveaux. Le gain de mana grandit à chaque niveau.", mods:{ hp:35, mana:30 }, perLevel:{ hp:5, mana:11 }, accel:{ mana:0.75 } },
-        { id:'insp_par_2', tier:'avancee', name:'Altruisme excessif', desc:'Une compétence ciblée peut transférer au choix 10 % de vos HP ou mana max (cible à confirmer)', kind:'reminder' },
+        { id:'insp_par_1', tier:'mineure', name:"PV · Mana", title:[{ t:"PV", w:'moyen' }, { t:"Mana", w:'moyen' }], desc:"Bonus passif permanent. PV et mana montent à chaque niveau ; le gain de mana grandit avec le niveau.", mods:{ hp:35, mana:30 }, perLevel:{ hp:5, mana:11 }, accel:{ mana:0.75 } },
+        { id:'insp_par_2', tier:'avancee', name:'Altruisme excessif', desc:"Une compétence ciblée peut transférer au choix 10 % de vos HP ou mana max", kind:'reminder' },
         { id:'insp_par_3', tier:'fondamentale', name:'Échange', desc:'Un buff ou debuff peut être réassigné à une nouvelle cible (CD 3)', kind:'reminder' },
       ]},
       { key:'pre', name:'Présage', capstone:"Jet de dé sur n'importe quelle action", nodes:[
-        { id:'insp_pre_1', tier:'mineure', name:"AD/AP · AR · RM · SB", title:[{ t:"AD/AP", w:'moyen' }, { t:"AR", w:'moyen' }, { t:"RM", w:'moyen' }, { t:"SB", w:'moyen' }], desc:"Bonus passif permanent. Retenez DEUX domaines parmi Offensif (AD ou AP), Défensif (AR ou RM) et SB. L'offensif est le choix sûr et régulier ; les deux autres démarrent plus bas et finissent plus haut.",
+        { id:'insp_pre_1', tier:'mineure', name:"AD/AP · AR · RM · SB", title:[{ t:"AD/AP", w:'moyen' }, { t:"AR", w:'moyen' }, { t:"RM", w:'moyen' }, { t:"SB", w:'moyen' }], desc:"Bonus passif permanent. Retenez DEUX domaines parmi Offensif (AD ou AP), Défensif (AR ou RM) et SB.",
           pick:{ count:2, options:[
             { key:'off_ad', group:'off',  label:'Offensif AD',     short:'AD',  mods:{ ad:12 }, perLevel:{ ad:1.5 } },
             { key:'off_ap', group:'off',  label:'Offensif AP',     short:'AP',  mods:{ ap:12 }, perLevel:{ ap:1.5 } },
