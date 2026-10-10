@@ -2412,6 +2412,11 @@ test('Jett C4 Nano-hex : stats sur le plafond de carac du niveau, un bonus par c
   s = L.nanoHexStats(7, { hp: 2, crit: 1, dcrit: 1, armure: 1, resmag: 2 });
   assert.deepEqual([s.hp, s.crit, s.dcrit, s.armure, s.resmag, s.cells], [340, 25, 170, 26, 38, 7]);
   assert.equal(L.allocTotal({ ad: 2, hp: 1, x: -4 }), 3);
+  // actions libres : le Nano-hex frappe avec SA fiche, rien de Jett ne passe (ni lethalite ni vol de vie)
+  assert.equal(L.nanoHexSummon(7, { ap: 2 }).ray, L.nanoHexStats(7, { ap: 2 }).ray);
+  assert.deepEqual(L.nanoHexEff({ crit: 25, dcrit: 170, hpMax: 324 }),
+    { crit: 25, dcrit: 170, hp: 324, letha: 0, lethaMag: 0, vol: 0, sapience: 0, omni: 0, soins: 0, mana: 0 });
+  assert.equal(L.nanoHexEff(null).dcrit, 150);
   const fiche = L.nanoHexSummon(7, { ad: 5 });
   assert.deepEqual([fiche.name, fiche.hpMax, fiche.hpCur, fiche.atk, fiche.crit, fiche.dcrit], ['Nano-hex', 284, 284, 130, 5, 150]);
   // le cast depose la fiche dans une instance `summon` ; le MJ en fait un PNJ allie

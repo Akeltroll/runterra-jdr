@@ -2402,11 +2402,19 @@
   /* La fiche à poser comme PNJ allié (forme de `combat/enemies`). */
   function nanoHexSummon(cap, alloc) {
     var s = nanoHexStats(cap, alloc);
-    return { name: 'Nano-hex', hpMax: s.hp, hpCur: s.hp, atk: s.attack, armure: s.armure, resmag: s.resmag,
+    return { name: 'Nano-hex', hpMax: s.hp, hpCur: s.hp, atk: s.attack, ray: s.ray, armure: s.armure, resmag: s.resmag,
       crit: s.crit, dcrit: s.dcrit,
       note: 'PV ' + s.hp + ' · AD ' + s.ad + ' · AP ' + s.ap + ' · Attaque ' + s.attack + ' (chaque tour, peut criter) · Rayon '
         + s.ray + ' par cible (magique, 1 tour sur 2, sans crit) · portée 2, 5 cases · joue au créneau de Jett · '
         + s.cells + ' CN' };
+  }
+
+  /* Stats avec lesquelles le Nano-hex FRAPPE (actions libres de Jett) : son critique à lui,
+     ni léthalité ni vol de vie — rien de ce que porte Jett ne passe dans ses coups. */
+  function nanoHexEff(nano) {
+    nano = nano || {};
+    return { crit: nano.crit | 0, dcrit: (nano.dcrit | 0) || 150, hp: nano.hpMax | 0,
+      letha: 0, lethaMag: 0, vol: 0, sapience: 0, omni: 0, soins: 0, mana: 0 };
   }
 
   /* --- Rathael : Chair gelée, âme fendue ---
@@ -3018,7 +3026,7 @@
     weaponAttackTargeting, buildWeaponAttack, buildFocalisation, LOT3_ASSISTED_PROPS, buildParade,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, eliasC4Heal, skillHeal,
     dmgSmithPassif, dmgSmithC1, smithC1Mult, smithC1CritBonus, dmgSmithC3, smithBleed,
-    urskaarStunPct, dmgUrskaarC4Ally, missingHpPct, resolveBoon, skillCastCost,
+    urskaarStunPct, dmgUrskaarC4Ally, missingHpPct, resolveBoon, skillCastCost, pctOf, nanoHexEff,
     dmgJettC3, jettC3Boon, NANOHEX_CN_OPTIONS, allocTotal, nanoHexStats, nanoHexSummon,
     healJettC1, shieldJettC1, jettC1ManaPct, JETT_C1_EFFECTS, jettC1Effect, jettC1Roll, jettC1Damage, jettC1Heal, jettC1Boon,
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,

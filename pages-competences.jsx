@@ -20,6 +20,8 @@ const SKILL_VARS = {
   pugilat: ['side', 'moved'],
   ecrasement: ['moved'],
   demi_ours: ['moved'],
+  pietinement: ['moved'],
+  pietinement_allie: ['moved'],
 };
 
 /* Couleurs d'effet, partagées carte joueur ↔ carte MJ (cf. INSTANCE_TONE, pages-mj). */
@@ -405,7 +407,10 @@ function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
   );
 }
 
-function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast, locked, minLevel, pools }) {
+/* Clé du marqueur « effet en cours » d'une compétence à actions libres (`sk.followUps`). */
+function followUpKey(sk) { return 'u_' + sk.id; }
+
+function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast, locked, minLevel, pools, followUpOf, onEndEffect }) {
   const [vars, setVars] = useState({ firstHit: false, furtif: false, marked: false, melee: false, config: '', alloc: {}, side: 'droite', moved: 0, duration: (sk.duration ? sk.duration.min : 1) });
   /* Sélection de cibles PAR EFFET, état LOCAL et non persisté : c'est un choix par
      lancement, comme les variables d'attaque. Vidée après chaque cast réussi. */
@@ -461,13 +466,18 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
   return (
     <div className="panel" style={{ borderLeft: `3px solid ${ready ? color : 'var(--line-strong)'}`, opacity: ready ? 1 : 0.7 }}>
       <div className="panel-head">
-        <h3>⚔ {sk.name}</h3>
+        <h3>{followUpOf ? '↳' : '⚔'} {sk.name}</h3>
+        {followUpOf ? (
+          <span className="badge" title={`Action libre tant que « ${followUpOf.name} » est en cours : ni mana, ni délai. Le MJ vérifie.`}
+            style={{ background: 'var(--bg-inset)', color: 'var(--skillbuff)' }}>action libre · {followUpOf.name}</span>
+        ) : (
         <span className="row gap-2" style={{ alignItems: 'center' }}>
           <span className="badge" style={{ background: 'var(--bg-inset)' }}
             title={sk.manaFixed ? 'Coût fixe, à tout niveau' : `Coût au niveau ${baseCtx.level} : ${sk.mana} au niveau 2, +8 % par niveau`}>{manaCost} mana</span>
           <span className="badge" title="Cooldown de la compétence" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>{cdInfo}</span>
           <span className="badge" style={{ background: ready ? 'var(--bg-inset)' : 'var(--bg-panel-2)', color: ready ? 'var(--buff)' : 'var(--gold-pale)' }}>{cdLabel}</span>
         </span>
+        )}
       </div>
       <div style={{ padding: '10px 14px' }}>
         {/* Contrôles de variables d'attaque */}
@@ -569,6 +579,13 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
         </div>
         {!check.ok && ready && enoughMana && (
           <div className="faint" style={{ fontSize: 11.5, marginTop: 6, color: 'var(--gold-pale)' }}>{check.reason}</div>
+        )}
+        {onEndEffect && (
+          <div className="row gap-2" style={{ alignItems: 'center', marginTop: 10 }}>
+            <span className="mono" style={{ fontSize: 11.5, color: 'var(--skillbuff)' }}>🟠 effet en cours · actions libres ci-contre</span>
+            <button className="btn btn-sm btn-ghost" style={{ padding: '2px 8px', fontSize: 11.5 }} onClick={onEndEffect}
+              title="Retire les actions libres de cette compétence. « ⟲ Combat » le fait aussi.">■ Fin de l'effet</button>
+          </div>
         )}
         <SkillDescription lines={SKILL_DESC[sk.id]} color={color} />
       </div>
@@ -771,7 +788,10 @@ function CompetencesBody({ char, staff }) {
   const wType = profile.wType;
   // `hpCur` : PV actuels du lanceur, pour la Frappe Irritée de Rathäel (% de PV manquants,
   // rapportés à `eff.hp`). `hpMax` reste le PV de BASE (bouclier d'Urskaar, ultime de Rathäel).
-  const baseCtx = { counters, level, wType, hpMax: base.hp, hpCur: state.hpCur != null ? state.hpCur : null };
+  // `nano` : le Nano-hex de Jett s'il est sur le plateau (PNJ allié posé par le MJ) — ses
+  // actions libres lisent SA fiche, pas celle de Jett.
+  const nano = enemies.find(e => e.side === 'ally' && e.name === 'Nano-hex' && e.hpCur > 0) || null;
+  const baseCtx = { counters, level, wType, hpMax: base.hp, hpCur: state.hpCur != null ? state.hpCur : null, nano };
   // Setters de ressources : même contrat que la fiche (valeur ou updater), pour que
   // ConsumablesRow soit branchable des deux côtés sans variante.
   const setHp   = (v) => setField('hpCur',   typeof v === 'function' ? v(state.hpCur || 0) : v);
@@ -825,12 +845,37 @@ function CompetencesBody({ char, staff }) {
     // Paiement AVANT dépôt : sinon la compétence est relançable pendant que le MJ arbitre.
     setField('manaCur', manaCur - cost);
     setCooldown(sk.id, skillLockValue(sk, turn));
+    // Compétence à effet PROLONGÉ : le marqueur « en cours » ouvre ses actions libres.
+    if (sk.followUps) setCooldown(followUpKey(sk), SKILL_CD_COMBAT);
     addAction({ attackerId: char.id, attackerName: char.name, skillId: sk.id, skillName: sk.name,
       source: 'skill', round: turn, cost: plan.cost }, plan.instances);
     const sum = instanceSummary(plan.instances, targetName);
     pushLog(`<b>${char.name}</b> lance <b>${sk.name}</b>${sum ? ' — ' + sum : ''} — en attente MJ`,
       plan.instances.some(i => i.didCrit) ? 'buff' : 'gold');
     toast(`<b>${char.name}</b> — ${sk.name} : ${plan.instances.length} effet(s) envoyé(s) au MJ`, 'buff');
+    return true;
+  }
+
+  /* ACTIONS LIBRES d'une compétence à effet prolongé (ultimes sur plusieurs tours : piétinement
+     d'Urskaar, onde de Rathäel, attaques du Nano-hex…). Demande MJ du 2026-10-10 : une fois la
+     compétence ACTIVÉE, le joueur dépose ses effets librement — ni mana, ni délai, ni compte de
+     tours — et le MJ vérifie à la résolution, comme pour tout le reste.
+     « Activée » = le marqueur `cooldowns/u_<id>` posé au cast. « ⟲ Combat » l'efface (ce n'est
+     pas un verrou du jour) ; le joueur peut aussi y mettre fin lui-même. */
+  const followUpActive = (sk) => !!(sk.followUps && cooldowns[followUpKey(sk)] != null);
+  function castFollowUp(parent, fu, ctx, selection) {
+    ctx = ctx || baseCtx; selection = selection || {};
+    const e = typeof fu.effOf === 'function' ? fu.effOf(eff, ctx) : eff;
+    const check = castSelectionValid(skillTargeting(fu, e, ctx), selection);
+    if (!check.ok) { toast(`<b>${char.name}</b> — ${check.reason}`, 'gold'); return false; }
+    const plan = buildCastPlan(fu, e, ctx, selection,
+      { turn, base, selfId: char.id, wType, cdPrev: null, buffs: activeBuffs, narrative: fu.name, level });
+    addAction({ attackerId: char.id, attackerName: char.name, skillId: fu.id, skillName: `${parent.name} — ${fu.name}`,
+      source: 'followup', round: turn, cost: plan.cost }, plan.instances);
+    const sum = instanceSummary(plan.instances, targetName);
+    pushLog(`<b>${char.name}</b> — <b>${parent.name}</b> : ${fu.name}${sum ? ' — ' + sum : ''} — en attente MJ`,
+      plan.instances.some(i => i.didCrit) ? 'buff' : 'gold');
+    toast(`<b>${char.name}</b> — ${fu.name} : envoyé au MJ`, 'buff');
     return true;
   }
 
@@ -1141,10 +1186,20 @@ function CompetencesBody({ char, staff }) {
       <PassiveCard kit={kitWithId} eff={eff} base={base} counters={counters} level={level} color={color} setCounter={setCounter} />
       <div className="comp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
         {kit.actives.map((sk, i) => (
-          <ActiveCard key={sk.id} sk={sk} eff={eff} baseCtx={baseCtx} color={color}
-            ready={cooldownReady(cooldowns[sk.id], turn)} readyAt={cooldowns[sk.id]} turn={turn}
-            manaCur={state.manaCur || 0} onCast={(ctx, selection) => cast(sk, ctx, selection)}
-            pools={pools} locked={!skillUnlocked(i, level)} minLevel={i + 1} />
+          <React.Fragment key={sk.id}>
+            <ActiveCard sk={sk} eff={eff} baseCtx={baseCtx} color={color}
+              ready={cooldownReady(cooldowns[sk.id], turn)} readyAt={cooldowns[sk.id]} turn={turn}
+              manaCur={state.manaCur || 0} onCast={(ctx, selection) => cast(sk, ctx, selection)}
+              pools={pools} locked={!skillUnlocked(i, level)} minLevel={i + 1}
+              onEndEffect={followUpActive(sk) ? () => setCooldown(followUpKey(sk), null) : null} />
+            {/* Actions libres de la compétence EN COURS : une carte par action, sans coût ni délai. */}
+            {skillUnlocked(i, level) && followUpActive(sk) && sk.followUps.map(fu => (
+              <ActiveCard key={fu.id} sk={fu} followUpOf={sk}
+                eff={typeof fu.effOf === 'function' ? fu.effOf(eff, baseCtx) : eff} baseCtx={baseCtx} color={color}
+                ready={true} readyAt={null} turn={turn} manaCur={state.manaCur || 0}
+                onCast={(ctx, selection) => castFollowUp(sk, fu, ctx, selection)} pools={pools} locked={false} />
+            ))}
+          </React.Fragment>
         ))}
       </div>
       <MyTurnBar me={char.id} meName={char.name} ini={ini} toast={toast} round={turn} />

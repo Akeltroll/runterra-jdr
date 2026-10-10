@@ -439,6 +439,13 @@ const ITEM_CATALOG = [
    conditionnel de compteur au cast. Source : info-mj/Codes App Script.md (le script prime).
    ⚠️ `mana` = coût AU NIVEAU 2 (rééquilibrage du 2026-10-10) : le coût réel monte de 8 % par niveau
    (`skillManaCost`, game-logic). `manaFixed: true` = coût fixe à tout niveau (les C4). --- */
+/* ACTIONS LIBRES (`followUps`) — demande MJ du 2026-10-10. Une compétence dont l'effet dure
+   plusieurs tours (les ultimes) porte une liste de mini-compétences : une fois la compétence
+   ACTIVÉE, l'onglet Combat les propose en cartes « action libre », sans mana ni délai ni compte
+   de tours. Le joueur les dépose quand il veut, le MJ vérifie à la résolution. Même forme qu'une
+   active (dmg, targeting, dmgType, noCrit, selfHeal, selfBuffFlat, info…) ; `effOf(eff, ctx)`
+   remplace les stats du lanceur (le Nano-hex frappe avec SA fiche, pas celle de Jett).
+   ⚠️ Leur `id` sert de clé Firebase (skillBuffs) : ni « . » ni « / ». */
 /* Plafond par caractéristique à un niveau (`LEVELS[].limit`) : c'est le « Mental » et la
    « Magie » du Nano-hex de Jett. Au-delà de la table, le dernier palier. */
 /* --- DESCRIPTIONS des compétences et passifs (onglet Combat, bouton « Description »).
@@ -674,7 +681,13 @@ const SKILLS = {
         dmgLabel: (eff) => `Saignement : ${smithBleed(eff)} dégâts BRUTS par tour · chaîne sur toutes les cibles du cône (exécutées à 10 % de PV)`,
         info: (eff) => [`Saignement : ${smithBleed(eff)} bruts par tour (20 % AD)`] },
       { id: 'voile', name: 'Voile dimensionnel', mana: 80, manaFixed: true, cd: 0, kind: 'day',
-        dmg: () => null },
+        dmg: () => null,
+        followUps: [
+          { id: 'voile_bonus', name: 'La cible est morte dans le Voile', dmg: () => null,
+            selfBuffFlat: { crit: 10, dcrit: 25 },
+            info: () => ['+10 % critique et +25 % dégâts critiques pour le combat', 'Soin de 10 % des PV et du mana max de la cible : à voir avec le MJ'] },
+        ],
+      },
     ],
   },
   urskaar: {
@@ -695,6 +708,13 @@ const SKILLS = {
         // min 0 : la transformation se lance aussi SANS rien piétiner au même instant.
         targeting: { damage: { min: 0, max: null, optional: true } },
         dmg: (eff, c) => dmgUrskaarC4(eff, c.moved), selfBuff: { hp: 0.30, ad: 0.30, armure: 0.30 },
+        // Actions LIBRES pendant les 5 tours de transformation (voir `followUps` plus haut).
+        followUps: [
+          { id: 'pietinement', name: 'Piétinement', targeting: { damage: { max: null } },
+            dmg: (eff, c) => dmgUrskaarC4(eff, c.moved) },
+          { id: 'pietinement_allie', name: 'Piétinement — allié (sauvegarde ratée)', targeting: { damage: { max: null } },
+            dmg: (eff, c) => dmgUrskaarC4Ally(eff, c.moved) },
+        ],
         info: (eff, c) => [`Allié adjacent qui rate sa sauvegarde : ${dmgUrskaarC4Ally(eff, c.moved)} (le quart)`] },
     ],
   },
@@ -724,6 +744,15 @@ const SKILLS = {
         dmg: () => null, counterSet: { cn: 0 },
         alloc: { label: 'Cellules à répartir', options: NANOHEX_CN_OPTIONS, max: (c) => (c.counters && c.counters.cn) || 0 },
         summon: (eff, c) => nanoHexSummon(attrCapOfLevel(c.level), c.alloc),
+        // Actions libres du compagnon : elles lisent SA fiche (`c.nano`, le PNJ allié posé par le MJ).
+        followUps: [
+          { id: 'nano_attaque', name: 'Nano-hex — Attaque',
+            dmg: (eff, c) => c.nano ? (c.nano.atk | 0) : null, dmgType: () => 'physique', effOf: (eff, c) => nanoHexEff(c.nano),
+            info: (eff, c) => [c.nano ? 'Une cible, chaque tour. Critique du Nano-hex.' : 'Le Nano-hex n\'est pas encore sur le plateau (validation du MJ).'] },
+          { id: 'nano_rayon', name: 'Nano-hex — Rayon', targeting: { damage: { max: null } }, noCrit: true,
+            dmg: (eff, c) => c.nano ? (c.nano.ray | 0) : null, dmgType: () => 'magique', effOf: (eff, c) => nanoHexEff(c.nano),
+            info: (eff, c) => [c.nano ? 'Par cible, petite zone en croix, 1 tour sur 2, sans critique.' : 'Le Nano-hex n\'est pas encore sur le plateau (validation du MJ).'] },
+        ],
         info: (eff, c) => { const s = nanoHexStats(attrCapOfLevel(c.level), c.alloc); return [
           `PV ${s.hp} · AD ${s.ad} · AP ${s.ap} · Armure ${s.armure} · RM ${s.resmag}`,
           `Crit ${s.crit} % · dégâts crit ${s.dcrit} %`,
@@ -750,6 +779,12 @@ const SKILLS = {
       { id: 'souverain_glacial', name: 'Souverain Glacial', mana: 100, manaFixed: true, cd: 0, kind: 'day',
         dmg: () => null,
         transform: { turns: 4 },
+        followUps: [
+          { id: 'onde_glaciale', name: 'Onde glaciale', targeting: { damage: { max: null } }, noCrit: true,
+            dmg: (eff) => pctOf(eff.hp, 2), dmgType: () => 'brut',
+            selfHeal: (eff, c, n) => Math.floor(pctOf(eff.hp, 2) * n * 0.1),
+            info: (eff) => [`2 % de tes PV max en bruts à chaque unité de la zone · soin de 10 % des dégâts infligés`] },
+        ],
         selfBuffFlat: (eff, c) => { const hp = rathaelUltHpBonus((c.counters && c.counters.glaciation) || 0, c.hpMax || 0); return hp ? { hp } : {}; } },
     ],
   },
