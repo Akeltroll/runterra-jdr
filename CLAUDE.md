@@ -356,11 +356,21 @@ Le backlog complet (diagnostics chiffrés, défauts par perso, chantiers en paus
 **`docs/backlog.md`** — ⚠️ **le lire avant d'ouvrir un chantier**, il contient des analyses déjà faites
 qu'il ne faut pas refaire.
 
-- **🔜 Prochain gros chantier : rééquilibrage des compétences** (diagnostic fait, décisions à prendre).
-  3 PJ sur 5 n'ont aucune raison de lancer une compétence (ratio comp/attaque de base : Smith ×1,04,
-  Jett ×1,00). Diagnostic : §10 de `docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md`.
-  **❓ Question non tranchée par le MJ** : scaling numérique par niveau **ou** upgrades de compétences au
-  choix du joueur — l'un ou l'autre, pas les deux.
+- **🔜 Chantier en cours : rééquilibrage des compétences — CONÇU, PAS ENCORE CODÉ** (figé le 2026-10-10).
+  👉 **Référence unique pour coder : `docs/superpowers/plans/2026-10-10-competences-patchs-a-appliquer.md`**
+  (valeurs finales des 5 kits au rang 1, grille de mana, lots A à G dans l'ordre, annonces à la table,
+  questions ouvertes Q1 à Q4). **Commencer par le lire, puis par le lot A.**
+  Décidé : attaque de base à **60 %** de l'AD/AP ; dégâts de compétence **×0,6** (3 exceptions MJ : Attaque
+  sournoise, Frappe Irritée, Éclat de l'âme à ×0,9) ; mana `coût niv. 2 × (1 + 8 % × (niveau − 2))`, C4 à coût
+  fixe ; **toutes les C4 une fois par JOUR** ; progression par rangs (1 à 5, plafond ⌊niveau/2⌋, C4 → ultime
+  au niveau 6) ; passifs d'Urskaar et d'Elias réécrits ; C3/C4 de Jett créées (Nano-hex).
+  ⚠️ **Règle de table qui a invalidé le premier cadre** : un perso lance à chaque tour son attaque de base
+  **ET** sa C1 **ET** sa C2 ou sa C3 **ET** sa C4 — les compétences ne remplacent pas l'attaque de base,
+  elles s'y **ajoutent**. Ne jamais comparer « compétence contre attaque de base ».
+  ⚠️ **`docs/superpowers/specs/2026-10-05-competences-etat-des-lieux.md` est un journal** : ses §2 à §7
+  portent des valeurs remplacées (bandeau en tête du fichier) ; seul son §8 est à jour, et le plan le résume.
+  **Reste à concevoir** (lot G bloqué dessus) : contenu des rangs 2 à 5, ultimes d'Elias et d'Urskaar,
+  dimensionnement des monstres (durées visées 6-7 / 9-10 / 13-15 rounds).
 - **Arbre de runes : déséquilibré, et c'est MESURÉ** (2026-09-15). Diagnostic chiffré des 45 nœuds :
   `docs/superpowers/specs/2026-09-15-runes-chiffrage-design.md` — ⚠️ **le lire avant de toucher
   `RUNES`**. ×5 entre la meilleure et la pire mineure (seules accessibles au niveau 2 = en jeu
@@ -379,9 +389,12 @@ qu'il ne faut pas refaire.
 l'admin.** Au 2026-09-07, la machine du MJ n'avait que 3 des 8 fichiers listés ici. Deux ont été
 retrouvés depuis et replacés : `SPECIFICATION - Système refondu.md` (2026-09-07) et
 `Nouveau système de gestion des attaques de base (2).md` (2026-09-09).
-**Restent manquants côté MJ** : `Compétences-Races PJ`, `Système de Runes.md`, `Codes App Script.md`,
-`tableau_XP.png`. Les rapatrier AVANT tout chantier qui en dépend (le rééquilibrage des compétences
-a besoin du premier).
+`Compétences-Races PJ (mis à jour).md` a été retrouvé et converti le 2026-10-10 (le `.docx` du 16 juin dans
+`~/OneDrive/Documents/Claude` ; ⚠️ le même dossier contient une version **plus ancienne** sans « (mis à
+jour) », à ne pas prendre : il lui manque la C2 de Jett et le kit réécrit de Rathäel).
+**Restent manquants côté MJ** : `Système de Runes.md`, `Codes App Script.md` (tous deux présents en `.docx`
+dans `~/OneDrive/Documents/Claude`, pas encore convertis), `tableau_XP.png`. Les rapatrier AVANT tout
+chantier qui en dépend.
 ⚠️ **Où chercher un fichier manquant** : `~/Downloads` et `~/OneDrive/Documents/Claude` — les deux
 retrouvés y étaient. Et **chercher en `.docx`, pas en `.md`** : cette liste les nomme en `.md`, mais
 le MJ les produit sous Word. Convertisseur docx→md (paragraphes, titres, listes, tableaux) écrit le

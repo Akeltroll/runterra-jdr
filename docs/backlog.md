@@ -3,7 +3,13 @@
 Déplacé depuis `CLAUDE.md` le 2026-09-11 (limite de taille). `CLAUDE.md` n'en garde qu'un résumé
 dans sa section « Chantiers en cours / backlog » ; **ce fichier fait foi**.
 
-### 🔜 PROCHAIN CHANTIER — Rééquilibrage des compétences (diagnostic FAIT, décisions à prendre)
+### 🔜 CHANTIER EN COURS — Rééquilibrage des compétences (CONÇU le 2026-10-10, PAS ENCORE CODÉ)
+> 👉 **Tout ce qui est à coder est dans
+> `docs/superpowers/plans/2026-10-10-competences-patchs-a-appliquer.md`** (valeurs finales, lots A à G,
+> questions ouvertes). ⚠️ **Le texte ci-dessous est le diagnostic d'origine du 2026-09-05, conservé pour
+> mémoire** : il raisonne « compétence À LA PLACE de l'attaque de base », alors qu'à la table les deux
+> s'ajoutent. Ses constats chiffrés et ses « décisions à prendre » sont clos par le plan.
+
 Ouvert le 2026-09-05, à reprendre dans une nouvelle conversation. **Tout le diagnostic est déjà
 chiffré au §10 de `docs/superpowers/specs/2026-09-05-calibrage-attaques-base-design.md`** — le
 relire AVANT de recommencer une analyse.
@@ -57,6 +63,8 @@ bruiser 1.3 / 2.2 ; tank 0.8 / 1.6 ; utilitaire 1.0 / 2.5. Moyenne ~1,5 pour les
   **cellules** (par défaut) l'attaque ne fait aucun dégât et part en action narrative, en mode
   **arc court** elle frappe en physique (livré le 2026-09-15).
 
+✅ **TRANCHÉ le 2026-10-06 : les upgrades d'abord**, scaling au cas par cas — règles au §3 de
+`docs/superpowers/specs/2026-10-05-competences-etat-des-lieux.md`. *Texte d'origine :*
 **❓ LA question non tranchée par le MJ** : **scaling numérique par niveau OU upgrades de
 compétences au choix du joueur à chaque montée** — le MJ veut **l'un ou l'autre, pas les deux**
 (« scale les nombres + upgrade de compétences risquent de rendre les personnages difficiles à
