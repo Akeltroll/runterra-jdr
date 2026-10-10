@@ -1,7 +1,7 @@
 # Rééquilibrage des compétences — patchs à appliquer (état figé au 2026-10-10)
 
 **Ce document est la référence unique pour coder.** Il rassemble les décisions du MJ prises du
-2026-10-06 au 2026-10-10, dans leur **valeur finale**. Rien de ce qui suit n'est encore dans le code.
+2026-10-06 au 2026-10-10, dans leur **valeur finale**. Seul le **lot A** est dans le code (2026-10-10).
 
 - Le raisonnement, les options écartées et les chiffres intermédiaires sont dans
   `docs/superpowers/specs/2026-10-05-competences-etat-des-lieux.md`. ⚠️ Cette spec est un **journal
@@ -148,6 +148,7 @@ Chaque lot est livrable seul. **Avant de toucher un fichier, lire `docs/archi/co
 attente, `buildCastPlan`, modes d'attaque de base).
 
 ### Lot A — Attaque de base à 60 % ⚠️ effet en jeu immédiat pour tous
+✅ **Codé le 2026-10-10** (`BASIC_ATTACK_RATIO`, cache `20261010-1`) — voir `docs/journal/2026-10-10.md`.
 - `basicAttackProfile` (`game-logic.js:778`) : `power = stat × ratio` → ajouter le facteur 0,6.
   Appelée par `pages-competences.jsx` et `pages-sheet.jsx` ; 17 tests.
 - **Le facteur 0,6 se MULTIPLIE avec tout le reste** (décision du 2026-10-10) : c'est une échelle globale de
@@ -205,8 +206,8 @@ choix, ultime au niveau 6, remise à zéro par le MJ, règle RTDB pour que le jo
 **Bloqué** : le contenu des rangs 2 à 5 et les versions ultimes d'Elias et d'Urskaar ne sont pas conçus.
 
 ### À chaque livraison de code
-- `node --test test/game-logic.test.js` et `node --test test/auth.test.js` (313 tests verts au départ).
-- Bumper le jeton de cache d'`index.html` (actuel : `20261005-2`).
+- `node --test test/game-logic.test.js` et `node --test test/auth.test.js` (314 tests verts après le lot A).
+- Bumper le jeton de cache d'`index.html` (actuel : `20261010-1`).
 - Une entrée `docs/journal/<date>.md` + une ligne dans l'index de `CLAUDE.md`.
 
 ---

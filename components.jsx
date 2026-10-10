@@ -1162,8 +1162,8 @@ function WeaponStatusLine({ profile }) {
         : cat.mini ? chip('Mini-arme · maîtrise non requise', 'var(--gold-pale)', 'Une mini-arme garde tout, maîtrisée ou non')
         : profile.mastered ? chip('✓ Maîtrisée', 'var(--buff-bright)')
         : chip('✗ Non maîtrisée · −25 % et sans propriété', 'var(--hp)', "La formation coûte 120 ar (guide d'économie)")}
-      {cat && cat.mini && profile.pair !== 'mini+mini' && chip('60 % de la puissance', 'var(--ink-soft)')}
-      {profile.pair === 'mini+mini' && chip('Deux mini-armes · 60 % + 40 %', 'var(--gold-pale)')}
+      {cat && cat.mini && profile.pair !== 'mini+mini' && chip("Mini-arme seule · 60 % d'une arme normale", 'var(--ink-soft)')}
+      {profile.pair === 'mini+mini' && chip("Deux mini-armes · 60 % + 40 % d'une arme normale", 'var(--gold-pale)')}
       {profile.pair === 'main+mini' && chip('Mini-arme en soutien · sa propriété, pas ses stats · une propriété par tour', 'var(--gold-pale)', "Les stats d'une mini-arme ne comptent qu'avec une autre mini-arme")}
       {profile.twoHanded && cat && cat.hands === 'poly' && chip('Tenue à deux mains · +2 au jet', 'var(--gold-pale)', 'Rappel : le jet se fait en table')}
       {profile.issues.indexOf('two_handed_blocked') !== -1 && chip("⚠ Arme à deux mains : l'autre main doit être libre", 'var(--hp)')}

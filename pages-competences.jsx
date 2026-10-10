@@ -730,7 +730,7 @@ function CompetencesBody({ char, staff }) {
 
   // Attaque de base : même flux que les compétences (elle passe par la file du MJ),
   // sans mana ni cooldown.
-  // Puissance PLEINE de l'attaque de base (ratio mini-arme et malus de maîtrise inclus) ;
+  // Puissance PLEINE de l'attaque de base (60 % de la stat, ratio mini-arme et malus de maîtrise inclus) ;
   // le geste n'en prend qu'une fraction.
   const basicPower = profile.power;
   // Choix du mode d'arme (hybride : physique/magique ; arc hextech : arc/cellules). PERSISTÉ,
@@ -939,7 +939,7 @@ function CompetencesBody({ char, staff }) {
       <div className="panel" style={{ borderLeft: '3px solid var(--gold)' }}>
         <div className="panel-head">
           <h3>⚔ Attaque de base</h3>
-          <span className="overline">{profile.name} · {profile.mode.label}{profile.damage ? ` · ${profile.stat.toUpperCase()}` : ''}</span>
+          <span className="overline">{profile.name} · {profile.mode.label}{profile.damage ? ` · ${Math.round(profile.scale * 100)} % ${profile.stat.toUpperCase()}` : ''}</span>
         </div>
         <div style={{ padding: '10px 14px' }}>
           <div style={{ marginBottom: 10 }}><WeaponStatusLine profile={profile} /></div>

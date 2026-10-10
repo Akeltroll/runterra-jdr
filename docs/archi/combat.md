@@ -22,7 +22,9 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   `weaponLoadout(equipment, items)` (arme d'attaque = l'arme NON mini des deux mains ; `pair`
   `mini+mini`/`main+mini` ; `twoHanded` ; `issues`), `basicAttackProfile(loadout, masteries, eff, choice)`
   (stat/type selon le MODE d'arme, ratio 0,6 mini seule / 1 mini+mini, ×0,75 sans maîtrise hors mini,
-  propriétés utilisables et perdues), `sumWeaponPropMods` (branché DANS `sumItemMods`, qui prend désormais
+  propriétés utilisables et perdues ; ⚠️ depuis le 2026-10-10 `power` porte en plus l'échelle globale
+  **`BASIC_ATTACK_RATIO` = 0,6** — `ratio` reste relatif à une arme normale, `scale` = part réelle de la
+  stat ; les compétences n'y passent pas), `sumWeaponPropMods` (branché DANS `sumItemMods`, qui prend désormais
   `masteries, level`, ignore les armes rangées en accessoire **et les stats de la mini-arme de soutien d'une
   paire `main+mini`** — elles ne comptent qu'en paire mini + mini, décision MJ du 2026-09-15), `equipSlotCheck` (2H = autre main vide,
   deux armes non mini interdites, seules les mini-armes en accessoire).

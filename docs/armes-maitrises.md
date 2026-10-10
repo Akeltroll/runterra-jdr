@@ -214,6 +214,10 @@ et aucune propriété ne le compense.
 > **Deux mini-armes équipées = 0,6 + 0,4 = 100 % du scaling**, soit exactement une arme normale.
 > **Une seule propriété de maîtrise est active à la fois** — celle des deux que le porteur choisit.
 
+⚠️ **Depuis le 2026-10-10, l'attaque de base vaut 60 % de l'AD/AP** (`BASIC_ATTACK_RATIO`). Cette
+échelle se multiplie avec tout : les pourcentages de ce document se lisent **relativement à une arme
+normale** et restent vrais (mini-arme seule 36 % de la stat, deux mini-armes 36 + 24 = 60 %).
+
 Le bénéfice ne vient donc pas des dégâts bruts mais de deux autres choses : le **choix** de la
 propriété selon la situation, et le **double bonus de stat** (+30 AD au lieu de +15, soit +9 %).
 

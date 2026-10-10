@@ -2366,20 +2366,21 @@ test('armes — profil : −25 % sans maîtrise, et les propriétés perdues', (
   const lo = L.weaponLoadout({ armePrincipale: 'c' }, items);
   const eff = { ad: 400, ap: 100 };
   let p = L.basicAttackProfile(lo, { claymore: true }, eff, {});
-  assert.equal(p.power, 400); assert.equal(p.mastered, true); assert.deepEqual(p.props.map(x => x.id), ['balayage']);
+  assert.equal(p.power, 240); assert.equal(p.mastered, true); assert.deepEqual(p.props.map(x => x.id), ['balayage']);   // 400 x 60 %
   p = L.basicAttackProfile(lo, {}, eff, {});
-  assert.equal(p.power, 300); assert.equal(p.malusPct, 25); assert.deepEqual(p.props, []);
+  assert.equal(p.power, 180); assert.equal(p.malusPct, 25); assert.deepEqual(p.props, []);
   assert.deepEqual(p.lostProps, ['balayage']);
   assert.equal(p.dmgType, 'physique'); assert.equal(p.wType, 'Physique');
 });
 
-test('armes — profil : mini-arme seule 60 %, non maîtrisée elle garde tout ; deux mini-armes 100 %', () => {
+test('armes — profil : mini-arme seule 36 % (60 % x 60 %), non maîtrisée elle garde tout ; deux mini-armes 60 %', () => {
   const items = { d1: W('d1', 'dague'), d2: W('d2', 'dague') };
   const eff = { ad: 500 };
   let p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'd1' }, items), {}, eff, {});
-  assert.equal(p.power, 300); assert.equal(p.mastered, true); assert.deepEqual(p.props.map(x => x.id), ['fourberie']);
+  assert.equal(p.power, 180); assert.equal(p.mastered, true); assert.deepEqual(p.props.map(x => x.id), ['fourberie']);
+  assert.equal(p.ratio, 0.6);                                    // `ratio` reste relatif à une arme normale
   p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'd1', armeSecondaire: 'd2' }, items), {}, eff, {});
-  assert.equal(p.power, 500);
+  assert.equal(p.power, 300); assert.equal(p.ratio, 1);
   assert.deepEqual(p.props.map(x => x.id), ['fourberie']);       // même propriété : une seule fois
 });
 
@@ -2388,10 +2389,10 @@ test('armes — profil : poly + mini offre les deux propriétés ; celle de l ar
   const lo = L.weaponLoadout({ armePrincipale: 'e', armeSecondaire: 'd' }, items);
   let p = L.basicAttackProfile(lo, { epee_longue: true }, { ad: 100 }, {});
   assert.deepEqual(p.props.map(x => x.id + ':' + x.source), ['parade_riposte:attacker', 'fourberie:support']);
-  assert.equal(p.power, 100);
+  assert.equal(p.power, 60);
   p = L.basicAttackProfile(lo, {}, { ad: 100 }, {});
   assert.deepEqual(p.props.map(x => x.id), ['fourberie']);
-  assert.equal(p.power, 75);
+  assert.equal(p.power, 45);
 });
 
 test('armes — profil : le choix hybride bascule la stat ET le type ; arc hextech en cellules sans dégâts', () => {
@@ -2399,23 +2400,36 @@ test('armes — profil : le choix hybride bascule la stat ET le type ; arc hexte
   const eff = { ad: 200, ap: 300 };
   const m = { pistolet_hextech: true, arc_hextech: true };
   let p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'p' }, items), m, eff, {});
-  assert.equal(p.stat, 'ad'); assert.equal(p.power, 200);
+  assert.equal(p.stat, 'ad'); assert.equal(p.power, 120);
   p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'p' }, items), m, eff, { mode: 'ap' });
-  assert.equal(p.stat, 'ap'); assert.equal(p.dmgType, 'magique'); assert.equal(p.wType, 'Magique'); assert.equal(p.power, 300);
+  assert.equal(p.stat, 'ap'); assert.equal(p.dmgType, 'magique'); assert.equal(p.wType, 'Magique'); assert.equal(p.power, 180);
   p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'a' }, items), m, eff, {});
   assert.equal(p.mode.id, 'cellules'); assert.equal(p.damage, false);
   p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'a' }, items), m, eff, { mode: 'ad' });
-  assert.equal(p.damage, true); assert.equal(p.dmgType, 'physique'); assert.equal(p.power, 200);
+  assert.equal(p.damage, true); assert.equal(p.dmgType, 'physique'); assert.equal(p.power, 120);
   p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'p' }, items), m, eff, { mode: 'inconnu' });
   assert.equal(p.mode.id, 'ad');                                 // mode inconnu : mode par défaut
+});
+
+test('armes — attaque de base à 60 % : échelle globale, multipliée avec mini-arme et maîtrise (MJ 2026-10-10)', () => {
+  assert.equal(L.BASIC_ATTACK_RATIO, 0.6);
+  const items = { c: W('c', 'claymore'), d1: W('d1', 'dague'), d2: W('d2', 'dague') };
+  const eff = { ad: 1000, ap: 200 };
+  const P = (eq, m) => L.basicAttackProfile(L.weaponLoadout(eq, items), m, eff, {});
+  assert.equal(P({ armePrincipale: 'c' }, { claymore: true }).power, 600);
+  assert.equal(P({ armePrincipale: 'c' }, {}).power, 450);                        // x0,75 par-dessus
+  assert.equal(P({ armePrincipale: 'd1' }, {}).power, 360);                       // mini seule : 36 %
+  assert.equal(P({ armePrincipale: 'd1', armeSecondaire: 'd2' }, {}).power, 600); // 36 % + 24 % = une arme normale
+  assert.equal(P({}, {}).power, 600);                                             // mains nues
+  assert.equal(Math.round(P({ armePrincipale: 'd1' }, {}).scale * 100), 36);
 });
 
 test('armes — une arme sans catégorie reste neutre (comportement d avant la livraison)', () => {
   const items = { x: L.makeItem({ id: 'x', type: 'weapon', name: 'Épée + Bouclier' }) };
   const p = L.basicAttackProfile(L.weaponLoadout({ armePrincipale: 'x' }, items), {}, { ad: 80 }, {});
-  assert.equal(p.power, 80); assert.equal(p.mastered, true); assert.deepEqual(p.issues, []);
+  assert.equal(p.power, 48); assert.equal(p.mastered, true); assert.deepEqual(p.issues, []);
   const bare = L.basicAttackProfile(L.weaponLoadout({}, items), {}, { ad: 80 }, {});
-  assert.equal(bare.name, 'Mains nues'); assert.equal(bare.power, 80);
+  assert.equal(bare.name, 'Mains nues'); assert.equal(bare.power, 48);
 });
 
 test('armes — sumItemMods : une arme en accessoire ne donne rien, un accessoire normal si', () => {
@@ -2468,11 +2482,14 @@ test('armes — mini-arme de soutien avec une arme non mini : propriété oui, s
    ⚠️ rng : chaque instance de dégâts qui roule le crit consomme UN tirage (crit 0 → jamais de crit).
    ============================================================ */
 const rngSeq = (...v) => { let i = 0; return () => v[Math.min(i++, v.length - 1)]; };
+/* `power` = puissance d'attaque PLEINE d'une arme normale : la stat est remontée de 1/0,6 pour que
+   les ratios des propriétés se lisent sur 100 (l'échelle de l'attaque de base a son propre test). */
 const prof = (cat, masteries, power, extraItems) => {
   const items = Object.assign({ w: W('w', cat) }, extraItems || {});
   const eq = { armePrincipale: 'w' };
   if (extraItems && extraItems.s) eq.armeSecondaire = 's';
-  return L.basicAttackProfile(L.weaponLoadout(eq, items), masteries || { [cat]: true }, { ad: power || 100, ap: power || 100 }, {});
+  return L.basicAttackProfile(L.weaponLoadout(eq, items), masteries || { [cat]: true },
+    { ad: (power || 100) / L.BASIC_ATTACK_RATIO, ap: (power || 100) / L.BASIC_ATTACK_RATIO }, {});
 };
 const WEFF = { ad: 100, ap: 100, hp: 1000, mana: 400, crit: 0, dcrit: 150 };
 const atk = (p, input) => L.buildWeaponAttack(p, WEFF, Object.assign({ turn: 3, selfId: 'me', rng: rngSeq(0.99),

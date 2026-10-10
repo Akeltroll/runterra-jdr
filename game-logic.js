@@ -774,7 +774,15 @@
   /* Profil de l'attaque de base (livraison 1 : ratio, maîtrise, type ; les propriétés
      sont listées, pas encore automatisées).
      choice = { mode } (weaponChoice persisté) ; atkMode = id de BASIC_MODES.
-     Composition MULTIPLICATIVE (docs/armes-maitrises.md) : ratio mini × maîtrise × geste. */
+     Composition MULTIPLICATIVE (docs/armes-maitrises.md) : ratio mini × maîtrise × geste.
+
+     ⚠️ `BASIC_ATTACK_RATIO` (décision MJ du 2026-10-10, rééquilibrage des compétences) :
+     l'attaque de base vaut 60 % de l'AD/AP. C'est une ÉCHELLE GLOBALE, multipliée avec tout
+     le reste — arme normale 60 %, mini-arme seule 36 %, deux mini-armes 60 % (36 + 24), sans
+     maîtrise ×0,75 par-dessus. `ratio` reste RELATIF à une arme normale (les écarts chiffrés
+     de docs/armes-maitrises.md ne bougent pas) ; `scale` est la part réelle de la stat.
+     Les compétences n'y passent pas (`skillBaseDamage`) : ne pas l'appliquer ailleurs. */
+  var BASIC_ATTACK_RATIO = 0.6;
   function basicAttackProfile(loadout, masteries, eff, choice) {
     loadout = loadout || {}; eff = eff || {}; choice = choice || {};
     var w = loadout.attacker;
@@ -802,8 +810,8 @@
       modes: modes, mode: mode, stat: mode.stat, dmgType: mode.dmgType,
       wType: mode.dmgType === 'magique' ? 'Magique' : 'Physique',
       damage: mode.damage !== false,
-      ratio: ratio, mastered: mastered, malusPct: mastered ? 0 : 25,
-      power: Math.round((eff[mode.stat] || 0) * ratio),
+      ratio: ratio, scale: ratio * BASIC_ATTACK_RATIO, mastered: mastered, malusPct: mastered ? 0 : 25,
+      power: Math.round((eff[mode.stat] || 0) * ratio * BASIC_ATTACK_RATIO),
       props: props, lostProps: lost,
       twoHanded: !!loadout.twoHanded, pair: loadout.pair || null, issues: loadout.issues || [],
     };
@@ -2735,7 +2743,7 @@
     BASIC_MODES, basicMode, basicModeDamage,
     WEAPON_MODES, WEAPON_TIER_MODS, WEAPON_TIERS, WEAPON_PROPERTIES, WEAPON_CATEGORIES,
     HANDS_LABEL, WEAPON_KIND_LABEL, HAND_SLOTS, weaponCategory, isWeaponItem, isMiniWeapon,
-    isAccessorySlot, weaponLoadout, weaponMastered, sumWeaponPropMods, basicAttackProfile,
+    isAccessorySlot, weaponLoadout, weaponMastered, sumWeaponPropMods, basicAttackProfile, BASIC_ATTACK_RATIO,
     equipSlotCheck, weaponCatLabel,
     LOT2_ATTACK_PROPS, weaponCdKey, weaponPropSources, weaponActiveSource, weaponActiveProps,
     weaponAttackTargeting, buildWeaponAttack, buildFocalisation, LOT3_ASSISTED_PROPS, buildParade,

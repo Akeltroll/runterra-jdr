@@ -173,7 +173,7 @@ function WeaponPanel({ profile, masteries, canEdit, setMastery }) {
         </div>
         <WeaponStatusLine profile={profile} />
         <div className="row" style={{ justifyContent:'space-between', padding:'12px 14px', margin:'10px 0', background:'var(--bg-inset)', borderRadius:8, border:'1px solid var(--line)' }}>
-          <span className="dim" style={{ fontSize:12 }}>Attaque de base ({profile.mode.label})</span>
+          <span className="dim" style={{ fontSize:12 }}>Attaque de base ({profile.mode.label}{profile.damage ? ` · ${Math.round(profile.scale * 100)} % ${profile.stat.toUpperCase()}` : ''})</span>
           <span className="mono" style={{ fontSize:22, fontWeight:700, color:'var(--gold-bright)' }}>
             {profile.damage ? profile.power : '—'}
           </span>
