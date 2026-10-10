@@ -341,6 +341,12 @@ function makeEnemy(name, side) {
     side: ally ? 'ally' : 'enemy',
     reveal: ally ? 'exact' : 'hidden', revealPct: 100 };
 }
+/* Pose un COMPAGNON en PNJ allié (Nano-hex de Jett) : la fiche vient de l'instance `summon`
+   validée par le MJ. Même nœud et même forme qu'un allié ajouté à la main. Écriture staff. */
+function summonAlly(summon) {
+  const e = Object.assign(makeEnemy((summon && summon.name) || 'Allié', 'ally'), summon || {});
+  return window.RTDB.updatePath(ENEMIES, { [e.id]: e }).then(() => e);
+}
 function useMJEnemies() {
   const [map, setMap] = useState(null);
   useEffect(() => window.RTDB.subscribePath(ENEMIES, (v) => setMap(v || {})), []);
@@ -843,7 +849,7 @@ Object.assign(window, {
   useInitiative, INITIATIVE, useAllHp,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   usePendingActions, applyHitToEnemy, applyHitToCharacter, healCharacter, healEnemy,
-  applyStatusToCharacter, refundCast, PENDING_ACTIONS,
+  applyStatusToCharacter, refundCast, PENDING_ACTIONS, summonAlly,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
   pushEconomyLog, useEconomyLog, ECONOMY_LOG, purseName,
   COIN_KEYS, setCharCoins, setSharedCoins,

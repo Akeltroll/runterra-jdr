@@ -1089,6 +1089,14 @@ function PendingActionsPanel({ enemies, stampKo, stOf, turn }) {
         : { manaMax: (target.enemy || {}).manaMax || 0 });
       manual = target.kind !== 'pj';
     }
+    /* COMPAGNON (Nano-hex de Jett) : la validation le pose en PNJ ALLIÉ, avec la fiche
+       calculée au cast. Rien n'est écrit sur la fiche du lanceur par cette instance. */
+    if (inst.summon) {
+      await summonAlly(inst.summon);
+      const t = `<b>${action.attackerName}</b> fait apparaître <b>${inst.summon.name}</b> (allié) — ${inst.summon.note || ''}`;
+      toast(t, 'buff'); pushLog(t, 'buff');
+      return;
+    }
     // Une instance narrative n'écrit rien : « Valider » vaut accusé de réception.
     if (!inst.narrative && !manual) await applyStatusToCharacter(target.id, action.skillId, payload);
     const txt = inst.narrative

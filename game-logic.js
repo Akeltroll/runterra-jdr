@@ -2044,6 +2044,13 @@
   }
   function skillManaCost(sk, level) { return sk ? scaleManaCost(sk.mana, level, sk.manaFixed) : 0; }
   function skillManaPer(sk, level) { return sk ? scaleManaCost(sk.manaPer, level, sk.manaFixed) : 0; }
+  /* Coût RÉEL d'un cast. Une compétence à `manaCount(ctx)` paie en plus `manaPer` par UNITÉ
+     comptée (Surcharge de Jett : 13 + 4 par cellule consommée). ⚠️ Ce n'est PAS un coût par
+     cible : rien n'en est rendu quand le MJ retire une instance (voir `buildCastPlan`). */
+  function skillCastCost(sk, level, ctx) {
+    var n = sk && typeof sk.manaCount === 'function' ? Math.max(0, sk.manaCount(ctx || {}) | 0) : 0;
+    return skillManaCost(sk, level) + (n ? skillManaPer(sk, level) * n : 0);
+  }
 
   /* Le plan complet d'un cast : ce qu'il coûte, et la liste des instances à déposer
      dans la file du MJ. Pur — `opts.rng` rend les jets de critique déterministes.
@@ -2054,8 +2061,10 @@
        dmgType(eff,ctx)  — type de dégâts imposé, sinon celui de l'arme (poison de Jett) ;
        dmgLabel(eff,ctx) — rappel porté par chaque instance de dégâts, lu par le MJ ;
        selfHeal(eff,ctx,n) — soin du LANCEUR, n = nombre de cibles de dégâts (Salve) ;
-       boon(eff,ctx)     — bouclier `{shield}` ou mana `{manaPct}` donné à une cible alliée :
-                           instance `status` marquée `boon`, convertie par `resolveBoon`.
+       boon(eff,ctx)     — bouclier `{shield}` ou mana `{manaPct, manaFlat}` donné à une cible
+                           alliée : instance `status` marquée `boon`, convertie par `resolveBoon` ;
+       summon(eff,ctx)   — fiche d'un COMPAGNON (Nano-hex) : instance `status` marquée `summon`,
+                           que le MJ transforme en PNJ allié à la validation.
      ⚠️ Le coût dépend du NIVEAU (`opts.level`, à défaut `ctx.level`) : c'est le seul endroit
      où le plan le lit, et l'appelant doit payer exactement `cost.mana`. */
   function buildCastPlan(sk, eff, ctx, selection, opts) {
@@ -2108,6 +2117,9 @@
       instances.push(Object.assign({ seq: ++seq, kind: 'status', targetId: tid, boon: true,
         healBonus: eff.soins || 0, sameActor: tid === selfId, producerBuffs: opts.buffs || [] }, boon));
     });
+    var summon = typeof sk.summon === 'function' ? sk.summon(eff, ctx) : null;
+    if (summon) instances.push({ seq: ++seq, kind: 'status', targetId: selfId, summon: summon,
+      label: 'Invoque ' + summon.name + ' — ' + (summon.note || '') });
     var self = buildSelfEffect(sk, eff, ctx, opts);
     if (self) instances.push(Object.assign({ seq: ++seq, kind: 'status', targetId: selfId }, self));
     // ⚠️ Une compétence sans AUCUN effet chiffré (Fondu au noir, Voile dimensionnel,
@@ -2117,7 +2129,9 @@
     if (!instances.length) instances.push({ seq: 1, kind: 'status', targetId: selfId,
       narrative: true, label: opts.narrative || 'Effet géré en table' });
     return { instances: instances,
-      cost: { mana: skillManaCost(sk, castLevel), manaPer: skillManaPer(sk, castLevel),
+      // `manaPer` du plan = mana rendu PAR INSTANCE retirée : nul pour un coût par unité (`manaCount`).
+      cost: { mana: skillCastCost(sk, castLevel, ctx),
+        manaPer: typeof sk.manaCount === 'function' ? 0 : skillManaPer(sk, castLevel),
         manaMax: Math.max(0, eff.mana | 0),
         cdPrev: opts.cdPrev != null ? opts.cdPrev : null } };
   }
@@ -2136,9 +2150,9 @@
         producerBuffs: inst.producerBuffs || [], receiverBuffs: receiver.buffs || [] });
       out.label = 'Bouclier de ' + out.shield;
     }
-    if (inst.manaPct) {
+    if (inst.manaPct || inst.manaFlat) {
       var max = Math.max(0, receiver.manaMax | 0);
-      out.manaGain = Math.floor(max * inst.manaPct / 100 + 1e-9);
+      out.manaGain = Math.floor(max * (inst.manaPct || 0) / 100 + 1e-9) + Math.max(0, inst.manaFlat | 0);
       out.manaMax = max;
       out.label = '+' + out.manaGain + ' mana';
     }
@@ -2336,6 +2350,57 @@
       return { manaPct: p, label: 'Mana : ' + String(p).replace('.', ',') + ' % de son mana max' };
     }
     return null;
+  }
+
+  /* C3 Surcharge destructrice (créée le 2026-10-10) : consomme les cellules (CN). Ennemis
+     adjacents à une CN : 60 + 6 × niveau + 60 % AD, et Hémorragie 2 tours. Alliés adjacents :
+     mana rendu = 20 % de LEUR mana max + 25 % AP. Une cible ne compte qu'une fois. */
+  function dmgJettC3(eff, level) { return 60 + 6 * Math.max(1, level | 0) + pctOf(eff.ad, 60); }
+  function jettC3Boon(eff) {
+    var flat = pctOf(eff.ap, 25);
+    return { manaPct: 20, manaFlat: flat, label: 'Mana : 20 % de son mana max + ' + flat };
+  }
+
+  /* C4 Nano-hex (créée le 2026-10-10) : un COMPAGNON. Ses stats ne dépendent PAS de celles de
+     Jett mais du PLAFOND PAR CARAC de son niveau (`LEVELS[niveau].limit`, passé en `cap`) :
+       PV = 40,5 × cap · AD = AP = 13,5 × cap · Armure = RM = 2 × cap · crit 5 % · dégâts crit 150 %.
+     Chaque cellule consommée donne UN bonus au choix de Jett (`alloc = { id: nombre }`) ;
+     les % portent sur la stat de BASE du Nano-hex (additifs entre cellules).
+     Attaque : 12 + 72 % de son AD, chaque tour, peut criter. Rayon : 12 + 72 % de son AP PAR
+     CIBLE, 1 tour sur 2, sans crit. (Valeurs déjà converties ×0,6.) */
+  var NANOHEX_CN_OPTIONS = [
+    { id: 'hp',     label: '+10 % PV' },
+    { id: 'ad',     label: '+15 % AD' },
+    { id: 'ap',     label: '+15 % AP' },
+    { id: 'crit',   label: '+20 crit' },
+    { id: 'dcrit',  label: '+20 dég. crit' },
+    { id: 'armure', label: '+12 Armure' },
+    { id: 'resmag', label: '+12 RM' },
+  ];
+  function allocTotal(alloc) {
+    var n = 0;
+    Object.keys(alloc || {}).forEach(function (k) { n += Math.max(0, alloc[k] | 0); });
+    return n;
+  }
+  function nanoHexStats(cap, alloc) {
+    cap = Math.max(0, Number(cap) || 0);
+    var a = {};
+    NANOHEX_CN_OPTIONS.forEach(function (o) { a[o.id] = Math.max(0, (alloc || {})[o.id] | 0); });
+    var hp = Math.round(40.5 * cap * (1 + 0.10 * a.hp));
+    var ad = Math.round(13.5 * cap * (1 + 0.15 * a.ad));
+    var ap = Math.round(13.5 * cap * (1 + 0.15 * a.ap));
+    return { hp: hp, ad: ad, ap: ap, armure: 2 * cap + 12 * a.armure, resmag: 2 * cap + 12 * a.resmag,
+      crit: 5 + 20 * a.crit, dcrit: 150 + 20 * a.dcrit,
+      attack: 12 + pctOf(ad, 72), ray: 12 + pctOf(ap, 72), cells: allocTotal(a) };
+  }
+  /* La fiche à poser comme PNJ allié (forme de `combat/enemies`). */
+  function nanoHexSummon(cap, alloc) {
+    var s = nanoHexStats(cap, alloc);
+    return { name: 'Nano-hex', hpMax: s.hp, hpCur: s.hp, atk: s.attack, armure: s.armure, resmag: s.resmag,
+      crit: s.crit, dcrit: s.dcrit,
+      note: 'PV ' + s.hp + ' · AD ' + s.ad + ' · AP ' + s.ap + ' · Attaque ' + s.attack + ' (chaque tour, peut criter) · Rayon '
+        + s.ray + ' par cible (magique, 1 tour sur 2, sans crit) · portée 2, 5 cases · joue au créneau de Jett · '
+        + s.cells + ' CN' };
   }
 
   /* --- Rathael : Chair gelée, âme fendue ---
@@ -2947,7 +3012,8 @@
     weaponAttackTargeting, buildWeaponAttack, buildFocalisation, LOT3_ASSISTED_PROPS, buildParade,
     eliasPassiveAD, eliasMaxStacks, dmgEliasC1, dmgEliasC2, dmgEliasC3, dmgEliasC4, eliasC4Heal, skillHeal,
     dmgSmithPassif, dmgSmithC1, smithC1Mult, smithC1CritBonus, dmgSmithC3, smithBleed,
-    urskaarStunPct, dmgUrskaarC4Ally, missingHpPct, resolveBoon,
+    urskaarStunPct, dmgUrskaarC4Ally, missingHpPct, resolveBoon, skillCastCost,
+    dmgJettC3, jettC3Boon, NANOHEX_CN_OPTIONS, allocTotal, nanoHexStats, nanoHexSummon,
     healJettC1, shieldJettC1, jettC1ManaPct, JETT_C1_EFFECTS, jettC1Effect, jettC1Roll, jettC1Damage, jettC1Heal, jettC1Boon,
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
     bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,

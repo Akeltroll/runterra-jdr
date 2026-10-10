@@ -115,6 +115,7 @@ function instanceSummary(instances, nameOf) {
   if (dmg.length) parts.push(`${dmg[0].computedDmg} dégâts → ${dmg.map(i => nameOf(i.targetId)).join(', ')}`);
   if (heal.length) parts.push(`${heal[0].amount} soin → ${heal.map(i => nameOf(i.targetId)).join(', ')}`);
   if (st.length) parts.push(st[0].narrative ? 'effet en table'
+    : st[0].summon ? st[0].label
     : st[0].boon ? `${st[0].label} → ${st.map(i => nameOf(i.targetId)).join(', ')}`
     : `sur soi : ${st[0].label}`);
   return parts.join(' · ');
@@ -371,7 +372,7 @@ function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
 }
 
 function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast, locked, minLevel, pools }) {
-  const [vars, setVars] = useState({ firstHit: false, furtif: false, marked: false, melee: false, config: '', side: 'droite', moved: 0, duration: (sk.duration ? sk.duration.min : 1) });
+  const [vars, setVars] = useState({ firstHit: false, furtif: false, marked: false, melee: false, config: '', alloc: {}, side: 'droite', moved: 0, duration: (sk.duration ? sk.duration.min : 1) });
   /* Sélection de cibles PAR EFFET, état LOCAL et non persisté : c'est un choix par
      lancement, comme les variables d'attaque. Vidée après chaque cast réussi. */
   const [sel, setSel] = useState({});
@@ -406,7 +407,14 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
   const nDmg = (sel.damage || []).length;
   const total = (dmg != null && nDmg > 1) ? dmg * nDmg : null;
   // Coût au niveau du lanceur (le `mana` de SKILLS est le coût du niveau 2, +8 %/niveau).
-  const manaCost = skillManaCost(sk, baseCtx.level);
+  const manaCost = skillCastCost(sk, baseCtx.level, ctx);
+  // Répartition de points au cast (cellules du Nano-hex) : `sk.alloc`, bornée par `max(ctx)`.
+  const allocMax = sk.alloc ? Math.max(0, sk.alloc.max(ctx) | 0) : 0;
+  const allocUsed = sk.alloc ? allocTotal(vars.alloc) : 0;
+  const setAlloc = (id, d) => setVars(s => {
+    const cur = Math.max(0, (s.alloc || {})[id] | 0);
+    return { ...s, alloc: { ...(s.alloc || {}), [id]: Math.max(0, cur + d) } };
+  });
   const enoughMana = manaCur >= manaCost;
   const cdLabel = ready ? 'Prêt'
     : readyAt === SKILL_CD_DAY ? '1×/jour utilisé'
@@ -463,6 +471,26 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
             )}
           </div>
         )}
+        {sk.alloc && (
+          <div style={{ marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--line)' }}>
+            <div className="overline" style={{ marginBottom: 6, color: allocUsed > allocMax ? 'var(--hp)' : undefined }}>
+              {sk.alloc.label} — {allocUsed} / {allocMax}
+            </div>
+            <div className="row gap-2 wrap">
+              {sk.alloc.options.map(o => {
+                const n = Math.max(0, (vars.alloc || {})[o.id] | 0);
+                return (
+                  <span key={o.id} className="row gap-1" style={{ alignItems: 'center', fontSize: 12 }}>
+                    <button className="btn btn-sm btn-ghost" style={{ padding: '1px 6px' }} disabled={n <= 0} onClick={() => setAlloc(o.id, -1)}>−</button>
+                    <span className="mono" style={{ minWidth: 14, textAlign: 'center', color: n ? 'var(--gold-pale)' : 'var(--faint)' }}>{n}</span>
+                    <button className="btn btn-sm btn-ghost" style={{ padding: '1px 6px' }} disabled={allocUsed >= allocMax} onClick={() => setAlloc(o.id, 1)}>+</button>
+                    <span className="dim">{o.label}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {/* Ciblage par effet. Une ligne par effet ciblable ; les effets sur SOI ne sont
             pas listés (implicites) mais rappelés sous les lignes. */}
         {tKeys.length > 0 && (
@@ -493,7 +521,7 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
               </span>
             ) : shield != null ? (
               <span className="mono" style={{ fontSize: 22, color: 'var(--gold)', fontWeight: 700 }}>{shield}<span style={{ fontSize: 12, color: 'var(--faint)' }}> bouclier</span></span>
-            ) : heal != null || boon ? null : (
+            ) : heal != null || boon || sk.summon ? null : (
               <span className="faint" style={{ fontSize: 13 }}>Utilitaire (pas de dégât direct)</span>
             )}
             {heal != null && <span className="mono" style={{ fontSize: 12.5, color: 'var(--buff)' }}>soin allié {heal}</span>}
@@ -501,9 +529,9 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
             {infos.map((t, i) => <span key={i} className="mono faint" style={{ fontSize: 11.5 }}>{t}</span>)}
           </div>
           <button className="btn btn-gold"
-            onClick={() => { if (onCast(ctx, sel)) { setSel({}); if (vars.config) setVars(s => ({ ...s, config: '' })); } }}
-            disabled={!ready || !enoughMana || !check.ok}
-            title={!enoughMana ? 'Pas assez de mana' : (!ready ? 'En cooldown' : (check.ok ? '' : check.reason))}>Lancer</button>
+            onClick={() => { if (onCast(ctx, sel)) { setSel({}); if (vars.config || sk.alloc) setVars(s => ({ ...s, config: '', alloc: {} })); } }}
+            disabled={!ready || !enoughMana || !check.ok || allocUsed > allocMax}
+            title={!enoughMana ? 'Pas assez de mana' : (!ready ? 'En cooldown' : (allocUsed > allocMax ? 'Plus de points répartis que de cellules' : (check.ok ? '' : check.reason)))}>Lancer</button>
         </div>
         {!check.ok && ready && enoughMana && (
           <div className="faint" style={{ fontSize: 11.5, marginTop: 6, color: 'var(--gold-pale)' }}>{check.reason}</div>
@@ -753,7 +781,7 @@ function CompetencesBody({ char, staff }) {
     const targeting = skillTargeting(sk, eff, ctx);
     const check = castSelectionValid(targeting, selection);
     if (!check.ok) { toast(`<b>${char.name}</b> — ${check.reason}`, 'gold'); return false; }
-    const cost = skillManaCost(sk, level);
+    const cost = skillCastCost(sk, level, ctx);
     const manaCur = state.manaCur || 0;
     if (manaCur < cost) { toast(`<b>${char.name}</b> — pas assez de mana (${manaCur}/${cost})`, 'gold'); return false; }
     // Cooldown d'AVANT le cast : snapshoté pour le remboursement si le MJ annule.

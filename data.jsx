@@ -439,6 +439,9 @@ const ITEM_CATALOG = [
    conditionnel de compteur au cast. Source : info-mj/Codes App Script.md (le script prime).
    ⚠️ `mana` = coût AU NIVEAU 2 (rééquilibrage du 2026-10-10) : le coût réel monte de 8 % par niveau
    (`skillManaCost`, game-logic). `manaFixed: true` = coût fixe à tout niveau (les C4). --- */
+/* Plafond par caractéristique à un niveau (`LEVELS[].limit`) : c'est le « Mental » et la
+   « Magie » du Nano-hex de Jett. Au-delà de la table, le dernier palier. */
+const attrCapOfLevel = (lvl) => (LEVELS.find(l => l.lvl === (lvl | 0)) || LEVELS[LEVELS.length - 1]).limit;
 const SKILLS = {
   lunick: { // Elias Crowe
     passive: { name: 'Instinct du Chasseur', counter: { key: 'chasseur', label: 'Charges', max: (lvl) => eliasMaxStacks(lvl) },
@@ -540,6 +543,28 @@ const SKILLS = {
         dmg: (eff) => dmgJettC2(eff), heal: (eff) => healJettC2(eff),
         dmgLabel: () => 'Étourdi 1 tour',
         note: 'Étourdit 1 tour + 36 % AD aux ennemis. Soigne les alliés de 40 + 80 % AP.' },
+      // C3 et C4 créées le 2026-10-10 (lot F). Sans effet en jeu avant les niveaux 3 et 4.
+      { id: 'surcharge', name: 'Surcharge destructrice', mana: 13, manaPer: 4, cd: 3, kind: 'cd',
+        manaCount: (c) => (c.counters && c.counters.cn) || 0,
+        targeting: { damage: { min: 0, max: null }, boon: { camp: 'allies', min: 0, max: null } },
+        dmg: (eff, c) => dmgJettC3(eff, c.level), dmgLabel: () => 'Hémorragie 2 tours (−50 % soins et boucliers reçus)',
+        boon: (eff) => jettC3Boon(eff), counterSet: { cn: 0 },
+        info: (eff, c) => [`${(c.counters && c.counters.cn) || 0} cellule(s) consommée(s)`],
+        note: 'Consomme toutes tes cellules (coût : 13 + 4 par cellule au niveau 2). Ennemis adjacents à une cellule : '
+          + '60 + 6 × niveau + 60 % AD et Hémorragie 2 tours. Alliés adjacents : mana rendu, 20 % de leur mana max + 25 % AP. '
+          + 'Une cible ne compte qu\'une fois, même adjacente à plusieurs cellules.' },
+      { id: 'nano_hex', name: 'Nano-hex', mana: 100, manaFixed: true, cd: 0, kind: 'day',
+        dmg: () => null, counterSet: { cn: 0 },
+        alloc: { label: 'Cellules à répartir', options: NANOHEX_CN_OPTIONS, max: (c) => (c.counters && c.counters.cn) || 0 },
+        summon: (eff, c) => nanoHexSummon(attrCapOfLevel(c.level), c.alloc),
+        info: (eff, c) => { const s = nanoHexStats(attrCapOfLevel(c.level), c.alloc); return [
+          `PV ${s.hp} · AD ${s.ad} · AP ${s.ap} · Armure ${s.armure} · RM ${s.resmag}`,
+          `Crit ${s.crit} % · dégâts crit ${s.dcrit} %`,
+          `Attaque ${s.attack} (chaque tour) · Rayon ${s.ray} par cible (1 tour sur 2)`]; },
+        note: 'Consomme toutes les cellules du terrain et fait apparaître le Nano-hex pour le combat (ou 10 minutes réelles). '
+          + 'Il joue à ton créneau, portée 2, 5 cases de déplacement, sans mana. Chaque cellule lui donne un bonus au choix. '
+          + 'Attaque : 12 + 72 % de son AD, peut critiquer. Rayon : 12 + 72 % de son AP par cible, à distance, petite zone en '
+          + 'croix, 1 tour sur 2, sans critique. Le MJ le pose en allié à la validation. 1×/jour.' },
     ],
   },
   rathael: {

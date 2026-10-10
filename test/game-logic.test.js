@@ -2365,6 +2365,46 @@ test('buildCastPlan + resolveBoon : bouclier ou mana donne a un allie', () => {
   p = L.buildCastPlan(vide, EFF, {}, {}, Object.assign({}, OPTS, { narrative: 'Configuration a tirer en table' }));
   assert.deepEqual([p.instances.length, p.instances[0].narrative, p.instances[0].label], [1, true, 'Configuration a tirer en table']);
 });
+test('Jett C3 Surcharge destructrice : cout par cellule, degats, mana rendu aux allies', () => {
+  assert.equal(L.dmgJettC3({ ad: 100 }, 3), 138);                  // 60 + 6 x niveau + 60 % AD
+  assert.equal(L.dmgJettC3({ ad: 100 }, 18), 228);
+  assert.deepEqual(L.jettC3Boon({ ap: 200 }), { manaPct: 20, manaFlat: 50, label: 'Mana : 20 % de son mana max + 50' });
+  assert.equal(L.resolveBoon(Object.assign({ boon: true }, L.jettC3Boon({ ap: 200 })), { manaMax: 300 }).manaGain, 110);
+  // cout : 13 + 4 par cellule au niveau 2 ; 21 + 7 au niveau 10 ; 30 + 9 au niveau 18 (§3 du plan)
+  const sk = { id: 'surcharge', mana: 13, manaPer: 4, manaCount: (c) => c.counters.cn, dmg: () => 100, counterSet: { cn: 0 },
+    targeting: { damage: { min: 0, max: null } } };
+  const cn = (n) => ({ counters: { cn: n } });
+  assert.deepEqual([L.skillCastCost(sk, 2, cn(0)), L.skillCastCost(sk, 2, cn(3)), L.skillCastCost(sk, 10, cn(3)), L.skillCastCost(sk, 18, cn(3))],
+    [13, 25, 42, 57]);
+  const p = L.buildCastPlan(sk, EFF, Object.assign({ level: 2 }, cn(3)), { damage: ['g1', 'g2'] }, OPTS);
+  assert.equal(p.cost.mana, 25);
+  // ⚠️ un cout par CELLULE n est pas un cout par cible : rien n est rendu en retirant une instance
+  assert.equal(p.cost.manaPer, 0);
+  // les cellules sont consommees : une instance sur le lanceur remet le compteur a zero
+  const self = p.instances.find(i => i.kind === 'status');
+  assert.deepEqual(self.counters, { cn: 0 });
+});
+test('Jett C4 Nano-hex : stats sur le plafond de carac du niveau, un bonus par cellule', () => {
+  // niveau 4 : plafond 7 → PV 40,5 x 7, AD = AP = 13,5 x 7, Armure = RM = 2 x 7
+  let s = L.nanoHexStats(7, {});
+  assert.deepEqual([s.hp, s.ad, s.ap, s.armure, s.resmag, s.crit, s.dcrit], [284, 95, 95, 14, 14, 5, 150]);
+  assert.deepEqual([s.attack, s.ray, s.cells], [80, 80, 0]);         // 12 + 72 % de 95
+  // 5 cellules en AD : +75 % de l AD de BASE (additif), le rayon ne bouge pas
+  s = L.nanoHexStats(7, { ad: 5 });
+  assert.deepEqual([s.ad, s.attack, s.ray, s.cells], [165, 130, 80, 5]);
+  s = L.nanoHexStats(7, { hp: 2, crit: 1, dcrit: 1, armure: 1, resmag: 2 });
+  assert.deepEqual([s.hp, s.crit, s.dcrit, s.armure, s.resmag, s.cells], [340, 25, 170, 26, 38, 7]);
+  assert.equal(L.allocTotal({ ad: 2, hp: 1, x: -4 }), 3);
+  const fiche = L.nanoHexSummon(7, { ad: 5 });
+  assert.deepEqual([fiche.name, fiche.hpMax, fiche.hpCur, fiche.atk, fiche.crit, fiche.dcrit], ['Nano-hex', 284, 284, 130, 5, 150]);
+  // le cast depose la fiche dans une instance `summon` ; le MJ en fait un PNJ allie
+  const sk = { id: 'nano_hex', mana: 100, manaFixed: true, dmg: () => null, counterSet: { cn: 0 },
+    summon: (eff, c) => L.nanoHexSummon(7, c.alloc) };
+  const p = L.buildCastPlan(sk, EFF, { level: 18, alloc: { ad: 5 }, counters: { cn: 5 } }, {}, OPTS);
+  assert.equal(p.cost.mana, 100);                                    // cout fixe
+  assert.deepEqual(p.instances.map(i => [i.kind, !!i.summon, !!i.narrative]), [['status', true, false], ['status', false, false]]);
+  assert.equal(p.instances[0].summon.atk, 130);
+});
 test('buildCastPlan : effet sur soi = une instance status sur le lanceur', () => {
   const ctx = { counters: { glaciation: 2 }, duration: 2 };
   const p = L.buildCastPlan(SK_STATUT, EFF, ctx, {}, OPTS);
