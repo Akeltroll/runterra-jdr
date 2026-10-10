@@ -359,9 +359,9 @@ qu'il ne faut pas refaire.
 - **🔜 Chantier en cours : rééquilibrage des compétences — CONÇU, PAS ENCORE CODÉ** (figé le 2026-10-10).
   👉 **Référence unique pour coder : `docs/superpowers/plans/2026-10-10-competences-patchs-a-appliquer.md`**
   (valeurs finales des 5 kits au rang 1, grille de mana, lots A à G dans l'ordre, annonces à la table,
-  questions ouvertes Q1 à Q4). **Commencer par le lire, puis par le lot A.**
-  Décidé : attaque de base à **60 %** de l'AD/AP ; dégâts de compétence **×0,6** (3 exceptions MJ : Attaque
-  sournoise, Frappe Irritée, Éclat de l'âme à ×0,9) ; mana `coût niv. 2 × (1 + 8 % × (niveau − 2))`, C4 à coût
+  plus aucune question bloquante). **Commencer par le lire, puis par le lot A.**
+  Décidé : attaque de base à **60 %** de l'AD/AP ; dégâts de compétence **×0,6** (4 exceptions MJ : Attaque
+  sournoise, Frappe Irritée, Flétrissement, Éclat de l'âme à ×0,9) ; mana `coût niv. 2 × (1 + 8 % × (niveau − 2))`, C4 à coût
   fixe ; **toutes les C4 une fois par JOUR** ; progression par rangs (1 à 5, plafond ⌊niveau/2⌋, C4 → ultime
   au niveau 6) ; passifs d'Urskaar et d'Elias réécrits ; C3/C4 de Jett créées (Nano-hex).
   ⚠️ **Règle de table qui a invalidé le premier cadre** : un perso lance à chaque tour son attaque de base

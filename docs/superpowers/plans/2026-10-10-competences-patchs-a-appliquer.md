@@ -24,7 +24,7 @@ Tout le monde est **niveau 2** : seuls les passifs, les C1 et les C2 sont en jeu
 | G3 | **Round de surprise** : seules l'attaque de base et la C1 sont permises. | Table |
 | G4 | **Toutes les C4 sont utilisables une fois par JOUR**, dès le niveau 4, version ultime ou non. | Code (lot E) |
 | G5 | **Coût en mana** : `coût = coût du niveau 2 × (1 + 8 % × (niveau − 2))`, arrondi. Les **C4 gardent un coût fixe**. Pas de coût en % du mana max. | Code (lot B) |
-| G6 | **Les dégâts de compétence sont écrits en % d'AD/AP, sans bonus fixe** (sauf exceptions listées). Les valeurs du §2 ont **déjà** reçu la conversion ×0,6 décidée le 2026-10-10. | — |
+| G6 | **Les dégâts de compétence sont écrits en % d'AD/AP, sans bonus fixe** (sauf exceptions listées). Les valeurs du §2 ont **déjà** reçu la conversion ×0,6 décidée le 2026-10-10 ; quatre exceptions voulues par le MJ : Attaque sournoise, Frappe Irritée, Flétrissement (non converties) et Éclat de l'âme (×0,9). | — |
 | G7 | **Tranche d'Urskaar** : elle se compte sur le déplacement **annoncé** (« a l'intention de parcourir X cases »), partout : 1 tranche à 5 cases, +1 par 3 cases. | Table + libellés |
 | G8 | **Progression par améliorations** (rangs 1 à 5, 1 point par niveau à partir du 4, C4 → ultime au niveau 6). Règles complètes au §3.2 de la spec. **Le contenu des rangs 2 à 5 n'est pas conçu.** | Plus tard (lot G) |
 
@@ -46,7 +46,7 @@ Coûts en mana donnés **au niveau 2**. Les formules sont celles à coder telles
 ### 2.2 Smith
 | | Avant | Après |
 |---|---|---|
-| Passif Flétrissement | `50 + 0,5 AP` | **`30 + 30 % AP`**, magique, 1×/combat. ⚠️ voir Q1. |
+| Passif Flétrissement | `50 + 0,5 AP` | **Inchangé : `50 + 50 % AP`**, magique, 1×/combat. **Non converti** (exception MJ). |
 | C1 Attaque sournoise | Dégâts d'arme, ×1,5 camouflé ; 30 mana | **Multiple de l'attaque de base (0,6 × dégâts d'arme)** : ×1 normale · ×1,5 camouflé · ×2 cible marquée · **×4,5 marquée ET camouflée**. +30 % de chance de crit sous camouflage. **Non convertie** (exception MJ). **13 mana.** |
 | C2 Fondu au noir | 40 mana | Inchangé. **21 mana.** |
 | C3 Chaînes estropiantes | `50 + 100 % AD`, saignement 5 % + 5 %/100 AD ; 60 mana | Cible choisie : **`72 % AD`** + **saignement de `20 % AD` par tour, dégâts BRUTS** (non converti). Toutes les cibles du cône portent la **chaîne** (exécutées à 10 % de PV). **26 mana.** |
@@ -70,7 +70,7 @@ Règles de table de Smith (rappels ou aides à l'écran, pas de calcul) :
 | C1 droite | Attaque de base à 150 % minimum, 50 % d'étourdir | **`54 % AD + 6 % AD par tranche`** ; étourdit à **50 % + 10 % par tranche**. Peut criter. |
 | C2 Écrasement | `150 % AD + 25 %/tranche` ; 50 mana | **`90 % AD + 15 % AD par tranche`**, portée 3 + 1 par tranche. **27 mana.** |
 | C3 Ralliement | Bouclier 30 % PV + 10 %/50 AP ; 100 mana | Bouclier **30 % PV max + 20 % par 50 AP** (calcul continu, non converti). **50 mana.** |
-| C4 On ne m'arrêtera pas | Piétinement `100 % AD + 25 %/tranche` ; 1×/combat | Piétinement **`42 % AD + 12 % AD par tranche`** par unité traversée, une fois par tour. Transformation inchangée (+30 % PV max, AD, Armure, 5 tours). **1×/jour**, 100 mana fixe. ⚠️ voir Q2. |
+| C4 On ne m'arrêtera pas | Piétinement `100 % AD + 25 %/tranche` ; 1×/combat | Piétinement **`42 % AD + 12 % AD par tranche`** par unité traversée, une fois par tour. Transformation inchangée (+30 % PV max, AD, Armure, 5 tours). **Alliés adjacents qui ratent leur sauvegarde : le QUART de ce qu'un ennemi subirait** (`10,5 % AD + 3 % AD par tranche` ; c'était 25 % AD + 25 %). **1×/jour**, 100 mana fixe. |
 
 ### 2.4 Elias (id `lunick`)
 | | Avant | Après |
@@ -93,7 +93,7 @@ Gain des charges du passif (le joueur monte son compteur) :
 | | Avant | Après |
 |---|---|---|
 | Passif Nano-hextech | — | Inchangé. |
-| C1 Remodulation | Aléatoire ; Poison `25 + 0,5 AP`, Répulsion/Attraction `25 + 0,5 AD` ; 50 mana | Toujours **aléatoire**. Dégâts : **`15 + 30 %`** (AP pour le poison, AD pour répulsion/attraction). **Nouveaux tirages de soutien** (non convertis) : soin **`20 + 40 % AP`** · bouclier **`25 + 50 % AP`** · mana **`15 % du mana max de la cible + 1 % par 40 AP`**. **32 mana.** ⚠️ voir Q3. |
+| C1 Remodulation | Aléatoire ; Poison `25 + 0,5 AP`, Répulsion/Attraction `25 + 0,5 AD` ; 50 mana | Toujours **aléatoire**. Dégâts : **`15 + 30 %`** (AP pour le poison, AD pour répulsion/attraction). **Nouveaux tirages de soutien** (non convertis) : soin **`20 + 40 % AP`** · bouclier **`25 + 50 % AP`** · mana **`15 % du mana max de la cible + 1 % par 40 AP`**. **Tirage : chance ÉGALE pour chaque effet**, soit 10 % chacun pour les 10 effets (Champ électrique, Poison, Duplication, Flash, Repoussement, Attraction, Fumigène, Soin, Bouclier, Mana) — réglage provisoire du MJ. **32 mana.** |
 | C2 Alignement de séquence | Étourdit 2 tours, `50 + 50 % AD`, soin `50 + 100 % AP` ; 40 mana | **Étourdit 1 tour** ; **`36 % AD`** ; soin **`40 + 80 % AP`**. **26 mana.** |
 | C3 Surcharge destructrice | N'existe pas | **Nouvelle.** Délai 3. Coût **`13 + 4 par cellule (CN)`** au niveau 2. Consomme les CN. Ennemis adjacents à une CN : **`60 + 6 × niveau + 60 % AD`** et **Hémorragie 2 tours**. Alliés adjacents : mana rendu **`20 % de leur mana max + 25 % AP`**. Une cible ne compte qu'une fois. |
 | C4 Nano-hex | N'existe pas | **Nouvelle**, détail au §2.6. |
@@ -150,8 +150,13 @@ attente, `buildCastPlan`, modes d'attaque de base).
 ### Lot A — Attaque de base à 60 % ⚠️ effet en jeu immédiat pour tous
 - `basicAttackProfile` (`game-logic.js:778`) : `power = stat × ratio` → ajouter le facteur 0,6.
   Appelée par `pages-competences.jsx` et `pages-sheet.jsx` ; 17 tests.
-- ⚠️ **Composition multiplicative** déjà en place : mini-arme ×0,6, sans maîtrise ×0,75, dual wield
-  60 % + 40 %. Avec le nouveau facteur, une mini-arme frappe à 36 %. **Voir Q4 avant de coder.**
+- **Le facteur 0,6 se MULTIPLIE avec tout le reste** (décision du 2026-10-10) : c'est une échelle globale de
+  l'attaque de base, par exemple une constante `BASIC_ATTACK_RATIO = 0.6` appliquée à `power`. Arme normale
+  60 % ; **dual wield de mini-armes 60 % au total (36 % + 24 %)**, donc toujours « exactement une arme
+  normale » ; mini-arme seule 36 % ; sans maîtrise ×0,75 par-dessus. Tous les écarts chiffrés de
+  `docs/armes-maitrises.md` restent vrais, et le dual wield des carrys n'est pas pénalisé.
+- L'Attaque sournoise de Smith passe par `skillBaseDamage`, pas par le profil d'arme : elle ne subit pas le
+  ratio des mini-armes, comme aujourd'hui.
 - Vérifier les propriétés d'armes qui dérivent de l'attaque de base (`buildWeaponAttack`).
 - **Ne pas** toucher à `skillBaseDamage` ici : les compétences ne passent pas par `basicAttackProfile`.
 
@@ -222,14 +227,9 @@ choix, ultime au niveau 6, remise à zéro par le MJ, règle RTDB pour que le jo
 
 ## 6. Questions encore ouvertes
 
-**À poser au MJ avant le lot concerné :**
-- **Q1 — Flétrissement de Smith** : le tableau de conversion validé donne `30 + 30 % AP`, mais le MJ avait
-  dit plus tôt « dégâts actuels » (`50 + 0,5 AP`). Confirmer `30 + 30 % AP`.
-- **Q2 — C4 d'Urskaar, dégâts aux alliés** (`25 % AD + 25 % par tranche` s'ils ratent leur sauvegarde) :
-  jamais discutés. Par cohérence : `15 % AD + 15 % par tranche`.
-- **Q3 — C1 de Jett** : la table de tirage (quelles chances pour chaque effet, dégâts contre soutien).
-- **Q4 — Mini-armes et dual wield** : le ×0,6 de l'attaque de base se multiplie-t-il avec le ×0,6 des
-  mini-armes (36 %) et le 60 % + 40 % du dual wield de Smith (36 % + 24 %) ?
+**Q1 à Q4 : tranchées par le MJ le 2026-10-10** et reportées dans les sections ci-dessus (Flétrissement non
+converti ; alliés piétinés au quart des dégâts ; tirage équiprobable de la C1 de Jett ; attaque de base
+multiplicative avec les mini-armes). **Aucune question ne bloque les lots A à F.**
 
 **Conception restante (hors lots A à F) :**
 - Ce que rapporte un rang d'amélioration (questions du §4.6 de la spec), puis le contenu des rangs 2 à 5.

@@ -989,7 +989,7 @@ passif d'Elias (un % de son AD), saignement de Smith (calé sur une cible absolu
 |---|---|---|---|
 | Rathäel | Frappe Irritée | 50 % AD × (1 + PV manquants + charges) | **50 % AD, non convertie** : 0,5 au repos, 1,35 mal en point |
 | Rathäel | Éclat de l'âme | 60 % AP + (50 % + 10 %/2 niv)(AR+RM) | **×0,9 seulement** : 54 % AP + (45 % + 9 %/2 niv)(AR+RM) |
-| Smith | Flétrissement | 50 + 50 % AP | 30 + 30 % AP |
+| Smith | Flétrissement | 50 + 50 % AP | **non converti** (MJ, 2026-10-10) : 50 + 50 % AP |
 | Smith | Attaque sournoise | ×1 / ×1,5 / ×2 / ×4,5 de l'attaque de base | **exemptée** : inchangée |
 | Smith | Chaînes | 120 % AD | 72 % AD |
 | Urskaar | Gauche | 120 % AD + 30 % par tranche | 72 % AD + 18 % |
@@ -1100,6 +1100,17 @@ niveau 18). Le mana des archétypes est multiplié par 4,1 sur la même période
 - **Impact sur le code** : `sk.mana` devient une fonction du niveau (ou un helper `skillManaCost(sk, level)`) ;
   `buildCastPlan` lit le coût en un seul endroit (`cost.mana`).
 
-### 8.16 Suite
+### 8.16 ✅ Dernières précisions du MJ (2026-10-10)
+- **Flétrissement de Smith** : reste à `50 + 50 % AP`, non converti (4e exception à la conversion).
+- **C4 d'Urskaar** : un allié adjacent qui rate sa sauvegarde subit **le quart** de ce qu'un ennemi
+  subirait (`10,5 % AD + 3 % par tranche`).
+- **C1 de Jett** : chance **égale** pour chacun des 10 effets (7 configurations d'origine + soin, bouclier,
+  mana), « pour le moment ».
+- **Attaque de base et mini-armes** : le ×0,6 est une échelle globale, **multiplicative**. Dual wield de
+  mini-armes = 60 % au total (36 % + 24 %), toujours égal à une arme normale ; mini-arme seule 36 %.
+
+**Le chantier est figé dans `docs/superpowers/plans/2026-10-10-competences-patchs-a-appliquer.md`.**
+
+### 8.17 Suite
 1. Trancher le §4.6 (ce que rapporte un rang), puis les rangs 2 à 5 et les versions ultimes ; ensuite
    l'implémentation (§7.2 point 7), avec les valeurs du §8, reste des kits d'Elias et d'Urskaar, puis §4.6.
