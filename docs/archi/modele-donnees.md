@@ -96,6 +96,20 @@ vide = non équipable. Renseigné dans l'éditeur d'item quand `cat === 'Équipe
 Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDefaultState`).
 `mods` = bonus de stats d'item (vide pour l'instant ; **hook futur** vers `computeEffective`).
 ```
+/bestiary/   ← BESTIAIRE (2026-10-11) : lecture + écriture rôle `mj` SEUL — l'admin n'y a pas accès
+                ⚠️ À LA RACINE, pas sous campaign/runeterra (dont le `.read` mj+admin s'hérite et ne se retire pas)
+                ⚠️ donc HORS de la sauvegarde de la page Admin : export/import propre à la page Bestiaire
+    monsters/{id}/   ← MODÈLE, indépendant des copies posées dans combat/enemies
+        id, name, img (data URL 256 px ou ''), note, side ('enemy'|'ally'), updatedAt
+        level (1-40), rank (id de NPC_RANKS), archetype (id de NPC_ARCHETYPES)
+        tilt   ← curseur endurance ↔ violence (−200..+300) ; ABSENT = défaut du rang (npcDefaultTilt)
+        hpMax, ad, ap, armure, resmag, crit, dcrit, rescrit, lethaAD, lethaAP, xp
+               ↑ valeurs FINALES, source de vérité ; un champ égal à la suggestion (npcSuggestSheet)
+                 suit les changements de paramètres (npcReparam), un champ retouché reste
+```
+Copie posée en combat (`placeMonster` → `npcToEnemy`) : forme de `combat/enemies` + `npcLevel`, `rank`,
+`bestiaryId` (informatifs). `atk` = max(ad, ap).
+```
 /users/{uid}/   ← rôles & attribution (écrit par l'admin ; auto-inscription « en attente » à la 1re connexion)
     username, role (joueur|mj|admin), charId (si joueur)
 ```

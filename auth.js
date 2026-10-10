@@ -27,10 +27,12 @@
   /* Un compte joueur sans perso attribué est « en attente ». */
   const isPending = (rec) => !!rec && rec.role === 'joueur' && !rec.charId;
 
-  /* Pages visibles selon le rôle (ids alignés sur PAGES dans index.html). */
+  /* Pages visibles selon le rôle (ids alignés sur PAGES dans index.html).
+     ⚠️ `bestiaire` est au MJ SEUL, admin exclu (décision MJ du 2026-10-11) : `admin` n'est
+     plus un sur-ensemble de `mj`. Ses données vivent dans `/bestiary`, hors de la campagne. */
   const PAGE_ACCESS = {
     joueur: ['lobby', 'sheet', 'equip', 'inv', 'recap', 'runes', 'competences', 'prog'],
-    mj:     ['lobby', 'mj', 'sheet', 'equip', 'journal', 'prog', 'ds', 'inv', 'recap', 'runes', 'competences'],
+    mj:     ['lobby', 'mj', 'bestiaire', 'sheet', 'equip', 'journal', 'prog', 'ds', 'inv', 'recap', 'runes', 'competences'],
     admin:  ['lobby', 'mj', 'sheet', 'equip', 'journal', 'prog', 'ds', 'inv', 'recap', 'runes', 'competences', 'admin'],
   };
   const pagesForRole = (role) => PAGE_ACCESS[role] || [];

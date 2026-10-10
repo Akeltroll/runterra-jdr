@@ -11,6 +11,10 @@
         "$other":   { ".validate": false }
       }
     },
+    "bestiary": {
+      ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'mj'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'mj'"
+    },
     "campaign": {
       "runeterra": {
         ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",

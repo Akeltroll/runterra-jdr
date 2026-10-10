@@ -1,0 +1,371 @@
+/* ============================================================
+   PAGE BESTIAIRE — atelier de création d'ennemis et de PNJ (MJ seul)
+   Spec : docs/superpowers/specs/2026-10-11-bestiaire-design.md
+   Les calculs sont dans game-logic.js (npc*). Les champs de la fiche sont la SOURCE DE
+   VÉRITÉ : le moteur suggère, le MJ corrige. Données dans `/bestiary` (rôle mj seul).
+   ============================================================ */
+const BST_FLD = { background:'var(--bg-inset)', color:'var(--ink)', border:'1px solid var(--line-strong)', borderRadius:6, padding:'6px 9px', fontSize:13, width:'100%', boxSizing:'border-box' };
+const BST_STATS = [
+  ['hpMax',   'PV',           'var(--hp)'],
+  ['ad',      'AD',           'var(--stat-phys)'],
+  ['ap',      'AP',           'var(--stat-mag)'],
+  ['armure',  'Armure',       'var(--stat-phys)'],
+  ['resmag',  'Rés. magique', 'var(--stat-mag)'],
+  ['crit',    '% Crit',       'var(--stat-neut)'],
+  ['dcrit',   '% Dég. crit',  'var(--stat-neut)'],
+  ['rescrit', '% Rés. crit',  'var(--stat-neut)'],
+  ['lethaAD', 'Léth. phys.',  'var(--stat-phys)'],
+  ['lethaAP', 'Léth. mag.',   'var(--stat-mag)'],
+];
+const bstNum = (n) => Math.round(Number(n) || 0).toLocaleString('fr-FR');
+const bstMult = (x) => '×' + (Math.round(x * 100) / 100).toLocaleString('fr-FR');
+const bstPct = (n) => Math.round(n * 100) + ' %';
+
+/* Champ lié à une valeur temps réel : garde sa saisie locale tant qu'il a le focus (un écho
+   Firebase ne doit pas déplacer le curseur), se resynchronise dès qu'il le perd — c'est ce qui
+   permet à un champ de SUIVRE la suggestion quand le niveau ou le rang change. */
+function BstField({ value, onCommit, numeric, min = 0, max = 9999999, multiline, style, ...rest }) {
+  const [txt, setTxt] = useState(String(value == null ? '' : value));
+  const focused = useRef(false);
+  useEffect(() => { if (!focused.current) setTxt(String(value == null ? '' : value)); }, [value]);
+  const change = (e) => {
+    const v = e.target.value;
+    setTxt(v);
+    if (!numeric) { onCommit(v); return; }
+    if (v.trim() === '' || isNaN(parseInt(v, 10))) return;       // saisie en cours : on n'écrit pas
+    onCommit(Math.max(min, Math.min(max, parseInt(v, 10))));
+  };
+  const props = { value: txt, onChange: change, style: { ...BST_FLD, ...style },
+    onFocus: () => { focused.current = true; },
+    onBlur: () => { focused.current = false; setTxt(String(value == null ? '' : value)); }, ...rest };
+  return multiline ? <textarea {...props} /> : <input {...props} />;
+}
+
+function BstMonsterRow({ m, active, onClick }) {
+  const p = npcParams(m), rank = npcRank(p.rank);
+  return (
+    <button onClick={onClick} className="row gap-2"
+      style={{ textAlign:'left', width:'100%', padding:'7px 9px', borderRadius:6, cursor:'pointer',
+        background: active ? 'var(--bg-hover)' : 'transparent', color:'var(--ink)',
+        border:'1px solid ' + (active ? 'var(--line-gold)' : 'transparent') }}>
+      <span style={{ width:30, height:30, flexShrink:0, borderRadius:5, border:'1px solid var(--line)',
+        background: m.img ? `center/cover no-repeat url(${m.img})` : 'var(--bg-inset)',
+        display:'grid', placeItems:'center', fontSize:13, color:'var(--ink-faint)' }}>{m.img ? '' : (m.side === 'ally' ? '☘' : '☠')}</span>
+      <span className="col" style={{ minWidth:0, flex:1 }}>
+        <span style={{ fontSize:13, color: active ? 'var(--gold-pale)' : 'var(--ink)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.name || '(sans nom)'}</span>
+        <span className="faint" style={{ fontSize:10.5 }}>Niv. {p.level} · {rank.label} · {npcArchetype(p.archetype).label}</span>
+      </span>
+    </button>
+  );
+}
+
+/* Export / import JSON du bestiaire : `/bestiary` est HORS de la sauvegarde de la page Admin. */
+function BstExportImport() {
+  const toast = useToast();
+  const doExport = async () => {
+    const data = await window.RTDB.getSnapshot(BESTIARY);
+    const blob = new Blob([JSON.stringify(data || {}, null, 2)], { type:'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `runeterra-bestiaire-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    toast('Bestiaire exporté', 'gold');
+  };
+  const doImport = (e) => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!data || typeof data !== 'object' || Array.isArray(data) || (data.monsters && typeof data.monsters !== 'object'))
+          throw new Error("ce fichier n'est pas un export du bestiaire");
+        if (!confirm('Remplacer TOUT le bestiaire par ce fichier ?')) return;
+        await window.RTDB.setPath(BESTIARY, data);
+        toast('Bestiaire importé', 'buff');
+      } catch (err) {
+        console.error('Import du bestiaire échoué :', err);
+        toast('Import échoué : ' + (err && err.message ? err.message : 'erreur inconnue'), 'debuff');
+      }
+    };
+    reader.readAsText(file);
+  };
+  return (
+    <div className="row gap-2">
+      <button className="btn btn-sm btn-ghost" style={{ flex:1 }} onClick={doExport}>⬇ Exporter</button>
+      <label className="btn btn-sm btn-ghost" style={{ flex:1, cursor:'pointer', textAlign:'center' }}>
+        ⬆ Importer<input type="file" accept="application/json" onChange={doImport} style={{ display:'none' }} />
+      </label>
+    </div>
+  );
+}
+
+/* Curseur endurance ↔ violence. Le brouillon local suit le glissé ; on n'écrit en base
+   qu'au relâchement (un `range` émet un changement par pixel). */
+function BstTilt({ tilt, rankId, onCommit }) {
+  const [draft, setDraft] = useState(tilt);
+  useEffect(() => { setDraft(tilt); }, [tilt]);
+  const k = npcTiltFactor(draft), def = npcDefaultTilt(rankId);
+  const commit = () => { if (draft !== tilt) onCommit(draft); };
+  return (
+    <div className="col gap-1">
+      <div className="row" style={{ justifyContent:'space-between' }}>
+        <span className="overline">Endurance ↔ violence</span>
+        <span className="mono" style={{ fontSize:11.5, color:'var(--gold-pale)' }}>
+          PV {bstMult(k)} · dégâts {bstMult(1 / k)}
+          {tilt !== def && <button className="btn btn-sm btn-ghost" onClick={() => onCommit(def)}
+            title={`Revenir au réglage du rang (${def > 0 ? '+' : ''}${def})`} style={{ marginLeft:8, padding:'1px 7px', fontSize:10.5 }}>↺ rang</button>}
+        </span>
+      </div>
+      <input type="range" min="-200" max="300" step="1" value={draft}
+        onChange={e => setDraft(parseInt(e.target.value, 10) || 0)}
+        onMouseUp={commit} onTouchEnd={commit} onKeyUp={commit} onBlur={commit}
+        style={{ width:'100%', accentColor:'var(--gold)' }} />
+      <div className="row faint" style={{ justifyContent:'space-between', fontSize:10 }}>
+        <span>bref et violent</span><span>{draft > 0 ? '+' : ''}{draft}</span><span>long et usant</span>
+      </div>
+    </div>
+  );
+}
+
+function BstEditor({ m, patch, onDuplicate, onRemove, go }) {
+  const toast = useToast();
+  const [count, setCount] = useState(1);
+  const p = npcParams(m), sug = npcSuggestSheet(m), ref = refPlayer(p.level);
+  const rank = npcRank(p.rank);
+  const reparam = (change) => patch(npcReparam(m, change));
+  const power = npcPowerOf(m, p.level);
+  const near = npcRankForPower(power);
+  const ehp = npcEhp(m), round = npcRoundDmgFromStats(m);
+  const edited = [...NPC_STAT_KEYS, 'xp'].filter(k => m[k] != null && Number(m[k]) !== sug[k]);
+
+  const pickImage = async (e) => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    try { patch({ img: await downscaleImageToDataURL(file, 256) }); }
+    catch (err) { toast('Image illisible', 'debuff'); }
+  };
+  const place = async () => {
+    try {
+      const n = await placeMonster(m, count);
+      toast(`<b>${m.name}</b> posé en combat${n > 1 ? ` (×${n})` : ''}`, 'buff');
+    } catch (err) { toast('Pose en combat échouée : ' + (err && err.message ? err.message : 'erreur'), 'debuff'); }
+  };
+
+  return (
+    <div className="col gap-4" style={{ padding:'18px 24px 32px', maxWidth:980 }}>
+      {/* Identité */}
+      <div className="row gap-3" style={{ alignItems:'flex-start' }}>
+        <label title="Choisir une image" style={{ width:76, height:76, flexShrink:0, borderRadius:8, cursor:'pointer',
+          border:'1px solid var(--line-gold)', background: m.img ? `center/cover no-repeat url(${m.img})` : 'var(--bg-inset)',
+          display:'grid', placeItems:'center', color:'var(--ink-faint)', fontSize:11 }}>
+          {m.img ? '' : '+ image'}
+          <input type="file" accept="image/*" onChange={pickImage} style={{ display:'none' }} />
+        </label>
+        <div className="col gap-2" style={{ flex:1, minWidth:0 }}>
+          <BstField value={m.name} onCommit={(v) => patch({ name: v })} placeholder="Nom"
+            style={{ fontFamily:'var(--font-display)', fontSize:19, color:'var(--gold-pale)', padding:'7px 11px' }} />
+          <div className="row gap-2 wrap">
+            {[['enemy','Ennemi'],['ally','PNJ allié']].map(([s, lbl]) => (
+              <button key={s} className={'btn btn-sm ' + ((m.side === 'ally' ? 'ally' : 'enemy') === s ? 'btn-gold' : 'btn-ghost')}
+                onClick={() => patch({ side: s })}>{lbl}</button>
+            ))}
+            {m.img && <button className="btn btn-sm btn-ghost" onClick={() => patch({ img: '' })}>Retirer l'image</button>}
+            <span style={{ flex:1 }} />
+            <button className="btn btn-sm btn-ghost" onClick={onDuplicate} title="Repartir de cette fiche pour en faire une autre version">⧉ Dupliquer</button>
+            <button className="btn btn-sm btn-ghost" onClick={onRemove} style={{ color:'var(--debuff-bright)' }}>Supprimer</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Paramètres de génération */}
+      <div className="panel col gap-3" style={{ padding:'14px 16px' }}>
+        <div className="row gap-4 wrap" style={{ alignItems:'flex-end' }}>
+          <label className="col gap-1" style={{ width:84 }}>
+            <span className="overline">Niveau</span>
+            <BstField numeric min={1} max={NPC_LEVEL_MAX} value={p.level} onCommit={(v) => reparam({ level: v })} />
+          </label>
+          <div className="col gap-1">
+            <span className="overline">Rang</span>
+            <div className="row gap-1 wrap">
+              {NPC_RANKS.map(r => (
+                <button key={r.id} className={'btn btn-sm ' + (p.rank === r.id ? 'btn-gold' : 'btn-ghost')}
+                  title={`${bstPct(r.power)} d'un PJ de même niveau`} onClick={() => reparam({ rank: r.id })}>{r.label}</button>
+              ))}
+            </div>
+          </div>
+          <label className="col gap-1" style={{ minWidth:190, flex:1 }}>
+            <span className="overline">Archétype</span>
+            <select value={p.archetype} onChange={e => reparam({ archetype: e.target.value })} style={BST_FLD}>
+              {NPC_ARCHETYPES.map(a => <option key={a.id} value={a.id}>{a.label} — PV {bstMult(a.hp)}, dégâts {bstMult(a.dmg)}</option>)}
+            </select>
+          </label>
+        </div>
+        <BstTilt tilt={p.tilt} rankId={p.rank} onCommit={(t) => reparam({ tilt: t })} />
+      </div>
+
+      {/* Verdict */}
+      <div className="panel col gap-2" style={{ padding:'14px 16px', borderColor:'var(--line-gold)' }}>
+        <div className="row gap-3 wrap" style={{ alignItems:'baseline' }}>
+          <span className="overline">Puissance réelle</span>
+          <span style={{ fontFamily:'var(--font-display)', fontSize:24, color:'var(--gold-bright)' }}>{bstPct(power)}</span>
+          <span className="dim" style={{ fontSize:13 }}>
+            d'un PJ de niveau {p.level} — {near.id === rank.id ? `un ${rank.label.toLowerCase()}` : `plus proche d'un ${near.label.toLowerCase()} que d'un ${rank.label.toLowerCase()}`}
+          </span>
+        </div>
+        <div className="mono faint" style={{ fontSize:11.5, lineHeight:1.7 }}>
+          PV effectifs <b style={{ color:'var(--ink)' }}>{bstNum(ehp)}</b> ({bstMult(ehp / ref.ehp)} du référentiel) ·
+          dégâts par round <b style={{ color:'var(--ink)' }}>{bstNum(round)}</b> ({bstMult(round / ref.roundDmg)})<br />
+          Référentiel niveau {p.level} : {bstNum(ref.hp)} PV · {bstNum(ref.atk)} AD/AP · {bstNum(ref.armure)} armure · {bstNum(ref.resmag)} RM ·
+          crit {bstNum(ref.crit)} % · {bstNum(ref.roundDmg)} dégâts par round
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="panel col gap-3" style={{ padding:'14px 16px' }}>
+        <div className="row" style={{ justifyContent:'space-between' }}>
+          <span className="overline">Statistiques</span>
+          {edited.length > 0 && (
+            <button className="btn btn-sm btn-ghost" style={{ padding:'2px 9px', fontSize:11 }}
+              onClick={() => patch(sug)} title="Remet tous les champs sur leur valeur suggérée">↺ Tout remettre aux valeurs suggérées ({edited.length})</button>
+          )}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:12 }}>
+          {BST_STATS.map(([k, lbl, color]) => {
+            const diff = Number(m[k]) !== sug[k];
+            return (
+              <label key={k} className="col gap-1">
+                <span className="overline" style={{ color }}>{lbl}</span>
+                <BstField numeric value={m[k] == null ? sug[k] : m[k]} onCommit={(v) => patch({ [k]: v })}
+                  style={diff ? { border:'1px solid var(--gold-deep)' } : null} />
+                <span className="row faint" style={{ fontSize:10.5, justifyContent:'space-between', minHeight:18 }}>
+                  <span>suggéré {bstNum(sug[k])}</span>
+                  {diff && <button className="btn btn-sm btn-ghost" onClick={(e) => { e.preventDefault(); patch({ [k]: sug[k] }); }}
+                    title="Revenir à la valeur suggérée" style={{ padding:'0 6px', fontSize:10.5 }}>↺</button>}
+                </span>
+              </label>
+            );
+          })}
+          <label className="col gap-1">
+            <span className="overline">XP donnée (à partager)</span>
+            <BstField numeric value={m.xp == null ? sug.xp : m.xp} onCommit={(v) => patch({ xp: v })}
+              style={Number(m.xp) !== sug.xp ? { border:'1px solid var(--gold-deep)' } : null} />
+            <span className="row faint" style={{ fontSize:10.5, justifyContent:'space-between', minHeight:18 }}>
+              <span>suggéré {bstNum(sug.xp)}</span>
+              {Number(m.xp) !== sug.xp && <button className="btn btn-sm btn-ghost" onClick={(e) => { e.preventDefault(); patch({ xp: sug.xp }); }}
+                style={{ padding:'0 6px', fontSize:10.5 }}>↺</button>}
+            </span>
+          </label>
+        </div>
+        <span className="faint" style={{ fontSize:11 }}>
+          Les valeurs suivent le niveau, le rang, l'archétype et le curseur tant que tu n'y touches pas.
+          Un champ retouché (bord doré) garde ta valeur.
+        </span>
+      </div>
+
+      {/* Notes */}
+      <label className="col gap-1">
+        <span className="overline">Notes</span>
+        <BstField multiline value={m.note || ''} onCommit={(v) => patch({ note: v })} rows={4}
+          placeholder="Comportement, effets, idées de mise en scène…" style={{ resize:'vertical', fontFamily:'inherit', lineHeight:1.5 }} />
+      </label>
+
+      {/* Pose en combat */}
+      <div className="panel row gap-3 wrap" style={{ padding:'12px 16px' }}>
+        <span className="overline">Poser en combat</span>
+        <span className="row gap-1">
+          <button className="btn btn-sm btn-ghost" onClick={() => setCount(c => Math.max(1, c - 1))} disabled={count <= 1}>−</button>
+          <span className="mono" style={{ minWidth:34, textAlign:'center', color:'var(--gold-pale)' }}>×{count}</span>
+          <button className="btn btn-sm btn-ghost" onClick={() => setCount(c => Math.min(20, c + 1))} disabled={count >= 20}>+</button>
+        </span>
+        <button className="btn btn-sm btn-gold" onClick={place}>⚔ Poser dans la vue MJ</button>
+        {go && <button className="btn btn-sm btn-ghost" onClick={() => go('mj')}>Ouvrir la vue MJ →</button>}
+        <span className="faint" style={{ fontSize:11, flexBasis:'100%' }}>
+          Chaque copie est indépendante de cette fiche. Attaque posée : {bstNum(Math.max(m.ad || 0, m.ap || 0))} (la plus élevée de AD et AP).
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function BestiairePage({ go }) {
+  const toast = useToast();
+  const { monsters, denied, addMonster, patchMonster, removeMonster } = useBestiary();
+  const [sel, setSel] = useState(() => localStorage.getItem('runeterra_bestiaire_sel') || null);
+  const [q, setQ] = useState('');
+  const select = (id) => { setSel(id); if (id) localStorage.setItem('runeterra_bestiaire_sel', id); };
+
+  if (denied) {
+    return (
+      <div style={{ padding:32, maxWidth:620, margin:'40px auto' }}>
+        <div className="panel" style={{ padding:24 }}>
+          <h2 style={{ marginBottom:10 }}>Bestiaire inaccessible</h2>
+          <p className="dim" style={{ fontSize:13, lineHeight:1.6 }}>
+            La base a refusé la lecture. Le bestiaire est réservé au rôle MJ, et la règle
+            <span className="mono"> /bestiary</span> doit être publiée (<span className="mono">firebase deploy --only database</span>).
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (monsters == null) return <div className="dim" style={{ padding:32 }}>Chargement du bestiaire…</div>;
+
+  const rankOrder = {}; NPC_RANKS.forEach((r, i) => { rankOrder[r.id] = i; });
+  const list = Object.values(monsters).filter(m => m && m.id);
+  const needle = q.trim().toLowerCase();
+  const shown = list
+    .filter(m => !needle || (m.name || '').toLowerCase().includes(needle))
+    .sort((a, b) => (rankOrder[npcParams(b).rank] - rankOrder[npcParams(a).rank])
+      || (npcParams(b).level - npcParams(a).level) || String(a.name).localeCompare(String(b.name), 'fr'));
+  const cur = (sel && monsters[sel]) || null;
+
+  const create = async () => {
+    const last = list.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    const m = await addMonster(npcNewMonster({ level: last ? npcParams(last).level : 2, rank: 'standard', archetype: 'bruiser' }));
+    select(m.id);
+  };
+  const duplicate = async () => {
+    const copy = Object.assign({}, cur, { name: (cur.name || 'Monstre') + ' (variante)' });
+    delete copy.id; delete copy.updatedAt;
+    const m = await addMonster(copy);
+    select(m.id);
+    toast(`Variante de <b>${cur.name}</b> créée`, 'gold');
+  };
+  const remove = () => {
+    if (!confirm(`Supprimer « ${cur.name} » du bestiaire ?\n\nLes copies déjà posées en combat ne sont pas touchées.`)) return;
+    removeMonster(cur.id);
+    select(null);
+  };
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'280px 1fr', height:'100%', minHeight:0 }}>
+      <aside style={{ borderRight:'1px solid var(--line)', background:'var(--bg-panel)', display:'flex', flexDirection:'column', minHeight:0 }}>
+        <div style={{ padding:'16px 16px 12px' }}>
+          <div className="overline">Maître du jeu</div>
+          <div className="row" style={{ justifyContent:'space-between', marginTop:4 }}>
+            <h3 style={{ fontSize:17 }}>Bestiaire</h3>
+            <span className="mono faint" style={{ fontSize:11 }}>{list.length} fiche{list.length > 1 ? 's' : ''}</span>
+          </div>
+          <div className="col gap-2" style={{ marginTop:10 }}>
+            <button className="btn btn-sm btn-gold" onClick={create}>+ Nouvelle fiche</button>
+            {list.length > 5 && <input value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher…" style={BST_FLD} />}
+          </div>
+        </div>
+        <hr className="gold-rule" />
+        <div className="col gap-1" style={{ padding:10, overflowY:'auto', flex:1, minHeight:0 }}>
+          {shown.length === 0 && <div className="faint" style={{ fontSize:12, padding:6 }}>{list.length ? 'Aucune fiche ne correspond.' : 'Aucune fiche pour l\'instant.'}</div>}
+          {shown.map(m => <BstMonsterRow key={m.id} m={m} active={cur && cur.id === m.id} onClick={() => select(m.id)} />)}
+        </div>
+        <div style={{ padding:10, borderTop:'1px solid var(--line)' }}><BstExportImport /></div>
+      </aside>
+      <main style={{ minHeight:0, overflow:'auto' }}>
+        {cur
+          ? <BstEditor key={cur.id} m={cur} patch={(pt) => patchMonster(cur.id, pt)} onDuplicate={duplicate} onRemove={remove} go={go} />
+          : <div className="dim" style={{ padding:32, maxWidth:560, lineHeight:1.6 }}>
+              {list.length ? 'Choisis une fiche à gauche, ou crée-en une nouvelle.' :
+                'Le bestiaire est vide. Crée une première fiche : choisis un niveau, un rang et un archétype, les statistiques attendues se calculent seules, puis ajuste-les.'}
+            </div>}
+      </main>
+    </div>
+  );
+}
+
+Object.assign(window, { BestiairePage });

@@ -74,3 +74,9 @@ test('hub : atterrissage lobby pour tous les rôles', () => {
 test('hub : le joueur peut voir la page lobby', () => {
   assert.equal(A.canSeePage('lobby', 'joueur'), true);
 });
+
+test('la page bestiaire est réservée au MJ : ni joueur, ni admin', () => {
+  assert.equal(A.canSeePage('bestiaire', 'mj'), true);
+  assert.equal(A.canSeePage('bestiaire', 'admin'), false);
+  assert.equal(A.canSeePage('bestiaire', 'joueur'), false);
+});

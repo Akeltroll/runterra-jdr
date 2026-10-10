@@ -357,6 +357,37 @@ function useMJEnemies() {
   return { enemies, addEnemy, updateEnemy, removeEnemy };
 }
 
+/* BESTIAIRE (2026-10-11) : modèles d'ennemis et de PNJ du MJ.
+   ⚠️ Le nœud est à la RACINE (`/bestiary`), PAS sous `campaign/runeterra` : ce dernier est
+   lisible par l'admin dès sa racine et un droit hérité ne se retire pas plus bas. Règle :
+   rôle `mj` seul, en lecture comme en écriture. Conséquence : hors de la sauvegarde de la
+   page Admin, d'où l'export/import propre à la page Bestiaire.
+   Un modèle est INDÉPENDANT de ses copies posées en combat (`placeMonster`). */
+const BESTIARY = 'bestiary';
+const BESTIARY_MONSTERS = `${BESTIARY}/monsters`;
+let _monsterSeq = 0;
+function newMonsterId() { return 'mon_' + Date.now().toString(36) + '_' + (_monsterSeq++); }
+function useBestiary() {
+  const [map, setMap] = useState(null);       // null = pas encore chargé
+  const [denied, setDenied] = useState(false); // lecture refusée (règle `/bestiary` non publiée, ou rôle ≠ mj)
+  useEffect(() => window.RTDB.subscribePath(BESTIARY_MONSTERS, (v) => setMap(v || {}), () => setDenied(true)), []);
+  const stamp = (o) => Object.assign({}, o, { updatedAt: Date.now() });
+  const addMonster = useCallback((monster) => {
+    const m = stamp(Object.assign({}, monster, { id: newMonsterId() }));
+    return window.RTDB.updatePath(BESTIARY_MONSTERS, { [m.id]: m }).then(() => m);
+  }, []);
+  const patchMonster = useCallback((id, patch) => window.RTDB.updatePath(`${BESTIARY_MONSTERS}/${id}`, stamp(patch)), []);
+  const removeMonster = useCallback((id) => window.RTDB.updatePath(BESTIARY_MONSTERS, { [id]: null }), []);
+  return { monsters: map, denied, addMonster, patchMonster, removeMonster };
+}
+/* Pose `count` copies d'un modèle dans `combat/enemies` (une seule écriture). */
+function placeMonster(monster, count) {
+  const n = Math.max(1, Math.min(20, count | 0));
+  const patch = {};
+  for (let i = 0; i < n; i++) { const id = newEnemyId(); patch[id] = Object.assign({ id }, npcToEnemy(monster, i, n)); }
+  return window.RTDB.updatePath(ENEMIES, patch).then(() => n);
+}
+
 /* File d'ACTIONS en attente : le joueur PROPOSE (au cast), le MJ résout instance par
    instance. Remplace `combat/pendingHits`, qui ne savait transporter qu'un coup de
    dégâts sur une cible.
@@ -848,6 +879,7 @@ Object.assign(window, {
   useSharedTurn, COMBAT_TURN,
   useInitiative, INITIATIVE, useAllHp,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
+  useBestiary, placeMonster, newMonsterId, BESTIARY, BESTIARY_MONSTERS,
   usePendingActions, applyHitToEnemy, applyHitToCharacter, healCharacter, healEnemy,
   applyStatusToCharacter, refundCast, PENDING_ACTIONS, summonAlly,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,

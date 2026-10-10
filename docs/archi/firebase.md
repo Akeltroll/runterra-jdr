@@ -41,6 +41,9 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   diff vide après normalisation) : aucune publication en attente, aucune dérive console.
   Les mentions « RÈGLES RTDB À REPUBLIER » des entrées d'état antérieures sont **historiques**
   — elles ont toutes été publiées depuis.
+  ⚠️ **`/bestiary` (2026-10-11) = lecture + écriture rôle `mj` SEUL**, nœud à la RACINE : c'est le seul
+  endroit où l'admin est exclu, et il ne pouvait pas vivre sous `campaign/runeterra` (droit hérité).
+  ✅ Publiée et relue le 2026-10-11 (en ligne == dépôt avant ET après, aucune dérive console).
   Contenu : joueur = sa fiche seule, staff = tout ; **`campaign/runeterra` a un `.write` `mj`+`admin`**
   (ouvert au MJ le 2026-08-21 pour l'import de sauvegarde — `setPath(CAMPAIGN,…)` écrit sur le nœud
   racine ; les `.validate` des descendants continuent de s'appliquer, et `/users` n'est pas

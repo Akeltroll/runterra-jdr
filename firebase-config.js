@@ -39,9 +39,11 @@ window.RTDB = {
     return _auth.signInWithEmailAndPassword(email, password);
   },
   signOut() { return _auth.signOut(); },
-  subscribePath(path, cb) {
+  /* `onError` (optionnel) : appelé si la lecture est refusée (règles RTDB). Sans lui un
+     refus est silencieux et la page reste sur « Chargement… ». */
+  subscribePath(path, cb, onError) {
     const ref = _db.ref(path);
-    const handler = ref.on('value', (snap) => cb(snap.val()));
+    const handler = ref.on('value', (snap) => cb(snap.val()), onError || undefined);
     return () => ref.off('value', handler); // fonction de désabonnement
   },
   updatePath(path, patch) { return _db.ref(path).update(patch); },

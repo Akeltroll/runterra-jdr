@@ -2971,3 +2971,198 @@ test('armes L3 — retirer un débuff rend SON rechargement, même après applic
   // une instance sans rechargement : règle habituelle (rien, dégâts déjà appliqués)
   assert.equal(L.actionRefundPlan(action, 'instance', { id: 'i2' }), null);
 });
+
+/* --- Bestiaire (2026-10-11) : référentiel, rangs, archétypes, attaques, rencontres, XP --- */
+test('npcPointBudget : recopie LEVELS jusqu au 18, prolonge au-delà', () => {
+  assert.deepEqual(L.npcPointBudget(2), { budget: 10, cap: 6 });
+  assert.deepEqual(L.npcPointBudget(18), { budget: 34, cap: 20 });
+  const b20 = L.npcPointBudget(20);
+  assert.equal(b20.budget, 37);
+  assert.ok(b20.cap >= 20);
+});
+
+test('npcScaleProfile : place tout le budget, respecte le plafond, laisse les 0 à 0', () => {
+  for (const lv of [1, 2, 6, 10, 14, 18, 22]) {
+    const pb = L.npcPointBudget(lv);
+    for (const p of L.NPC_REF_PROFILES) {
+      const a = L.npcScaleProfile(p.attrs, pb.budget, pb.cap);
+      assert.equal(a[0] + a[1] + a[2] + a[3], pb.budget, p.id + ' niv ' + lv);
+      a.forEach((v, i) => { assert.ok(v <= pb.cap); if (p.attrs[i] === 0) assert.equal(v, 0); });
+    }
+  }
+});
+
+test('refPlayer : moyenne des 5 profils nus, croissante avec le niveau', () => {
+  const r2 = L.refPlayer(2), r10 = L.refPlayer(10), r18 = L.refPlayer(18);
+  assert.equal(Math.round(r2.hp), 400);
+  assert.equal(Math.round(r2.atk), 113);
+  assert.equal(Math.round(r18.hp), 1601);
+  assert.ok(r2.ehp > r2.hp);                       // l'armure compte dans les PV effectifs
+  assert.ok(r2.roundDmg < r10.roundDmg && r10.roundDmg < r18.roundDmg);
+  assert.ok(L.refPlayer(20).hp > r18.hp);          // au-delà du 18
+});
+
+test('npcPowerMults : n standards tués un par un (PV cumulés, dégâts moyens)', () => {
+  assert.deepEqual(L.npcPowerMults(1), { hp: 1, dmg: 1 });
+  assert.deepEqual(L.npcPowerMults(2), { hp: 2, dmg: 1.5 });
+  assert.deepEqual(L.npcPowerMults(5), { hp: 5, dmg: 3 });
+  assert.ok(Math.abs(L.npcPowerMults(0.5).dmg - 2 / 3) < 1e-9);
+  assert.ok(Math.abs(L.npcPowerMults(0.1).dmg - 0.2 / 1.1) < 1e-9);
+});
+
+test('npcPowerFromProduct est la réciproque de npcPowerProduct', () => {
+  for (const n of [0.1, 0.5, 1, 2, 5, 12])
+    assert.ok(Math.abs(L.npcPowerFromProduct(L.npcPowerProduct(n)) - n) < 1e-9, 'n=' + n);
+  assert.equal(L.npcRankForPower(2.4).id, 'elite');
+  assert.equal(L.npcRankForPower(0.08).id, 'microbe');
+});
+
+test('npcSuggestStats : un bruiser standard EST le référentiel', () => {
+  const ref = L.refPlayer(10), s = L.npcSuggestStats(10, 'standard', 'bruiser', 0);
+  // à 1 % près : l'armure et la RM sont arrondies à l'entier, les PV bruts compensent
+  assert.ok(Math.abs(s.hpMax / ref.hp - 1) < 0.01);
+  assert.ok(Math.abs(s.roundDmg - ref.roundDmg) <= 1);
+  assert.equal(s.ap, 0);
+  assert.ok(Math.abs(L.npcPowerOf(s, 10) - 1) < 0.02);
+});
+
+test('npcSuggestStats : la puissance réelle retombe sur celle du rang, pour tout archétype', () => {
+  for (const rank of L.NPC_RANKS) for (const arch of L.NPC_ARCHETYPES) {
+    const s = L.npcSuggestStats(6, rank.id, arch.id, 0);
+    const attendu = L.npcPowerFromProduct(L.npcPowerProduct(rank.power) * arch.hp * arch.dmg);
+    assert.ok(Math.abs(L.npcPowerOf(s, 6) / attendu - 1) < 0.06, rank.id + '/' + arch.id);
+  }
+});
+
+test('archétypes : le tank physique paie son armure en PV bruts, le mage tape en AP', () => {
+  const t = L.npcSuggestStats(10, 'standard', 'tank_phys', 0), c = L.npcSuggestStats(10, 'standard', 'colosse', 0);
+  assert.ok(t.armure > c.armure * 2);
+  assert.ok(t.hpMax < c.hpMax);
+  assert.ok(Math.abs(L.npcEhp(t) / L.npcEhp(c) - 1) < 0.01);   // mêmes PV effectifs
+  const m = L.npcSuggestStats(10, 'standard', 'mage', 0);
+  assert.ok(m.ap > 0 && m.ad === 0);
+});
+
+test('curseur endurance / violence : échange PV contre dégâts à puissance constante', () => {
+  const a = L.npcSuggestStats(10, 'boss', 'bruiser', 0), b = L.npcSuggestStats(10, 'boss', 'bruiser', 100);
+  assert.ok(Math.abs(b.hpMax / a.hpMax - 2) < 0.01);
+  assert.ok(Math.abs(b.roundDmg / a.roundDmg - 0.5) < 0.01);
+  assert.ok(Math.abs(L.npcPowerOf(b, 10) - L.npcPowerOf(a, 10)) < 0.1);
+  assert.equal(L.npcTiltFactor(200), 4);
+  assert.equal(L.npcTiltFactor(9999), 8);          // borné
+});
+
+test('npcBuildAttacks : le gabarit consomme 100 % du budget', () => {
+  for (const arch of ['bruiser', 'assassin', 'mage', 'mage_zone', 'soutien_fragile']) {
+    const s = L.npcSuggestStats(10, 'elite', arch, 0);
+    const atts = L.npcBuildAttacks(arch, s, s.roundDmg);
+    const u = L.npcBudgetUsage(atts, s, s.roundDmg);
+    assert.ok(Math.abs(u.pct - 100) < 1.5, arch + ' ' + u.pct);
+    assert.equal(atts[0].type, L.npcArchetype(arch).main === 'ap' ? 'magique' : 'physique');
+  }
+});
+
+test('npcAttackCost : zone, délai et 1×/combat', () => {
+  const st = { crit: 0, dcrit: 200 };
+  assert.equal(L.npcAttackCost({ dmg: 100, cd: 1, targets: 1 }, st), 100);
+  assert.equal(L.npcAttackCost({ dmg: 100, cd: 2, targets: 1 }, st), 50);
+  assert.equal(L.npcAttackCost({ dmg: 50, cd: 1, targets: 3 }, st), 100);    // 3 cibles à 50 % = une monocible
+  assert.equal(L.npcAttackCost({ dmg: 500, cd: 1, targets: 1, once: true }, st), 0);
+  assert.equal(L.npcAttackCost({ dmg: 100, cd: 1, targets: 1 }, { crit: 50, dcrit: 200 }), 150);
+  assert.equal(L.npcAttackCost({ dmg: 100, cd: 1, targets: 1, crit: false }, { crit: 50, dcrit: 200 }), 100);
+});
+
+test('npcAttackView : annonce, critique, et encaissé selon le type affiché', () => {
+  const st = { crit: 20, dcrit: 175, lethaAD: 0, lethaAP: 0 }, def = { armure: 100, resmag: 0, rescrit: 0 };
+  const v = L.npcAttackView({ dmg: 100, type: 'physique', targets: 1, cd: 1 }, st, def);
+  assert.equal(v.normal, 100); assert.equal(v.crit, 175);
+  assert.equal(v.low, 85); assert.equal(v.high, 115);
+  assert.equal(v.taken.normal, 50);                 // 100 d'armure = moitié
+  assert.equal(L.npcAttackView({ dmg: 100, type: 'physique' }, st, def, 'magique').taken.normal, 100);
+  assert.equal(L.npcAttackView({ dmg: 100, type: 'physique' }, st, def, 'brut').taken.normal, 100);
+  assert.equal(L.npcAttackView({ dmg: 100, crit: false }, st, def).crit, null);
+  assert.equal(L.npcAttackView({ dmg: 40, targets: 4 }, { crit: 0 }, def).total, 160);
+});
+
+test('npcEncounterBudget : additif, et un monstre de plus haut niveau pèse plus', () => {
+  const b = L.npcEncounterBudget([{ power: 2, level: 6, count: 1 }, { power: 0.5, level: 6, count: 6 }], 6);
+  assert.equal(b, 5);
+  assert.ok(L.npcPowerAtLevel(1, 10, 6) > 1);
+  assert.ok(L.npcPowerAtLevel(1, 2, 6) < 1);
+  assert.equal(L.npcPowerAtLevel(2, 6, 6), 2);
+});
+
+test('npcDifficulty : repères du MJ, ramenés au nombre de PJ', () => {
+  assert.equal(L.npcDifficulty(1, 5).id, 'faible');
+  assert.equal(L.npcDifficulty(2.5, 5).id, 'moyenne');
+  assert.equal(L.npcDifficulty(5, 5).id, 'dure');
+  assert.equal(L.npcDifficulty(10, 5).id, 'extreme');
+  assert.equal(L.npcDifficulty(4, 4).id, 'dure');   // 4 joueurs : 400 % = le miroir
+});
+
+test('XP : 1 extrême = 2 dures = 4 moyennes = 8 faibles = un niveau', () => {
+  const need = L.xpToNext(2);                       // 380
+  assert.equal(L.npcEncounterXp(10, 2, 5).perPlayer, need);
+  assert.equal(L.npcEncounterXp(5, 2, 5).perPlayer * 2, need);
+  assert.equal(L.npcEncounterXp(2.5, 2, 5).perPlayer * 4, need);
+  assert.ok(Math.abs(L.npcEncounterXp(1, 2, 5).perPlayer * 8 - need) <= 4);   // arrondi
+  assert.ok(L.npcEncounterXp(1, 2, 5).bonus > 0);   // la rencontre faible paie plus que ses monstres
+  assert.equal(L.npcEncounterXp(5, 2, 5).bonus, 0);
+  // cagnotte d'un monstre : 5 standards = un demi-niveau pour chacun des 5 PJ
+  assert.equal(L.npcMonsterXp(2, 1), 190);
+  assert.equal(L.npcMonsterXp(2, 1) * 5 / 5, need / 2);
+  assert.equal(L.npcXpForLevel(20), 2180);          // pas de plafond au 18
+});
+
+/* --- Bestiaire, fiches (lot 2) --- */
+test('rangs : curseur par défaut intermédiaire (décision MJ du 2026-10-11)', () => {
+  assert.equal(L.npcDefaultTilt('microbe'), 0);
+  assert.equal(L.npcDefaultTilt('sbire'), 0);
+  assert.equal(L.npcDefaultTilt('standard'), 58);
+  assert.equal(L.npcDefaultTilt('elite'), 100);
+  assert.equal(L.npcDefaultTilt('boss'), 158);
+  assert.equal(L.npcParams({ rank: 'boss' }).tilt, 158);       // absent = défaut du rang
+  assert.equal(L.npcParams({ rank: 'boss', tilt: 0 }).tilt, 0); // 0 explicite respecté
+});
+
+test('npcNewMonster : fiche complète, stats = suggestion', () => {
+  const m = L.npcNewMonster({ level: 6, rank: 'elite', archetype: 'tank_phys' });
+  assert.equal(m.tilt, 100);
+  assert.equal(m.side, 'enemy');
+  const s = L.npcSuggestSheet(m);
+  for (const k of L.NPC_STAT_KEYS) assert.equal(m[k], s[k], k);
+  assert.equal(m.xp, L.npcMonsterXp(6, 2));
+});
+
+test('npcReparam : les champs non retouchés suivent, les champs retouchés restent', () => {
+  const m = L.npcNewMonster({ level: 6, rank: 'standard', archetype: 'bruiser' });
+  m.armure = 99;                                   // retouche manuelle
+  const p = L.npcReparam(m, { level: 10 });
+  assert.equal(p.level, 10);
+  assert.ok(p.hpMax > m.hpMax);                    // a suivi
+  assert.equal(p.armure, undefined);               // pas dans le patch : la retouche reste
+  assert.ok(p.xp > m.xp);
+});
+
+test('npcReparam : changer de rang emmène le curseur s il était au défaut, pas sinon', () => {
+  const m = L.npcNewMonster({ level: 6, rank: 'standard', archetype: 'bruiser' });
+  assert.equal(L.npcReparam(m, { rank: 'boss' }).tilt, 158);
+  const m2 = Object.assign({}, m, L.npcReparam(m, { tilt: 20 }));
+  assert.equal(m2.tilt, 20);
+  assert.equal(L.npcReparam(m2, { rank: 'boss' }).tilt, 20);
+  // le curseur bouge les PV et la stat d attaque, à puissance constante
+  assert.ok(m2.hpMax < m.hpMax && m2.ad > m.ad);
+});
+
+test('npcToEnemy : forme de la vue MJ, atk = max(AD, AP), copies numérotées', () => {
+  const m = Object.assign(L.npcNewMonster({ level: 6, rank: 'elite', archetype: 'mage', name: 'Liche' }), { id: 'mon_1' });
+  const e = L.npcToEnemy(m, 1, 3);
+  assert.equal(e.name, 'Liche 2');
+  assert.equal(e.hpCur, m.hpMax); assert.equal(e.hpMax, m.hpMax);
+  assert.equal(e.atk, m.ap);
+  assert.equal(e.side, 'enemy'); assert.equal(e.reveal, 'hidden');
+  assert.equal(e.npcLevel, 6); assert.equal(e.rank, 'elite'); assert.equal(e.bestiaryId, 'mon_1');
+  assert.equal(L.npcToEnemy(m, 0, 1).name, 'Liche');
+  const a = L.npcToEnemy(Object.assign({}, m, { side: 'ally' }), 0, 1);
+  assert.equal(a.side, 'ally'); assert.equal(a.reveal, 'exact');
+});

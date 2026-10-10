@@ -2991,7 +2991,430 @@
     return { level, xp, levelsLost };
   }
 
+  /* ============================================================
+     BESTIAIRE — dimensionnement des ennemis et PNJ (2026-10-11)
+     Spec : docs/superpowers/specs/2026-10-11-bestiaire-design.md
+     Tout se mesure contre un PJ DE RÉFÉRENCE du même niveau : la moyenne des 5 profils
+     de la campagne, NUS (ni équipement, ni runes, ni buffs — décision MJ).
+     ⚠️ Comme `npcStatsFromAttrs`, ces fonctions SUGGÈRENT : les champs de la fiche du
+     monstre restent la source de vérité, le MJ corrige ce qu'il veut.
+     ============================================================ */
+
+  /* ⚠️ COPIE de `LEVELS` (data.jsx) : budget = `total` + CREATION_BONUS, cap = `limit`.
+     game-logic ne lit pas data.jsx (logique pure) — à resynchroniser si LEVELS bouge. */
+  var NPC_POINT_BUDGET = [8, 10, 11, 12, 13, 15, 16, 18, 19, 21, 23, 25, 26, 28, 30, 32, 33, 34];
+  var NPC_POINT_CAP    = [5, 6, 7, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20];
+  /* Au-delà de 18 (« endgame ») : pente moyenne de LEVELS (~1,5 point par niveau), le plafond
+     suit ; `escalationFactor` gère déjà la zone PNJ au-delà de 20 points. */
+  function npcPointBudget(level) {
+    level = Math.max(1, level | 0);
+    if (level <= NPC_POINT_BUDGET.length) return { budget: NPC_POINT_BUDGET[level - 1], cap: NPC_POINT_CAP[level - 1] };
+    var b = Math.round(34 + 1.5 * (level - 18));
+    return { budget: b, cap: Math.max(20, Math.round(b / 1.7)) };
+  }
+
+  /* Les 5 profils de la campagne [Force, Habileté, Mental, Magie] : seules les PROPORTIONS
+     comptent, elles sont étirées au budget du niveau. */
+  var NPC_REF_PROFILES = [
+    { id: 'rathael', attrs: [4, 3, 4, 1] },
+    { id: 'urskaar', attrs: [6, 1, 5, 0] },
+    { id: 'smith',   attrs: [3, 6, 1, 2] },
+    { id: 'lunick',  attrs: [5, 4, 3, 0] },
+    { id: 'jett',    attrs: [1, 6, 1, 4] },
+  ];
+  /* Étire un profil à `budget` points (plus fort reste, plafond `cap` par carac). Une carac
+     à 0 dans le profil reste à 0. */
+  function npcScaleProfile(attrs, budget, cap) {
+    var sum = 0, i;
+    for (i = 0; i < 4; i++) sum += attrs[i];
+    var out = [0, 0, 0, 0], rest = [];
+    if (sum <= 0) return out;
+    for (i = 0; i < 4; i++) {
+      var exact = attrs[i] * budget / sum;
+      out[i] = Math.min(cap, Math.floor(exact));
+      rest.push({ i: i, r: exact - Math.floor(exact) });
+    }
+    rest.sort(function (a, b) { return b.r - a.r || a.i - b.i; });
+    var left = budget - (out[0] + out[1] + out[2] + out[3]);
+    for (var guard = 0; left > 0 && guard < 400; guard++) {
+      var k = rest[guard % 4].i;
+      if (attrs[k] > 0 && out[k] < cap) { out[k]++; left--; }
+    }
+    return out;
+  }
+
+  /* Multiplicateur moyen d'un coup, critique compris (sans les paliers de surcrit). */
+  function critAverage(critPct, dcritPct) {
+    var c = Math.max(0, Math.min(100, Number(critPct) || 0)) / 100;
+    var d = Math.max(100, Number(dcritPct) || 100) / 100;
+    return 1 + c * (d - 1);
+  }
+
+  /* Dégâts qu'un PJ sort par round, en multiples de sa stat d'attaque (hors critique).
+     Un PJ joue chaque tour attaque de base (0,6) + C1 + C2 ou C3 ; les C4 (1×/jour) sont
+     hors compte. Moyenne des 5 kits au rang 1 (2026-10-10) pondérés par leurs délais :
+     Elias ~2,1 · Smith ~2,4 · Urskaar ~2,0 · Rathäel ~1,75 · Jett ~0,85 (soutien).
+     ⚠️ À recaler si les kits changent (lot G des compétences : rangs 2 à 5). */
+  var REF_ROUND_RATIO = 1.8;
+
+  /* PV effectifs : moyenne des PV effectifs physiques et magiques (mitigation AR/(AR+K)). */
+  function npcEhpFactor(armure, resmag) {
+    var a = Math.max(0, Number(armure) || 0), r = Math.max(0, Number(resmag) || 0);
+    return ((MITIGATION_K + a) / MITIGATION_K + (MITIGATION_K + r) / MITIGATION_K) / 2;
+  }
+  function npcEhp(stats) {
+    stats = stats || {};
+    return Math.max(0, Number(stats.hpMax != null ? stats.hpMax : stats.hp) || 0) * npcEhpFactor(stats.armure, stats.resmag);
+  }
+
+  var REF_PLAYER_CACHE = {};
+  function refPlayer(level) {
+    level = Math.max(1, level | 0);
+    if (REF_PLAYER_CACHE[level]) return REF_PLAYER_CACHE[level];
+    var pb = npcPointBudget(level), n = NPC_REF_PROFILES.length;
+    var acc = { hp: 0, atk: 0, armure: 0, resmag: 0, crit: 0, dcrit: 0, rescrit: 0, hit: 0 };
+    NPC_REF_PROFILES.forEach(function (p) {
+      var a = npcScaleProfile(p.attrs, pb.budget, pb.cap);
+      var s = computeStats(a[0], a[1], a[2], a[3], level);
+      var atk = Math.max(s.ad, s.ap);
+      acc.hp += s.hp; acc.atk += atk; acc.armure += s.armure; acc.resmag += s.resmag;
+      acc.crit += s.crit; acc.dcrit += s.dcrit; acc.rescrit += s.rescrit;
+      acc.hit += atk * critAverage(s.crit, s.dcrit);
+    });
+    var r = { level: level };
+    Object.keys(acc).forEach(function (k) { r[k] = acc[k] / n; });
+    r.hpMax = r.hp;
+    r.ehp = npcEhp(r);
+    r.roundDmg = REF_ROUND_RATIO * r.hit;            // dégâts AFFICHÉS par round, crit moyen compris
+    delete r.hit;
+    REF_PLAYER_CACHE[level] = r;
+    return r;
+  }
+
+  /* --- Rangs ---
+     Puissance = PV effectifs × dégâts par round, rapportés au référentiel. Un monstre de
+     puissance n vaut n standards tués l'un après l'autre : il a leurs PV cumulés et leurs
+     dégâts MOYENS pendant qu'ils tombent. ⚠️ Doubler PV et dégâts ne double pas la puissance. */
+  /* `tilt` = position PAR DÉFAUT du curseur endurance ↔ violence (décision MJ du 2026-10-11,
+     réglage « intermédiaire ») : standard PV ×1,5, élite ×2, boss ×3 — soit ~5, 7 et 10 rounds
+     pour une rencontre dure dans le simulateur, qui ignore soins et contrôles. Microbe et
+     sbire restent neutres. */
+  var NPC_RANKS = [
+    { id: 'microbe',  label: 'Microbe',  power: 0.1, tilt: 0 },
+    { id: 'sbire',    label: 'Sbire',    power: 0.5, tilt: 0 },
+    { id: 'standard', label: 'Standard', power: 1,   tilt: 58 },
+    { id: 'elite',    label: 'Élite',    power: 2,   tilt: 100 },
+    { id: 'boss',     label: 'Boss',     power: 5,   tilt: 158 },
+  ];
+  function npcRank(id) {
+    for (var i = 0; i < NPC_RANKS.length; i++) if (NPC_RANKS[i].id === id) return NPC_RANKS[i];
+    return NPC_RANKS[2];
+  }
+  function npcPowerMults(n) {
+    n = Math.max(0, Number(n) || 0);
+    return n >= 1 ? { hp: n, dmg: (n + 1) / 2 } : { hp: n, dmg: 2 * n / (1 + n) };
+  }
+  function npcPowerProduct(n) { var m = npcPowerMults(n); return m.hp * m.dmg; }
+  /* Réciproque : la puissance n dont le produit PV × dégâts vaut P. */
+  function npcPowerFromProduct(P) {
+    P = Math.max(0, Number(P) || 0);
+    return P >= 1 ? (-1 + Math.sqrt(1 + 8 * P)) / 2 : (P + Math.sqrt(P * P + 8 * P)) / 4;
+  }
+  /* Rang le plus proche d'une puissance (échelle logarithmique). */
+  function npcRankForPower(n) {
+    n = Math.max(1e-6, Number(n) || 0);
+    var best = NPC_RANKS[0], bd = Infinity;
+    NPC_RANKS.forEach(function (r) { var d = Math.abs(Math.log(n / r.power)); if (d < bd) { bd = d; best = r; } });
+    return best;
+  }
+
+  /* --- Archétypes : DÉPLACENT le budget (hp × dmg ≈ 1, sauf les soutiens dont le reste est
+     en effets non chiffrés). `hp` s'entend en PV EFFECTIFS : un monstre plus armuré paie ses
+     résistances en PV bruts. `ar`/`rm`/`crit`/`rescrit` = multiples du référentiel.
+     `main` = stat d'attaque ; `tpl` = gabarit d'attaques (NPC_ATTACK_TEMPLATES). */
+  var NPC_ARCHETYPES = [
+    { id: 'bruiser',   label: 'Bruiser',           hp: 1,   dmg: 1,    main: 'ad', ar: 1,   rm: 1,   crit: 1,    rescrit: 1,   tpl: 'std' },
+    { id: 'tank_phys', label: 'Tank physique',     hp: 1.4, dmg: 0.7,  main: 'ad', ar: 3,   rm: 1,   crit: 0.5,  rescrit: 1.5, tpl: 'std' },
+    { id: 'tank_mag',  label: 'Tank magique',      hp: 1.4, dmg: 0.7,  main: 'ad', ar: 1,   rm: 3,   crit: 0.5,  rescrit: 1.5, tpl: 'std' },
+    { id: 'colosse',   label: 'Colosse',           hp: 1.4, dmg: 0.7,  main: 'ad', ar: 1,   rm: 1,   crit: 0.5,  rescrit: 1,   tpl: 'std' },
+    { id: 'assassin',  label: 'Assassin',          hp: 0.7, dmg: 1.4,  main: 'ad', ar: 0.6, rm: 0.6, crit: 2,    rescrit: 0.5, tpl: 'burst' },
+    { id: 'tireur',    label: 'Tireur (carry AD)', hp: 0.8, dmg: 1.25, main: 'ad', ar: 0.7, rm: 0.7, crit: 1.75, rescrit: 0.5, tpl: 'std' },
+    { id: 'mage',      label: 'Mage (burst)',      hp: 0.8, dmg: 1.25, main: 'ap', ar: 0.7, rm: 1.5, crit: 0.5,  rescrit: 0.5, tpl: 'mage' },
+    { id: 'mage_zone', label: 'Mage de zone',      hp: 0.8, dmg: 1.25, main: 'ap', ar: 0.7, rm: 1.5, crit: 0.5,  rescrit: 0.5, tpl: 'zone' },
+    { id: 'soutien_fragile',   label: 'Soutien fragile',   hp: 0.7, dmg: 0.6, main: 'ap', ar: 0.7, rm: 1,   crit: 0.5, rescrit: 0.5, tpl: 'soutien' },
+    { id: 'soutien_resistant', label: 'Soutien résistant', hp: 1.2, dmg: 0.5, main: 'ap', ar: 1.2, rm: 1.2, crit: 0.5, rescrit: 1,   tpl: 'soutien' },
+  ];
+  function npcArchetype(id) {
+    for (var i = 0; i < NPC_ARCHETYPES.length; i++) if (NPC_ARCHETYPES[i].id === id) return NPC_ARCHETYPES[i];
+    return NPC_ARCHETYPES[0];
+  }
+
+  /* Curseur endurance ↔ violence : à PUISSANCE CONSTANTE, échange des dégâts contre des PV.
+     tilt ∈ [−200, +300] ; +100 = PV ×2 et dégâts ÷2, +200 = ×4 et ÷4, −100 l'inverse, 0 = neutre.
+     C'est le levier de DURÉE des combats : mesuré le 2026-10-11 (sim-bestiaire.js), une
+     rencontre « dure » dure ~4 rounds à 0, ~7 à +100, ~10 à +158 (×3), ~13 à +200 (×4),
+     pour la MÊME usure du groupe (spec §10). */
+  function npcTiltFactor(tilt) {
+    var t = Math.max(-200, Math.min(300, Number(tilt) || 0));
+    return Math.pow(2, t / 100);
+  }
+
+  /* Dégâts affichés par round que sortent des stats données, sans connaître les attaques. */
+  function npcRoundDmgFromStats(stats) {
+    stats = stats || {};
+    var atk = Math.max(Number(stats.ad) || 0, Number(stats.ap) || 0, 0);
+    return REF_ROUND_RATIO * atk * critAverage(stats.crit, stats.dcrit);
+  }
+
+  /* Stats SUGGÉRÉES d'un monstre. `roundDmg` = son budget de dégâts affichés par round
+     (crit moyen compris), à répartir entre attaque de base et compétences. */
+  function npcSuggestStats(level, rankId, archetypeId, tilt) {
+    var ref = refPlayer(level), rk = npcRank(rankId), ar = npcArchetype(archetypeId);
+    var m = npcPowerMults(rk.power), k = npcTiltFactor(tilt);
+    var armure = Math.round(ref.armure * ar.ar), resmag = Math.round(ref.resmag * ar.rm);
+    var hpMax = Math.max(1, Math.round(ref.ehp * m.hp * ar.hp * k / npcEhpFactor(armure, resmag)));
+    var crit = Math.round(ref.crit * ar.crit), dcrit = Math.round(ref.dcrit);
+    var roundDmg = ref.roundDmg * m.dmg * ar.dmg / k;
+    var stat = Math.max(1, Math.round(roundDmg / (REF_ROUND_RATIO * critAverage(crit, dcrit))));
+    return {
+      hpMax: hpMax,
+      ad: ar.main === 'ad' ? stat : 0, ap: ar.main === 'ap' ? stat : 0,
+      armure: armure, resmag: resmag,
+      crit: crit, dcrit: dcrit, rescrit: Math.round(ref.rescrit * ar.rescrit),
+      lethaAD: 0, lethaAP: 0,
+      roundDmg: Math.round(roundDmg),
+    };
+  }
+
+  /* Puissance RÉELLE de stats (éventuellement retouchées à la main), au niveau donné.
+     `roundDmg` optionnel = dégâts par round réellement posés par ses attaques ; absent, on
+     les déduit de la stat d'attaque. Renvoie n (1 = un standard). */
+  function npcPowerOf(stats, level, roundDmg) {
+    var ref = refPlayer(level);
+    var dmg = roundDmg != null ? Math.max(0, Number(roundDmg) || 0) : npcRoundDmgFromStats(stats);
+    if (!(ref.ehp > 0) || !(ref.roundDmg > 0)) return 0;
+    return npcPowerFromProduct((npcEhp(stats) / ref.ehp) * (dmg / ref.roundDmg));
+  }
+  /* La même puissance, vue depuis un groupe d'un AUTRE niveau (budget de rencontre). */
+  function npcPowerAtLevel(power, level, partyLevel) {
+    level = Math.max(1, level | 0); partyLevel = Math.max(1, partyLevel | 0);
+    if (level === partyLevel) return Math.max(0, Number(power) || 0);
+    var a = refPlayer(level), b = refPlayer(partyLevel);
+    return npcPowerFromProduct(npcPowerProduct(power) * (a.ehp * a.roundDmg) / (b.ehp * b.roundDmg));
+  }
+
+  /* --- Fiche de bestiaire ---
+     Les champs de stats de la fiche sont la SOURCE DE VÉRITÉ. Quand le MJ change un
+     paramètre (niveau, rang, archétype, curseur), `npcReparam` fait SUIVRE les champs qui
+     valaient encore la suggestion et laisse intacts ceux qu'il a retouchés à la main. */
+  var NPC_STAT_KEYS = ['hpMax', 'ad', 'ap', 'armure', 'resmag', 'crit', 'dcrit', 'rescrit', 'lethaAD', 'lethaAP'];
+  var NPC_LEVEL_MAX = 40;
+  function npcDefaultTilt(rankId) { return npcRank(rankId).tilt || 0; }
+  function npcParams(m) {
+    m = m || {};
+    var rank = npcRank(m.rank).id;
+    return {
+      level: Math.max(1, Math.min(NPC_LEVEL_MAX, (m.level | 0) || 1)),
+      rank: rank, archetype: npcArchetype(m.archetype).id,
+      tilt: m.tilt == null ? npcDefaultTilt(rank) : Math.max(-200, Math.min(300, Math.round(Number(m.tilt) || 0))),
+    };
+  }
+  /* Valeurs suggérées de TOUS les champs chiffrés d'une fiche (stats + XP). */
+  function npcSuggestSheet(m) {
+    var p = npcParams(m), s = npcSuggestStats(p.level, p.rank, p.archetype, p.tilt), out = {};
+    NPC_STAT_KEYS.forEach(function (k) { out[k] = s[k]; });
+    out.xp = npcMonsterXp(p.level, npcRank(p.rank).power);
+    return out;
+  }
+  function npcNewMonster(init) {
+    var p = npcParams(init || {});
+    return Object.assign({ name: (init && init.name) || 'Nouveau monstre', side: 'enemy', note: '', img: '' },
+      p, npcSuggestSheet(p));
+  }
+  /* Patch à écrire quand des PARAMÈTRES changent. Changer de rang emmène aussi le curseur,
+     s'il était encore sur le défaut de l'ancien rang. */
+  function npcReparam(monster, change) {
+    var before = npcParams(monster), raw = Object.assign({}, before, change || {});
+    if (change && change.rank != null && change.tilt == null && before.tilt === npcDefaultTilt(before.rank)) raw.tilt = null;
+    var after = npcParams(raw);
+    var was = npcSuggestSheet(before), now = npcSuggestSheet(after), patch = Object.assign({}, after);
+    Object.keys(now).forEach(function (k) {
+      if (monster[k] == null || Number(monster[k]) === was[k]) patch[k] = now[k];
+    });
+    return patch;
+  }
+  /* Copie à poser dans `combat/enemies` (forme de `makeEnemy`, sans l'id). `index`/`count`
+     numérotent les copies. ⚠️ La vue MJ n'a qu'UN champ `atk` : il reçoit la plus élevée de
+     AD / AP, comme `npcStatsFromAttrs`. */
+  function npcToEnemy(monster, index, count) {
+    var m = monster || {}, n = function (v) { return Math.max(0, Math.round(Number(v) || 0)); };
+    var ally = m.side === 'ally';
+    return {
+      name: (m.name || 'Monstre') + (count > 1 ? ' ' + ((index | 0) + 1) : ''),
+      hpCur: Math.max(1, n(m.hpMax)), hpMax: Math.max(1, n(m.hpMax)), manaCur: 0, manaMax: 0,
+      atk: Math.max(n(m.ad), n(m.ap)), armure: n(m.armure), resmag: n(m.resmag),
+      crit: n(m.crit), dcrit: n(m.dcrit) || 200, rescrit: n(m.rescrit),
+      lethaAD: n(m.lethaAD), lethaAP: n(m.lethaAP), note: '',
+      side: ally ? 'ally' : 'enemy', reveal: ally ? 'exact' : 'hidden', revealPct: 100,
+      npcLevel: npcParams(m).level, rank: npcParams(m).rank, bestiaryId: m.id || null,
+    };
+  }
+
+  /* --- Attaques et compétences (indicatif MJ) ---
+     Une attaque : { kind:'basic'|'skill', type:'physique'|'magique'|'brut', targets 1-5,
+     cd 1-10, dmg (coup NORMAL, par cible), crit (défaut true), once (1×/combat : hors budget) }.
+     Zone : des dégâts étalés valent moins que des dégâts concentrés, donc une zone sur N
+     cibles inflige NPC_AOE_SHARE[N] de sa monocible équivalente À CHAQUE cible. */
+  var NPC_AOE_SHARE = [1, 0.65, 0.5, 0.4, 0.35];
+  function npcAoeShare(targets) {
+    var n = Math.max(1, Math.min(NPC_AOE_SHARE.length, targets | 0));
+    return NPC_AOE_SHARE[n - 1];
+  }
+  var NPC_DMG_SPREAD = 0.15;   // fourchette basse-haute affichée : ±15 %
+  function npcAttackAvg(att, stats) {
+    att = att || {};
+    var d = Math.max(0, Number(att.dmg) || 0);
+    return att.crit === false ? d : d * critAverage(stats && stats.crit, stats && stats.dcrit);
+  }
+  /* Ce que l'attaque consomme du budget par round : sa monocible équivalente, étalée sur son délai. */
+  function npcAttackCost(att, stats) {
+    att = att || {};
+    if (att.once) return 0;
+    return npcAttackAvg(att, stats) / npcAoeShare(att.targets) / Math.max(1, att.cd | 0);
+  }
+  function npcBudgetUsage(attacks, stats, budget) {
+    var used = 0;
+    (attacks || []).forEach(function (a) { used += npcAttackCost(a, stats); });
+    budget = Math.max(0, Number(budget) || 0);
+    return { used: used, budget: budget, pct: budget > 0 ? used / budget * 100 : 0, left: budget - used };
+  }
+  /* Lecture d'une attaque : chiffre à ANNONCER (avant mitigation) et ce qu'ENCAISSE la
+     défense donnée (le PJ de référence par défaut côté page). `type` force l'affichage
+     physique / magique / brut ; absent, celui de l'attaque. */
+  function npcAttackView(att, stats, defense, type) {
+    att = att || {}; stats = stats || {}; defense = defense || {};
+    var t = type || att.type || 'physique';
+    var d = Math.max(0, Number(att.dmg) || 0);
+    var canCrit = att.crit !== false;
+    var critMult = canCrit ? Math.max(100, Number(stats.dcrit) || 100) / 100 : 1;
+    var leth = t === 'physique' ? stats.lethaAD : t === 'magique' ? stats.lethaAP : 0;
+    var taken = function (x) { return mitigateDamage(x, t, defense, leth); };
+    var n = Math.max(1, Math.min(NPC_AOE_SHARE.length, att.targets | 0));
+    var avg = npcAttackAvg(att, stats);
+    return {
+      type: t, targets: n,
+      normal: Math.round(d), low: Math.round(d * (1 - NPC_DMG_SPREAD)), high: Math.round(d * (1 + NPC_DMG_SPREAD)),
+      crit: canCrit ? Math.round(d * critMult) : null,
+      avg: Math.round(avg), total: Math.round(avg * n),
+      taken: {
+        normal: taken(d),
+        crit: canCrit ? taken(d * critMultAfterResist(critMult, defense.rescrit)) : null,
+      },
+    };
+  }
+
+  /* Gabarits d'attaques : `share` = part du budget par round. Le monstre suit l'économie
+     d'actions des PJ (attaque de base + C1 + C2 OU C3). Les soutiens gardent C2/C3 pour
+     leurs effets (dégâts 0, à décrire dans les notes). */
+  var NPC_ATTACK_TEMPLATES = {
+    std:     [ { key: 'aa', name: 'Attaque de base', kind: 'basic', share: 0.30, cd: 1, targets: 1 },
+               { key: 'c1', name: 'Compétence 1',    kind: 'skill', share: 0.30, cd: 1, targets: 1 },
+               { key: 'c2', name: 'Compétence 2',    kind: 'skill', share: 0.20, cd: 2, targets: 1 },
+               { key: 'c3', name: 'Compétence 3 (zone)', kind: 'skill', share: 0.20, cd: 3, targets: 2 } ],
+    burst:   [ { key: 'aa', name: 'Attaque de base', kind: 'basic', share: 0.25, cd: 1, targets: 1 },
+               { key: 'c1', name: 'Compétence 1',    kind: 'skill', share: 0.25, cd: 1, targets: 1 },
+               { key: 'c2', name: 'Coup fatal',      kind: 'skill', share: 0.50, cd: 3, targets: 1 } ],
+    mage:    [ { key: 'aa', name: 'Attaque de base', kind: 'basic', share: 0.20, cd: 1, targets: 1 },
+               { key: 'c1', name: 'Sort 1',          kind: 'skill', share: 0.35, cd: 1, targets: 1 },
+               { key: 'c2', name: 'Sort 2',          kind: 'skill', share: 0.25, cd: 2, targets: 1 },
+               { key: 'c3', name: 'Sort 3 (zone)',   kind: 'skill', share: 0.20, cd: 3, targets: 2 } ],
+    zone:    [ { key: 'aa', name: 'Attaque de base', kind: 'basic', share: 0.20, cd: 1, targets: 1 },
+               { key: 'c1', name: 'Sort 1 (zone)',   kind: 'skill', share: 0.30, cd: 1, targets: 2 },
+               { key: 'c2', name: 'Sort 2 (zone)',   kind: 'skill', share: 0.25, cd: 2, targets: 3 },
+               { key: 'c3', name: 'Sort 3 (zone)',   kind: 'skill', share: 0.25, cd: 3, targets: 4 } ],
+    soutien: [ { key: 'aa', name: 'Attaque de base', kind: 'basic', share: 0.50, cd: 1, targets: 1 },
+               { key: 'c1', name: 'Compétence 1',    kind: 'skill', share: 0.50, cd: 1, targets: 1 },
+               { key: 'c2', name: 'Soutien 1',       kind: 'skill', share: 0,    cd: 2, targets: 1 },
+               { key: 'c3', name: 'Soutien 2',       kind: 'skill', share: 0,    cd: 3, targets: 1 } ],
+  };
+  /* Attaques par défaut d'un monstre : le gabarit de son archétype, chiffré sur `budget`. */
+  function npcBuildAttacks(archetypeId, stats, budget) {
+    var ar = npcArchetype(archetypeId), tpl = NPC_ATTACK_TEMPLATES[ar.tpl] || NPC_ATTACK_TEMPLATES.std;
+    var avgMult = critAverage(stats && stats.crit, stats && stats.dcrit);
+    budget = Math.max(0, Number(budget) || 0);
+    return tpl.map(function (t, i) {
+      return {
+        id: t.key, order: i, name: t.name, kind: t.kind,
+        type: ar.main === 'ap' ? 'magique' : 'physique',
+        targets: t.targets, cd: t.cd, note: '',
+        dmg: Math.round(t.share * budget * t.cd * npcAoeShare(t.targets) / avgMult),
+      };
+    });
+  }
+
+  /* --- Rencontres ---
+     Budget = somme des puissances, chacune ramenée au niveau du GROUPE. ⚠️ Approximation :
+     exacte tant que le groupe tue les monstres un par un, optimiste dès que les zones jouent. */
+  function npcEncounterBudget(entries, partyLevel) {
+    var sum = 0;
+    (entries || []).forEach(function (e) {
+      if (!e) return;
+      var count = Math.max(0, e.count == null ? 1 : e.count | 0);
+      sum += count * npcPowerAtLevel(e.power, e.level || partyLevel, partyLevel);
+    });
+    return sum;
+  }
+  /* Difficulté = budget PAR PJ (1 = le miroir). Bornes à mi-chemin géométrique des repères MJ. */
+  var NPC_DIFFICULTY = [
+    { id: 'faible',  label: 'Faible',  perPj: 0.2 },
+    { id: 'moyenne', label: 'Moyenne', perPj: 0.5 },
+    { id: 'dure',    label: 'Dure',    perPj: 1 },
+    { id: 'extreme', label: 'Extrême', perPj: 2 },
+  ];
+  function npcDifficulty(budget, partySize) {
+    var perPj = Math.max(0, Number(budget) || 0) / Math.max(1, partySize | 0);
+    var d = NPC_DIFFICULTY[NPC_DIFFICULTY.length - 1];
+    for (var i = 0; i < NPC_DIFFICULTY.length - 1; i++) {
+      if (perPj < Math.sqrt(NPC_DIFFICULTY[i].perPj * NPC_DIFFICULTY[i + 1].perPj)) { d = NPC_DIFFICULTY[i]; break; }
+    }
+    return { id: d.id, label: d.label, perPj: perPj };
+  }
+
+  /* --- XP ---
+     Règle MJ : un niveau = 1 rencontre extrême, 2 dures, 4 moyennes ou 8 faibles.
+     `npcXpForLevel` = xpToNext SANS le plafond du niveau 18 (un monstre peut le dépasser). */
+  function npcXpForLevel(level) { return 180 + 100 * Math.max(1, level | 0); }
+  /* Cagnotte d'un monstre (à partager entre les PJ) : 100 % de puissance = un demi-niveau d'UN PJ. */
+  function npcMonsterXp(level, power) {
+    return Math.round(npcXpForLevel(level) * Math.max(0, Number(power) || 0) * 0.5);
+  }
+  var NPC_XP_CURVE = [[0, 0], [0.2, 0.125], [0.5, 0.25], [1, 0.5], [2, 1]];   // budget par PJ → fraction de niveau
+  function npcEncounterXp(budget, partyLevel, partySize) {
+    partySize = Math.max(1, partySize | 0);
+    var perPj = Math.max(0, Number(budget) || 0) / partySize;
+    var c = NPC_XP_CURVE, frac = c[c.length - 1][1] + (perPj - c[c.length - 1][0]) * 0.5;
+    for (var i = 1; i < c.length; i++) {
+      if (perPj <= c[i][0]) {
+        frac = c[i - 1][1] + (perPj - c[i - 1][0]) * (c[i][1] - c[i - 1][1]) / (c[i][0] - c[i - 1][0]);
+        break;
+      }
+    }
+    var need = npcXpForLevel(partyLevel);
+    var perPlayer = Math.round(frac * need);
+    // `bonus` = ce que la courbe du MJ donne de plus que la somme des cagnottes des monstres.
+    return { perPj: perPj, fraction: frac, perPlayer: perPlayer, total: perPlayer * partySize,
+      bonus: perPlayer - Math.round(perPj * 0.5 * need) };
+  }
+
   return {
+    NPC_REF_PROFILES, NPC_RANKS, NPC_ARCHETYPES, NPC_AOE_SHARE, NPC_DMG_SPREAD, NPC_ATTACK_TEMPLATES,
+    NPC_DIFFICULTY, NPC_XP_CURVE, REF_ROUND_RATIO,
+    npcPointBudget, npcScaleProfile, critAverage, npcEhpFactor, npcEhp, refPlayer,
+    npcRank, npcPowerMults, npcPowerProduct, npcPowerFromProduct, npcRankForPower,
+    NPC_STAT_KEYS, NPC_LEVEL_MAX, npcDefaultTilt, npcParams, npcSuggestSheet, npcNewMonster, npcReparam, npcToEnemy,
+    npcArchetype, npcTiltFactor, npcRoundDmgFromStats, npcSuggestStats, npcPowerOf, npcPowerAtLevel,
+    npcAoeShare, npcAttackAvg, npcAttackCost, npcBudgetUsage, npcAttackView, npcBuildAttacks,
+    npcEncounterBudget, npcDifficulty, npcXpForLevel, npcMonsterXp, npcEncounterXp,
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,
     healMultiplier, applyHealBonus, lifestealMultiplier, buildDefaultState, makeItem, newItemId,
