@@ -1976,13 +1976,31 @@
     return out;
   }
 
+  /* Coût en mana d'une compétence (règle G5 du rééquilibrage, 2026-10-10) :
+       coût(niveau) = arrondi(coût du niveau 2 × (1 + 8 % × (niveau − 2)))
+     `sk.mana` de SKILLS est le coût AU NIVEAU 2. `sk.manaFixed` (les C4) = coût fixe.
+     Niveau absent → coût du niveau 2. `skillManaPer` : même pente pour un coût PAR CIBLE
+     (`manaPer`, ex. « 4 par cellule » de la Surcharge de Jett). */
+  var MANA_COST_PER_LEVEL = 0.08;
+  function scaleManaCost(base, level, fixed) {
+    base = Math.max(0, Number(base) || 0);
+    if (fixed) return Math.round(base);
+    var lvl = level == null ? 2 : (Number(level) || 2);
+    return Math.max(0, Math.round(base * (1 + MANA_COST_PER_LEVEL * (lvl - 2))));
+  }
+  function skillManaCost(sk, level) { return sk ? scaleManaCost(sk.mana, level, sk.manaFixed) : 0; }
+  function skillManaPer(sk, level) { return sk ? scaleManaCost(sk.manaPer, level, sk.manaFixed) : 0; }
+
   /* Le plan complet d'un cast : ce qu'il coûte, et la liste des instances à déposer
      dans la file du MJ. Pur — `opts.rng` rend les jets de critique déterministes.
-     opts = { turn, base, wType, selfId, cdPrev, rng, narrative } */
+     opts = { turn, base, wType, selfId, cdPrev, rng, narrative, level }
+     ⚠️ Le coût dépend du NIVEAU (`opts.level`, à défaut `ctx.level`) : c'est le seul endroit
+     où le plan le lit, et l'appelant doit payer exactement `cost.mana`. */
   function buildCastPlan(sk, eff, ctx, selection, opts) {
     eff = eff || {}; ctx = ctx || {}; selection = selection || {}; opts = opts || {};
     var magic = opts.wType === 'Magique';
     var selfId = opts.selfId || '';
+    var castLevel = opts.level != null ? opts.level : ctx.level;
     var instances = [], seq = 0;
     var dmg = typeof sk.dmg === 'function' ? sk.dmg(eff, ctx) : null;
     if (dmg != null) (selection.damage || []).forEach(function (tid) {
@@ -2017,7 +2035,7 @@
     if (!instances.length) instances.push({ seq: 1, kind: 'status', targetId: selfId,
       narrative: true, label: opts.narrative || 'Effet géré en table' });
     return { instances: instances,
-      cost: { mana: Math.max(0, sk.mana | 0), manaPer: Math.max(0, sk.manaPer | 0),
+      cost: { mana: skillManaCost(sk, castLevel), manaPer: skillManaPer(sk, castLevel),
         manaMax: Math.max(0, eff.mana | 0),
         cdPrev: opts.cdPrev != null ? opts.cdPrev : null } };
   }
@@ -2739,7 +2757,7 @@
     combatantJoinRound, initiativeJoinOnValidate, initiativeSlots, slotParticipants, initiativeState,
     skillBaseDamage, cooldownReady, nextReadyAt, skillUnlocked,
     EFFECT_LABEL, hasSelfEffect, skillTargeting, castSelectionValid, buildSelfEffect,
-    buildCastPlan, actionRefundPlan, refundManaValue,
+    buildCastPlan, actionRefundPlan, refundManaValue, skillManaCost, skillManaPer, MANA_COST_PER_LEVEL,
     BASIC_MODES, basicMode, basicModeDamage,
     WEAPON_MODES, WEAPON_TIER_MODS, WEAPON_TIERS, WEAPON_PROPERTIES, WEAPON_CATEGORIES,
     HANDS_LABEL, WEAPON_KIND_LABEL, HAND_SLOTS, weaponCategory, isWeaponItem, isMiniWeapon,

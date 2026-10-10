@@ -385,7 +385,9 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
   const check = castSelectionValid(targeting, sel);
   const nDmg = (sel.damage || []).length;
   const total = (dmg != null && nDmg > 1) ? dmg * nDmg : null;
-  const enoughMana = manaCur >= (sk.mana || 0);
+  // Coût au niveau du lanceur (le `mana` de SKILLS est le coût du niveau 2, +8 %/niveau).
+  const manaCost = skillManaCost(sk, baseCtx.level);
+  const enoughMana = manaCur >= manaCost;
   const cdLabel = ready ? 'Prêt' : (readyAt === CD_LOCKED ? '1×/combat utilisé' : `prêt tour ${readyAt}`);
   const cdInfo = sk.kind === 'turn' ? '1×/tour'
     : sk.kind === 'combat' ? '1×/combat'
@@ -396,7 +398,8 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
       <div className="panel-head">
         <h3>⚔ {sk.name}</h3>
         <span className="row gap-2" style={{ alignItems: 'center' }}>
-          <span className="badge" style={{ background: 'var(--bg-inset)' }}>{sk.mana} mana</span>
+          <span className="badge" style={{ background: 'var(--bg-inset)' }}
+            title={sk.manaFixed ? 'Coût fixe, à tout niveau' : `Coût au niveau ${baseCtx.level} : ${sk.mana} au niveau 2, +8 % par niveau`}>{manaCost} mana</span>
           <span className="badge" title="Cooldown de la compétence" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>{cdInfo}</span>
           <span className="badge" style={{ background: ready ? 'var(--bg-inset)' : 'var(--bg-panel-2)', color: ready ? 'var(--buff)' : 'var(--gold-pale)' }}>{cdLabel}</span>
         </span>
@@ -709,13 +712,13 @@ function CompetencesBody({ char, staff }) {
     const targeting = skillTargeting(sk, eff, ctx);
     const check = castSelectionValid(targeting, selection);
     if (!check.ok) { toast(`<b>${char.name}</b> — ${check.reason}`, 'gold'); return false; }
-    const cost = sk.mana || 0;
+    const cost = skillManaCost(sk, level);
     const manaCur = state.manaCur || 0;
     if (manaCur < cost) { toast(`<b>${char.name}</b> — pas assez de mana (${manaCur}/${cost})`, 'gold'); return false; }
     // Cooldown d'AVANT le cast : snapshoté pour le remboursement si le MJ annule.
     const cdPrev = cooldowns[sk.id] != null ? cooldowns[sk.id] : null;
     const plan = buildCastPlan(sk, eff, ctx, selection,
-      { turn, base, selfId: char.id, wType, cdPrev, buffs: activeBuffs, narrative: narrativeLabel(sk) });
+      { turn, base, selfId: char.id, wType, cdPrev, buffs: activeBuffs, narrative: narrativeLabel(sk), level });
     // Paiement AVANT dépôt : sinon la compétence est relançable pendant que le MJ arbitre.
     setField('manaCur', manaCur - cost);
     setCooldown(sk.id, sk.kind === 'combat' ? CD_LOCKED : nextReadyAt(turn, sk.kind === 'turn' ? 1 : sk.cd));

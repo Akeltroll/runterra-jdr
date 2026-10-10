@@ -2200,6 +2200,30 @@ test('buildCastPlan : le cout appartient a l ACTION, pas a l instance', () => {
   assert.equal(p.cost.manaPer, 0);
   assert.equal(p.cost.manaMax, 300);
 });
+test('skillManaCost : grille du reequilibrage (cout du niveau 2, +8 % par niveau, C4 fixes)', () => {
+  // [cout niveau 2, niveau 10, niveau 18] — §3 du plan du 2026-10-10
+  const grid = [[10, 16, 23], [28, 46, 64], [13, 21, 30], [21, 34, 48], [26, 43, 59], [15, 25, 34],
+    [27, 44, 62], [50, 82, 114], [30, 49, 68], [32, 52, 73]];
+  grid.forEach(([n2, n10, n18]) => {
+    const sk = { mana: n2 };
+    assert.deepEqual([L.skillManaCost(sk, 2), L.skillManaCost(sk, 10), L.skillManaCost(sk, 18)], [n2, n10, n18]);
+  });
+  assert.equal(L.skillManaCost({ mana: 100, manaFixed: true }, 18), 100);   // C4 : cout fixe
+  assert.equal(L.skillManaCost({ mana: 28 }), 28);                          // niveau absent = niveau 2
+  assert.equal(L.skillManaCost({ mana: 50 }, 1), 46);                       // sous le niveau 2 : la pente continue
+  assert.equal(L.skillManaCost({ mana: 0 }, 18), 0);
+  assert.equal(L.skillManaCost(null, 5), 0);
+  // cout par cible : meme pente (Surcharge de Jett, 13 + 4 par cellule)
+  const sur = { mana: 13, manaPer: 4 };
+  assert.deepEqual([L.skillManaPer(sur, 2), L.skillManaPer(sur, 10), L.skillManaPer(sur, 18)], [4, 7, 9]);
+});
+test('buildCastPlan : le cout suit le niveau du lanceur (opts.level, a defaut ctx.level)', () => {
+  const sel = { damage: ['g1'] };
+  assert.equal(L.buildCastPlan(SK_MULTI, EFF, {}, sel, Object.assign({}, OPTS, { level: 10 })).cost.mana, 98);
+  assert.equal(L.buildCastPlan(SK_MULTI, EFF, { level: 18 }, sel, OPTS).cost.mana, 137);
+  const fixe = Object.assign({}, SK_MULTI, { manaFixed: true });
+  assert.equal(L.buildCastPlan(fixe, EFF, { level: 18 }, sel, OPTS).cost.mana, 60);
+});
 test('buildCastPlan : effet sur soi = une instance status sur le lanceur', () => {
   const ctx = { counters: { glaciation: 2 }, duration: 2 };
   const p = L.buildCastPlan(SK_STATUT, EFF, ctx, {}, OPTS);

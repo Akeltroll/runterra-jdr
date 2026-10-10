@@ -435,7 +435,9 @@ const ITEM_CATALOG = [
    (résolues via window). dmg(eff, ctx) -> nombre ou null (utilitaire). kind :
    'turn' = 1×/tour (cd 1), 'cd' = CD en tours (cd:0 = sans cooldown), 'combat' = 1×/combat.
    selfBuff = % de la stat de base ; selfBuffFlat = mods plats littéraux. counterBump = incrément
-   conditionnel de compteur au cast. Source : info-mj/Codes App Script.md (le script prime). --- */
+   conditionnel de compteur au cast. Source : info-mj/Codes App Script.md (le script prime).
+   ⚠️ `mana` = coût AU NIVEAU 2 (rééquilibrage du 2026-10-10) : le coût réel monte de 8 % par niveau
+   (`skillManaCost`, game-logic). `manaFixed: true` = coût fixe à tout niveau (les C4). --- */
 const SKILLS = {
   lunick: { // Elias Crowe
     passive: { name: 'Instinct du Chasseur', counter: { key: 'chasseur', label: 'Charges', max: (lvl) => eliasMaxStacks(lvl) },
@@ -443,11 +445,11 @@ const SKILLS = {
     actives: [
       { id: 'tir_cible', name: 'Tir Ciblé', mana: 10, cd: 1, kind: 'turn',
         dmg: (eff, c) => dmgEliasC1(c.wType, eff, c.firstHit), note: 'Arme à distance. 1er coup : +25% & +2 au jet. Soin 5% des dégâts. Pas de crit.' },
-      { id: 'dash_tactique', name: 'Dash Tactique', mana: 30, cd: 3, kind: 'cd',
+      { id: 'dash_tactique', name: 'Dash Tactique', mana: 28, cd: 3, kind: 'cd',
         dmg: (eff) => dmgEliasC2(eff), note: 'Rayon 6. Si fin au corps à corps : 50 + 100% AD et −1 CD. Sinon repositionnement (0 dégât).' },
-      { id: 'frappe_duale', name: 'Frappe Duale', mana: 30, cd: 3, kind: 'cd',
+      { id: 'frappe_duale', name: 'Frappe Duale', mana: 28, cd: 3, kind: 'cd',
         dmg: (eff) => dmgEliasC3(eff), note: 'À distance : repousse 4 cases. Mêlée : marque la cible (+25% dégâts subis).' },
-      { id: 'salve_corsaire', name: 'Salve du Corsaire', mana: 60, cd: 0, kind: 'combat',
+      { id: 'salve_corsaire', name: 'Salve du Corsaire', mana: 60, manaFixed: true, cd: 0, kind: 'combat',
         targeting: { damage: { max: null } },
         dmg: (eff) => dmgEliasC4(eff), note: 'Arme à distance. Dégâts par cible ; soin 5% du total. Pas de crit. 1×/combat.' },
     ],
@@ -456,14 +458,14 @@ const SKILLS = {
     passive: { name: 'Flétrissement de la rose', counter: { key: 'marques', label: 'Marques', max: 9 },
       note: 'Focalise l\'arcane : 50 + 0,5 AP magiques + marque (1×/combat). Propagation à la mort de la cible.' },
     actives: [
-      { id: 'attaque_sournoise', name: 'Attaque sournoise', mana: 30, cd: 1, kind: 'turn',
+      { id: 'attaque_sournoise', name: 'Attaque sournoise', mana: 13, cd: 1, kind: 'turn',
         dmg: (eff, c) => dmgSmithC1(c.wType, eff, c.furtif), note: 'Dégâts d\'arme. Si camouflé/invisible : ×1,5 (+30% crit). Peut critiquer.' },
-      { id: 'fondu_au_noir', name: 'Fondu au noir', mana: 40, cd: 3, kind: 'cd',
+      { id: 'fondu_au_noir', name: 'Fondu au noir', mana: 21, cd: 3, kind: 'cd',
         dmg: () => null, note: 'Camouflage 3 tours, +3 mobilité 2 tours. Peut se troquer en fumigène 5×5.' },
-      { id: 'chaines', name: 'Chaînes estropiantes', mana: 60, cd: 4, kind: 'cd',
+      { id: 'chaines', name: 'Chaînes estropiantes', mana: 26, cd: 4, kind: 'cd',
         targeting: { damage: { max: null } },
         dmg: (eff) => dmgSmithC3(eff), note: 'Cône 8 cases. Exécute < 10% HP. Cible : 50 + 100% AD + saignement. Peut critiquer.' },
-      { id: 'voile', name: 'Voile dimensionnel', mana: 80, cd: 0, kind: 'combat',
+      { id: 'voile', name: 'Voile dimensionnel', mana: 80, manaFixed: true, cd: 0, kind: 'combat',
         dmg: () => null, note: 'Dimension A×B. Immunité 50%. Si cible supprimée : soin 10% (50% ult) PV/mana cible + bonus crit.' },
     ],
   },
@@ -471,14 +473,14 @@ const SKILLS = {
     passive: { name: 'Voie de l\'ours', counter: { key: 'tranches', label: 'PM bonus', max: 3 },
       note: '+2 init. Après 5 cases : prochaine AA +150% (+25%/3 cases) et +1 PM (max 3). Les tranches boostent C2/C4.' },
     actives: [
-      { id: 'pugilat', name: 'Maîtrise du pugilat', mana: 30, cd: 1, kind: 'turn',
+      { id: 'pugilat', name: 'Maîtrise du pugilat', mana: 15, cd: 1, kind: 'turn',
         dmg: (eff, c) => dmgUrskaarC1(eff, c.side, c.moved), note: 'Gauche : AA classique, pas d\'attaque d\'opportunité. Droite : AA améliorée (min 150%), 50% étourdir.' },
-      { id: 'ecrasement', name: 'Écrasement', mana: 50, cd: 3, kind: 'cd',
+      { id: 'ecrasement', name: 'Écrasement', mana: 27, cd: 3, kind: 'cd',
         targeting: { damage: { max: null } },
         dmg: (eff, c) => dmgUrskaarC2(eff, c.moved), note: 'Bond. Dégâts AD·(1,5 + 0,25·tranches), portée 3+tranches, zone adjacente. Pas d\'attaque d\'opportunité.' },
-      { id: 'ralliement', name: 'Ralliement', mana: 100, cd: 5, kind: 'cd',
+      { id: 'ralliement', name: 'Ralliement', mana: 50, cd: 5, kind: 'cd',
         dmg: () => null, shield: (eff, c) => urskaarC3Shield(eff, c.hpMax), note: 'Bouclier (30% +10%/50 AP des PV) + Peau de Fer ; alliés : Bravoure 2 tours. +1 charisme (permanent).' },
-      { id: 'demi_ours', name: 'On ne m\'arrêtera pas', mana: 100, cd: 0, kind: 'combat',
+      { id: 'demi_ours', name: 'On ne m\'arrêtera pas', mana: 100, manaFixed: true, cd: 0, kind: 'combat',
         targeting: { damage: { max: null } },
         dmg: (eff, c) => dmgUrskaarC4(eff, c.moved), selfBuff: { hp: 0.30, ad: 0.30, armure: 0.30 },
         note: 'Transfo 5 tours : +30% PV/AD/Armure. Déplacement : 100% AD (+25%/tranche) par unité. 1×/combat.' },
@@ -488,9 +490,9 @@ const SKILLS = {
     passive: { name: 'Nano-hextech', counter: { key: 'cn', label: 'Cellules (CN)', max: 99 },
       note: 'L\'AA ne fait plus de dégâts : crée des CN (1 + paliers AD, ×2 crit). Récupérer une CN = +10 mana.' },
     actives: [
-      { id: 'remodulation', name: 'Remodulation expérimentale', mana: 50, cd: 1, kind: 'turn',
+      { id: 'remodulation', name: 'Remodulation expérimentale', mana: 32, cd: 1, kind: 'turn',
         dmg: (eff) => dmgJettForce(eff), note: 'Config aléatoire. Poison 25+0,5 AP ; Repouss./Attract. 25+0,5 AD ; Champ élec./Flash/Dupli./Fumigène : effets.' },
-      { id: 'alignement', name: 'Alignement de séquence', mana: 40, cd: 3, kind: 'cd',
+      { id: 'alignement', name: 'Alignement de séquence', mana: 26, cd: 3, kind: 'cd',
         targeting: { damage: { min: 0, max: null }, heal: { camp: 'allies', min: 0, max: null } },
         dmg: (eff) => dmgJettC2(eff), heal: (eff) => healJettC2(eff), note: 'Stun 2 tours + 50 + 50% AD aux ennemis. Soigne les alliés de 50 + 100% AP.' },
     ],
@@ -503,11 +505,11 @@ const SKILLS = {
         + '10% PV max/tour + aura de 10% des PV manquants (rayon 1), Rathael devient sourd (géré en table). '
         + 'Le stepper reste dispo pour ajuster à la main.', statHint: 'armure' },
     actives: [
-      { id: 'frappe_irritee', name: 'Frappe Irritée', mana: 20, cd: 0, kind: 'cd',
+      { id: 'frappe_irritee', name: 'Frappe Irritée', mana: 10, cd: 0, kind: 'cd',
         dmg: (eff, c) => dmgRathaelC1(eff, (c.counters && c.counters.glaciation) || 0, c.level),
         note: '25 + (30% +5%/4 niv) AD + (40% +5%/2 niv) (Armure+RM), ×(1 + 20% par charge de Glaciation, max +100%). '
           + 'Sans CD. Peut critiquer. En état Âme fendue : la cible est ralentie 1 tour.' },
-      { id: 'mur_de_givre', name: 'Mur de Givre', mana: 50, cd: 3, kind: 'cd',
+      { id: 'mur_de_givre', name: 'Mur de Givre', mana: 26, cd: 3, kind: 'cd',
         dmg: () => null,
         duration: { min: 1, max: 2 },
         selfBuffFlat: (eff, c) => { const v = rathaelC2Buff(c.level); return { armure: v, resmag: v }; },
@@ -515,7 +517,7 @@ const SKILLS = {
         note: 'PE = Pendant l\'Effet (choisis 1 ou 2 tours au lancement). PE : inamovible, +Armure / +Résistance '
           + 'magique (15 +5/2 niv, soit 20 au niv 2) ; un ennemi adjacent est provoqué (forcé de cibler Rathael) ; '
           + 'en état Âme fendue, immobilise les ennemis adjacents. Si ≥1 charge de Glaciation : +1 charge.' },
-      { id: 'eclat_ame', name: "Éclat de l'âme", mana: 60, cd: 3, kind: 'cd',
+      { id: 'eclat_ame', name: "Éclat de l'âme", mana: 30, cd: 3, kind: 'cd',
         targeting: { damage: { max: null } },
         dmg: (eff, c) => dmgRathaelC3(eff, (c.counters && c.counters.glaciation) || 0, c.level),
         counterSet: { glaciation: 0 },
@@ -523,14 +525,14 @@ const SKILLS = {
           + '(50% +10%/2 niv) (Armure+RM) ; chaque charge ajoute +50% de la base (max +250%, soit ×3,5 à 5 charges). '
           + 'Le MJ applique le nombre affiché aux ennemis proches et la MOITIÉ à ceux à 3 cases (via « Subir »). '
           + 'En état Âme fendue (5 charges) : étourdit les cibles touchées jusqu\'à leur prochain tour.' },
-      { id: 'ailes_givre', name: 'Ailes de Givre', mana: 100, cd: 0, kind: 'combat',
+      { id: 'ailes_givre', name: 'Ailes de Givre', mana: 100, manaFixed: true, cd: 0, kind: 'combat',
         dmg: () => null,
         note: 'Transformation 3 tours (1×/combat). Rathael déploie une aile de glace, peut léviter, et émet une brume '
           + 'noire (rayon 4) qui inflige à TOUTES les unités (alliées comprises) une combinaison de débuffs au choix '
           + '(fixée au lancement) : ① Brisé & Érosion Magique (−50% Armure / −50% AP) ou ② Choc Magique & '
           + 'Affaiblissement (−50% Rés. mag / −50% AD). Si la transformation devait finir mais qu\'il affecte encore '
           + '≥2 unités en fin de tour, elle persiste. Aura/débuffs/persistance gérés en table.' },
-      { id: 'souverain_glacial', name: 'Souverain Glacial', mana: 100, cd: 0, kind: 'combat',
+      { id: 'souverain_glacial', name: 'Souverain Glacial', mana: 100, manaFixed: true, cd: 0, kind: 'combat',
         dmg: () => null,
         transform: { turns: 4 },
         selfBuffFlat: (eff, c) => { const hp = rathaelUltHpBonus((c.counters && c.counters.glaciation) || 0, c.hpMax || 0); return hp ? { hp } : {}; },
