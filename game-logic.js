@@ -3415,6 +3415,43 @@
     return { id: d.id, label: d.label, perPj: perPj };
   }
 
+  /* Part des dégâts affichés qui touche réellement au d20 : 1-5 échec, 6-10 demi, 11-20 plein
+     (calibrage du 2026-09-05). Sert à estimer une durée de rencontre. */
+  var NPC_HIT_FACTOR = 0.625;
+  /* Bilan d'une rencontre : { partyLevel, partySize, entries:{monsterId: effectif} } + les fiches.
+     Chaque fiche compte pour sa puissance RÉELLE (stats retouchées comprises), ramenée au
+     niveau du groupe. `rounds` = durée si le groupe reste au complet et concentre ses coups,
+     sans soins ni contrôles : une estimation BASSE (le simulateur donne ~1 round de plus dès
+     que des PJ tombent). `swarm` = beaucoup de petits monstres, cas où le budget sous-évalue. */
+  function npcEncounterSummary(enc, monsters) {
+    enc = enc || {}; monsters = monsters || {};
+    var partyLevel = Math.max(1, Math.min(NPC_LEVEL_MAX, (enc.partyLevel | 0) || 1));
+    var partySize = Math.max(1, Math.min(10, (enc.partySize | 0) || 5));
+    var ref = refPlayer(partyLevel);
+    var rows = [], budget = 0, mxp = 0, ehp = 0, dmg = 0, n = 0;
+    Object.keys(enc.entries || {}).forEach(function (id) {
+      var count = Math.max(0, enc.entries[id] | 0);
+      if (!count) return;
+      var m = monsters[id];
+      if (!m) { rows.push({ id: id, missing: true, count: count, powerAtParty: 0 }); return; }
+      var p = npcParams(m), power = npcPowerOf(m, p.level), at = npcPowerAtLevel(power, p.level, partyLevel);
+      rows.push({ id: id, monster: m, count: count, level: p.level, power: power, powerAtParty: at });
+      budget += count * at; n += count;
+      mxp += count * (m.xp != null ? Math.max(0, Number(m.xp) || 0) : npcSuggestSheet(m).xp);
+      ehp += count * npcEhp(m); dmg += count * npcRoundDmgFromStats(m);
+    });
+    rows.sort(function (a, b) { return b.powerAtParty - a.powerAtParty || (a.id < b.id ? -1 : 1); });
+    var groupDmg = partySize * ref.roundDmg * NPC_HIT_FACTOR;
+    return {
+      partyLevel: partyLevel, partySize: partySize, rows: rows, count: n,
+      budget: budget, difficulty: npcDifficulty(budget, partySize),
+      xp: npcEncounterXp(budget, partyLevel, partySize), monstersXp: Math.round(mxp),
+      ehp: ehp, roundDmg: dmg,
+      rounds: groupDmg > 0 && ehp > 0 ? Math.max(1, Math.ceil(ehp / groupDmg)) : 0,
+      swarm: n >= 2 * partySize,
+    };
+  }
+
   /* --- XP ---
      Règle MJ : un niveau = 1 rencontre extrême, 2 dures, 4 moyennes ou 8 faibles.
      `npcXpForLevel` = xpToNext SANS le plafond du niveau 18 (un monstre peut le dépasser). */
@@ -3450,7 +3487,7 @@
     npcArchetype, npcTiltFactor, npcRoundDmgFromStats, npcSuggestStats, npcPowerOf, npcPowerAtLevel,
     npcAoeShare, npcAttackAvg, npcAttackCost, npcBudgetUsage, npcAttackView, npcBuildAttacks,
     npcMonsterAttacks, npcFitAttacks, npcNewAttack,
-    npcEncounterBudget, npcDifficulty, npcXpForLevel, npcMonsterXp, npcEncounterXp,
+    npcEncounterBudget, npcDifficulty, npcEncounterSummary, NPC_HIT_FACTOR, npcXpForLevel, npcMonsterXp, npcEncounterXp,
     clamp, clampGauge,
     DEFAULT_MODIFIERS, BUFF_STAT_MAP, computeEffective, sumItemMods,
     healMultiplier, applyHealBonus, lifestealMultiplier, buildDefaultState, makeItem, newItemId,

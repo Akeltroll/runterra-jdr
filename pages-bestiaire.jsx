@@ -422,12 +422,162 @@ function BstEditor({ m, patch, onDuplicate, onRemove, go }) {
   );
 }
 
+/* ---------- Rencontres (lot 4) ----------
+   Une rencontre RÉFÉRENCE des fiches avec leurs effectifs ; son bilan (`npcEncounterSummary`)
+   se recalcule donc dès qu'une fiche est retouchée. */
+const BST_DIFF_COLOR = { faible:'var(--buff-bright)', moyenne:'var(--gold-bright)', dure:'#e0a33a', extreme:'var(--debuff-bright)' };
+
+function BstEncounterRow({ enc, monsters, active, onClick }) {
+  const r = npcEncounterSummary(enc, monsters);
+  return (
+    <button onClick={onClick} className="col"
+      style={{ textAlign:'left', width:'100%', padding:'7px 9px', borderRadius:6, cursor:'pointer', gap:2,
+        background: active ? 'var(--bg-hover)' : 'transparent', color:'var(--ink)',
+        border:'1px solid ' + (active ? 'var(--line-gold)' : 'transparent') }}>
+      <span style={{ fontSize:13, color: active ? 'var(--gold-pale)' : 'var(--ink)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'100%' }}>{enc.name || '(sans nom)'}</span>
+      <span className="faint" style={{ fontSize:10.5 }}>
+        Niv. {r.partyLevel} · {r.partySize} joueur{r.partySize > 1 ? 's' : ''} · <span style={{ color: BST_DIFF_COLOR[r.difficulty.id] }}>{r.count ? r.difficulty.label : 'vide'}</span>{r.count ? ` ${bstPct(r.budget)}` : ''}
+      </span>
+    </button>
+  );
+}
+
+function BstEncounterEditor({ enc, monsters, patch, onDuplicate, onRemove, onOpenMonster, go }) {
+  const toast = useToast();
+  const [pick, setPick] = useState('');
+  const r = npcEncounterSummary(enc, monsters);
+  const setCount = (id, n) => patch({ ['entries/' + id]: n > 0 ? Math.min(20, n) : null });
+  const rankOrder = {}; NPC_RANKS.forEach((k, i) => { rankOrder[k.id] = i; });
+  const free = Object.values(monsters).filter(m => m && m.id && !(enc.entries && enc.entries[m.id]))
+    .sort((a, b) => (rankOrder[npcParams(b).rank] - rankOrder[npcParams(a).rank]) || String(a.name).localeCompare(String(b.name), 'fr'));
+  const dcol = BST_DIFF_COLOR[r.difficulty.id];
+  const missing = r.rows.filter(x => x.missing).length;
+  const place = async () => {
+    try {
+      const n = await placeEncounter(r.rows);
+      toast(n ? `<b>${enc.name}</b> posée en combat (${n} combattant${n > 1 ? 's' : ''})` : 'Rencontre vide : rien à poser', n ? 'buff' : 'gold');
+    } catch (err) { toast('Pose en combat échouée : ' + (err && err.message ? err.message : 'erreur'), 'debuff'); }
+  };
+
+  return (
+    <div className="col gap-4" style={{ padding:'18px 24px 32px', maxWidth:980 }}>
+      <div className="row gap-2">
+        <BstField value={enc.name || ''} onCommit={(v) => patch({ name: v })} placeholder="Nom de la rencontre"
+          style={{ flex:1, fontFamily:'var(--font-display)', fontSize:19, color:'var(--gold-pale)', padding:'7px 11px' }} />
+        <button className="btn btn-sm btn-ghost" onClick={onDuplicate}>⧉ Dupliquer</button>
+        <button className="btn btn-sm btn-ghost" onClick={onRemove} style={{ color:'var(--debuff-bright)' }}>Supprimer</button>
+      </div>
+
+      <div className="panel row gap-4 wrap" style={{ padding:'14px 16px', alignItems:'flex-end' }}>
+        <label className="col gap-1" style={{ width:130 }}>
+          <span className="overline">Niveau du groupe</span>
+          <BstField numeric min={1} max={NPC_LEVEL_MAX} value={r.partyLevel} onCommit={(v) => patch({ partyLevel: v })} />
+        </label>
+        <label className="col gap-1" style={{ width:130 }}>
+          <span className="overline">Joueurs présents</span>
+          <BstField numeric min={1} max={10} value={r.partySize} onCommit={(v) => patch({ partySize: v })} />
+        </label>
+        <span className="faint" style={{ fontSize:11, flex:1, minWidth:220, lineHeight:1.5 }}>
+          La difficulté se lit par joueur : le miroir (un standard par joueur) est une rencontre dure.
+        </span>
+      </div>
+
+      {/* Bilan */}
+      <div className="panel col gap-2" style={{ padding:'14px 16px', borderColor:'var(--line-gold)' }}>
+        <div className="row gap-3 wrap" style={{ alignItems:'baseline' }}>
+          <span className="overline">Difficulté</span>
+          <span style={{ fontFamily:'var(--font-display)', fontSize:24, color: r.count ? dcol : 'var(--ink-dim)' }}>{r.count ? r.difficulty.label : 'Rencontre vide'}</span>
+          {r.count > 0 && <span className="dim" style={{ fontSize:13 }}>budget <b style={{ color:'var(--ink)' }}>{bstPct(r.budget)}</b>, soit {bstPct(r.difficulty.perPj)} par joueur</span>}
+        </div>
+        <div className="row gap-2 wrap">
+          {NPC_DIFFICULTY.map((d, i) => (
+            <span key={d.id} className="mono" style={{ fontSize:11, padding:'2px 9px', borderRadius:20,
+              border:'1px solid ' + (r.count && r.difficulty.id === d.id ? BST_DIFF_COLOR[d.id] : 'var(--line)'),
+              color: r.count && r.difficulty.id === d.id ? BST_DIFF_COLOR[d.id] : 'var(--ink-faint)' }}>
+              {d.label} {bstPct(d.perPj * r.partySize)}{i === NPC_DIFFICULTY.length - 1 ? ' et plus' : ''}
+            </span>
+          ))}
+        </div>
+        {r.count > 0 && (
+          <div className="mono" style={{ fontSize:11.5, lineHeight:1.8, color:'var(--ink-dim)' }}>
+            Durée estimée : <b style={{ color:'var(--ink)' }}>au moins {r.rounds} round{r.rounds > 1 ? 's' : ''}</b>
+            <span className="faint"> (groupe au complet qui concentre ses coups, sans soins ni contrôles)</span><br />
+            {r.count} combattant{r.count > 1 ? 's' : ''} · {bstNum(r.ehp)} PV effectifs · {bstNum(r.roundDmg)} dégâts par round à pleine force<br />
+            XP conseillée : <b style={{ color:'var(--gold-pale)' }}>{bstNum(r.xp.perPlayer)} par joueur</b> ({Math.round(r.xp.fraction * 100)} % d'un niveau {r.partyLevel}), {bstNum(r.xp.total)} au total
+            {r.xp.bonus > 0 && <span className="faint"> · dont {bstNum(r.xp.bonus)} de bonus de petite rencontre</span>}<br />
+            <span className="faint">Somme des XP des fiches : {bstNum(r.monstersXp)}, soit {bstNum(r.monstersXp / r.partySize)} par joueur</span>
+          </div>
+        )}
+        {r.swarm && <div style={{ fontSize:12, color:'#e0a33a' }}>⚠ Essaim : beaucoup de petits monstres qui concentrent leurs coups coûtent plus cher que leur budget. Compte cette rencontre un cran plus dure.</div>}
+        {r.difficulty.id === 'extreme' && r.count > 0 && <div style={{ fontSize:12, color:'var(--debuff-bright)' }}>⚠ Dans la simulation, un groupe sans soins ni contrôles perd une rencontre à ce budget.</div>}
+        {missing > 0 && <div style={{ fontSize:12, color:'var(--debuff-bright)' }}>⚠ {missing} fiche{missing > 1 ? 's' : ''} de cette rencontre n'existe{missing > 1 ? 'nt' : ''} plus dans le bestiaire.</div>}
+      </div>
+
+      {/* Composition */}
+      <div className="panel col gap-2" style={{ padding:'14px 16px' }}>
+        <span className="overline">Composition</span>
+        {r.rows.length === 0 && <span className="faint" style={{ fontSize:12 }}>Aucun monstre. Ajoute des fiches du bestiaire ci-dessous.</span>}
+        {r.rows.map(x => x.missing ? (
+          <div key={x.id} className="row gap-2" style={{ padding:'7px 0', borderBottom:'1px solid var(--line)' }}>
+            <span className="faint" style={{ flex:1, fontSize:13 }}>Fiche supprimée (×{x.count})</span>
+            <button className="btn btn-sm btn-ghost" onClick={() => setCount(x.id, 0)} style={{ color:'var(--debuff-bright)' }}>Retirer</button>
+          </div>
+        ) : (
+          <div key={x.id} className="row gap-3 wrap" style={{ padding:'7px 0', borderBottom:'1px solid var(--line)' }}>
+            <button onClick={() => onOpenMonster(x.id)} title="Ouvrir la fiche" className="col"
+              style={{ flex:1, minWidth:180, textAlign:'left', background:'none', border:'none', cursor:'pointer', color:'var(--ink)', padding:0, gap:2 }}>
+              <span style={{ fontSize:13.5, color:'var(--gold-pale)' }}>{x.monster.name || '(sans nom)'}</span>
+              <span className="faint" style={{ fontSize:10.5 }}>Niv. {x.level} · {npcRank(npcParams(x.monster).rank).label} · {npcArchetype(npcParams(x.monster).archetype).label} · {bstNum(x.monster.hpMax)} PV</span>
+            </button>
+            <span className="mono" style={{ fontSize:12, minWidth:150, textAlign:'right' }}>
+              {bstPct(x.powerAtParty)} l'unité
+              {x.level !== r.partyLevel && <span className="faint" title={`Vaut ${bstPct(x.power)} à son propre niveau`}> (niv. {x.level})</span>}
+            </span>
+            <span className="row gap-1">
+              <button className="btn btn-sm btn-ghost" onClick={() => setCount(x.id, x.count - 1)}>−</button>
+              <span className="mono" style={{ minWidth:34, textAlign:'center', color:'var(--gold-pale)' }}>×{x.count}</span>
+              <button className="btn btn-sm btn-ghost" onClick={() => setCount(x.id, x.count + 1)} disabled={x.count >= 20}>+</button>
+            </span>
+            <span className="mono" style={{ fontSize:12.5, minWidth:64, textAlign:'right', color:'var(--ink)' }}>{bstPct(x.powerAtParty * x.count)}</span>
+            <button className="btn btn-sm btn-ghost" onClick={() => setCount(x.id, 0)} title="Retirer de la rencontre" style={{ padding:'4px 9px', color:'var(--debuff-bright)' }}>✗</button>
+          </div>
+        ))}
+        <div className="row gap-2" style={{ marginTop:6 }}>
+          <select value={pick} onChange={e => setPick(e.target.value)} style={{ ...BST_FLD, flex:1 }} disabled={!free.length}>
+            <option value="">{free.length ? '— choisir une fiche —' : (Object.keys(monsters).length ? 'Toutes les fiches sont déjà dans la rencontre' : 'Le bestiaire est vide : crée d\'abord des fiches')}</option>
+            {free.map(m => <option key={m.id} value={m.id}>{m.name} — niv. {npcParams(m).level}, {npcRank(npcParams(m).rank).label.toLowerCase()}</option>)}
+          </select>
+          <button className="btn btn-sm btn-gold" disabled={!pick} onClick={() => { setCount(pick, 1); setPick(''); }}>+ Ajouter</button>
+        </div>
+      </div>
+
+      <label className="col gap-1">
+        <span className="overline">Notes</span>
+        <BstField multiline value={enc.note || ''} onCommit={(v) => patch({ note: v })} rows={3}
+          placeholder="Lieu, déclencheur, déroulé, renforts…" style={{ resize:'vertical', fontFamily:'inherit', lineHeight:1.5 }} />
+      </label>
+
+      <div className="panel row gap-3 wrap" style={{ padding:'12px 16px' }}>
+        <span className="overline">Poser en combat</span>
+        <button className="btn btn-sm btn-gold" onClick={place} disabled={!r.count}>⚔ Poser toute la rencontre dans la vue MJ</button>
+        {go && <button className="btn btn-sm btn-ghost" onClick={() => go('mj')}>Ouvrir la vue MJ →</button>}
+        <span className="faint" style={{ fontSize:11, flexBasis:'100%' }}>Les combattants s'ajoutent à ceux déjà posés. Chaque copie est indépendante des fiches.</span>
+      </div>
+    </div>
+  );
+}
+
 function BestiairePage({ go }) {
   const toast = useToast();
   const { monsters, denied, addMonster, patchMonster, removeMonster } = useBestiary();
+  const { encounters, addEncounter, patchEncounter, removeEncounter } = useEncounters();
+  const [tab, setTabRaw] = useState(() => localStorage.getItem('runeterra_bestiaire_tab') === 'rencontres' ? 'rencontres' : 'fiches');
+  const setTab = (t) => { setTabRaw(t); localStorage.setItem('runeterra_bestiaire_tab', t); };
   const [sel, setSel] = useState(() => localStorage.getItem('runeterra_bestiaire_sel') || null);
+  const [selEnc, setSelEnc] = useState(() => localStorage.getItem('runeterra_bestiaire_enc') || null);
   const [q, setQ] = useState('');
   const select = (id) => { setSel(id); if (id) localStorage.setItem('runeterra_bestiaire_sel', id); };
+  const selectEnc = (id) => { setSelEnc(id); if (id) localStorage.setItem('runeterra_bestiaire_enc', id); };
 
   if (denied) {
     return (
@@ -466,10 +616,33 @@ function BestiairePage({ go }) {
     toast(`Variante de <b>${cur.name}</b> créée`, 'gold');
   };
   const remove = () => {
-    if (!confirm(`Supprimer « ${cur.name} » du bestiaire ?\n\nLes copies déjà posées en combat ne sont pas touchées.`)) return;
+    if (!confirm(`Supprimer « ${cur.name} » du bestiaire ?\n\nLes copies déjà posées en combat ne sont pas touchées. Les rencontres qui l'utilisent le signaleront.`)) return;
     removeMonster(cur.id);
     select(null);
   };
+
+  const encList = Object.values(encounters || {}).filter(e => e && e.id)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
+  const curEnc = (selEnc && encounters && encounters[selEnc]) || null;
+  const createEnc = async () => {
+    const last = encList.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    const lastM = list.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    const e = await addEncounter({ name: 'Nouvelle rencontre', note: '', partySize: last ? (last.partySize || 5) : 5,
+      partyLevel: last ? (last.partyLevel || 2) : (lastM ? npcParams(lastM).level : 2) });
+    selectEnc(e.id);
+  };
+  const duplicateEnc = async () => {
+    const copy = Object.assign({}, curEnc, { name: (curEnc.name || 'Rencontre') + ' (variante)' });
+    delete copy.id; delete copy.updatedAt;
+    const e = await addEncounter(copy);
+    selectEnc(e.id);
+  };
+  const removeEnc = () => {
+    if (!confirm(`Supprimer la rencontre « ${curEnc.name} » ?\n\nLes fiches qu'elle utilise sont conservées.`)) return;
+    removeEncounter(curEnc.id);
+    selectEnc(null);
+  };
+  const rencontres = tab === 'rencontres';
 
   return (
     <div style={{ display:'grid', gridTemplateColumns:'280px 1fr', height:'100%', minHeight:0 }}>
@@ -478,22 +651,43 @@ function BestiairePage({ go }) {
           <div className="overline">Maître du jeu</div>
           <div className="row" style={{ justifyContent:'space-between', marginTop:4 }}>
             <h3 style={{ fontSize:17 }}>Bestiaire</h3>
-            <span className="mono faint" style={{ fontSize:11 }}>{list.length} fiche{list.length > 1 ? 's' : ''}</span>
+            <span className="mono faint" style={{ fontSize:11 }}>{rencontres ? `${encList.length} rencontre${encList.length > 1 ? 's' : ''}` : `${list.length} fiche${list.length > 1 ? 's' : ''}`}</span>
           </div>
-          <div className="col gap-2" style={{ marginTop:10 }}>
-            <button className="btn btn-sm btn-gold" onClick={create}>+ Nouvelle fiche</button>
-            {list.length > 5 && <input value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher…" style={BST_FLD} />}
+          <div className="row gap-1" style={{ marginTop:10 }}>
+            <button className={'btn btn-sm ' + (!rencontres ? 'btn-gold' : 'btn-ghost')} style={{ flex:1 }} onClick={() => setTab('fiches')}>Fiches</button>
+            <button className={'btn btn-sm ' + (rencontres ? 'btn-gold' : 'btn-ghost')} style={{ flex:1 }} onClick={() => setTab('rencontres')}>Rencontres</button>
+          </div>
+          <div className="col gap-2" style={{ marginTop:8 }}>
+            {rencontres
+              ? <button className="btn btn-sm btn-ghost" onClick={createEnc}>+ Nouvelle rencontre</button>
+              : <button className="btn btn-sm btn-ghost" onClick={create}>+ Nouvelle fiche</button>}
+            {!rencontres && list.length > 5 && <input value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher…" style={BST_FLD} />}
           </div>
         </div>
         <hr className="gold-rule" />
-        <div className="col gap-1" style={{ padding:10, overflowY:'auto', flex:1, minHeight:0 }}>
-          {shown.length === 0 && <div className="faint" style={{ fontSize:12, padding:6 }}>{list.length ? 'Aucune fiche ne correspond.' : 'Aucune fiche pour l\'instant.'}</div>}
-          {shown.map(m => <BstMonsterRow key={m.id} m={m} active={cur && cur.id === m.id} onClick={() => select(m.id)} />)}
-        </div>
+        {rencontres ? (
+          <div className="col gap-1" style={{ padding:10, overflowY:'auto', flex:1, minHeight:0 }}>
+            {encList.length === 0 && <div className="faint" style={{ fontSize:12, padding:6 }}>Aucune rencontre pour l'instant.</div>}
+            {encList.map(e => <BstEncounterRow key={e.id} enc={e} monsters={monsters} active={curEnc && curEnc.id === e.id} onClick={() => selectEnc(e.id)} />)}
+          </div>
+        ) : (
+          <div className="col gap-1" style={{ padding:10, overflowY:'auto', flex:1, minHeight:0 }}>
+            {shown.length === 0 && <div className="faint" style={{ fontSize:12, padding:6 }}>{list.length ? 'Aucune fiche ne correspond.' : 'Aucune fiche pour l\'instant.'}</div>}
+            {shown.map(m => <BstMonsterRow key={m.id} m={m} active={cur && cur.id === m.id} onClick={() => select(m.id)} />)}
+          </div>
+        )}
         <div style={{ padding:10, borderTop:'1px solid var(--line)' }}><BstExportImport /></div>
       </aside>
       <main style={{ minHeight:0, overflow:'auto' }}>
-        {cur
+        {rencontres ? (curEnc
+          ? <BstEncounterEditor key={curEnc.id} enc={curEnc} monsters={monsters} patch={(pt) => patchEncounter(curEnc.id, pt)}
+              onDuplicate={duplicateEnc} onRemove={removeEnc} go={go}
+              onOpenMonster={(id) => { select(id); setTab('fiches'); }} />
+          : <div className="dim" style={{ padding:32, maxWidth:560, lineHeight:1.6 }}>
+              {encList.length ? 'Choisis une rencontre à gauche, ou crée-en une nouvelle.' :
+                'Une rencontre regroupe des fiches du bestiaire avec leurs effectifs. Elle en estime la difficulté, la durée et l\'XP, et se pose en combat d\'un clic.'}
+            </div>)
+        : cur
           ? <BstEditor key={cur.id} m={cur} patch={(pt) => patchMonster(cur.id, pt)} onDuplicate={duplicate} onRemove={remove} go={go} />
           : <div className="dim" style={{ padding:32, maxWidth:560, lineHeight:1.6 }}>
               {list.length ? 'Choisis une fiche à gauche, ou crée-en une nouvelle.' :

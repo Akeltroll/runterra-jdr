@@ -112,6 +112,13 @@ Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDe
                ↑ ABSENT = jamais retouchées → gabarit de l'archétype chiffré sur le budget courant
                  (npcMonsterAttacks), qui SUIT les paramètres. La 1re retouche écrit la liste ENTIÈRE,
                  qui devient absolue. `attacks: null` (bouton « ↺ Gabarit ») rend le suivi.
+    encounters/{id}/   ← RENCONTRE préparée (lot 4)
+        id, name, note, updatedAt
+        partyLevel (1-40), partySize (1-10 ; ABSENT = 5)
+        entries/{monsterId}: effectif (1-20)
+               ↑ RÉFÉRENCE la fiche par id, aucune copie : le bilan (npcEncounterSummary) suit les
+                 retouches de la fiche. Fiche supprimée → la ligne reste, signalée, hors du budget.
+               ↑ écrit par clé multi-chemin `entries/<id>` (null = retirer la ligne)
 ```
 Copie posée en combat (`placeMonster` → `npcToEnemy`) : forme de `combat/enemies` + `npcLevel`, `rank`,
 `bestiaryId` (informatifs). `atk` = coup normal de l'attaque de base de la fiche (repli : max(ad, ap)).

@@ -3208,3 +3208,41 @@ test('npcNewAttack : chiffrée sur le reste du budget, 10 % au minimum', () => {
   assert.equal(a.type, 'magique'); assert.equal(a.order, 1); assert.equal(a.cd, 2);
   assert.equal(L.npcNewAttack([{ id: 'a', order: 0, dmg: 100, cd: 1, targets: 1 }], st, 100, 'ad').dmg, 20);
 });
+
+/* --- Bestiaire, rencontres (lot 4) --- */
+test('npcEncounterSummary : 1 élite + 6 sbires au curseur neutre = 500 %, rencontre dure', () => {
+  const mk = (id, rank) => Object.assign(L.npcNewMonster({ level: 6, rank, archetype: 'bruiser', tilt: 0 }), { id });
+  const mons = { e: mk('e', 'elite'), s: mk('s', 'sbire') };
+  const r = L.npcEncounterSummary({ partyLevel: 6, partySize: 5, entries: { e: 1, s: 6 } }, mons);
+  assert.ok(Math.abs(r.budget - 5) < 0.15, 'budget ' + r.budget);
+  assert.equal(r.difficulty.id, 'dure');
+  assert.equal(r.count, 7);
+  assert.equal(r.rows[0].id, 'e');                          // le plus puissant d'abord
+  assert.equal(r.monstersXp, mons.e.xp + 6 * mons.s.xp);
+  assert.ok(Math.abs(r.xp.perPlayer - L.npcXpForLevel(6) / 2) <= 12);   // ~ un demi-niveau
+  assert.ok(r.rounds >= 3 && r.rounds <= 5, 'rounds ' + r.rounds);
+  assert.equal(r.swarm, false);
+});
+
+test('npcEncounterSummary : le curseur allonge la durée sans changer le budget', () => {
+  const a = Object.assign(L.npcNewMonster({ level: 6, rank: 'boss', archetype: 'bruiser', tilt: 0 }), { id: 'b' });
+  const b = Object.assign(L.npcNewMonster({ level: 6, rank: 'boss', archetype: 'bruiser', tilt: 200 }), { id: 'b' });
+  const ra = L.npcEncounterSummary({ partyLevel: 6, entries: { b: 1 } }, { b: a });
+  const rb = L.npcEncounterSummary({ partyLevel: 6, entries: { b: 1 } }, { b: b });
+  assert.ok(Math.abs(ra.budget - rb.budget) < 0.15);
+  assert.ok(rb.rounds >= ra.rounds * 3);                  // x4 de PV, arrondi au round superieur
+  assert.equal(ra.partySize, 5);                            // absent = 5 joueurs
+});
+
+test('npcEncounterSummary : niveau du groupe, fiche supprimée, essaim, retouches', () => {
+  const m = Object.assign(L.npcNewMonster({ level: 10, rank: 'standard', archetype: 'bruiser', tilt: 0 }), { id: 'm' });
+  const low = L.npcEncounterSummary({ partyLevel: 6, partySize: 5, entries: { m: 1, gone: 2 } }, { m });
+  assert.ok(low.budget > 1.2);                              // un standard niv 10 pèse plus pour un groupe niv 6
+  assert.equal(low.rows.filter(r => r.missing).length, 1);
+  assert.equal(low.count, 1);                               // la fiche supprimée ne compte pas
+  assert.equal(L.npcEncounterSummary({ partyLevel: 10, partySize: 4, entries: { m: 8 } }, { m }).swarm, true);
+  // une fiche retouchée compte pour sa puissance RÉELLE
+  const fat = Object.assign({}, m, { hpMax: m.hpMax * 3 });
+  assert.ok(L.npcEncounterSummary({ partyLevel: 10, entries: { m: 1 } }, { m: fat }).budget > 1.6);
+  assert.equal(L.npcEncounterSummary({}, {}).budget, 0);
+});

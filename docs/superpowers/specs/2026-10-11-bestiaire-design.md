@@ -1,7 +1,7 @@
 # Bestiaire — atelier de création d'ennemis et de PNJ (design)
 
-Date : 2026-10-11. Statut : **design validé ; lots 1 à 3 codés le 2026-10-11** (journal du jour),
-lots 4 et 5 à faire.
+Date : 2026-10-11. Statut : **design validé ; lots 1 à 4 codés le 2026-10-11** (journal du jour),
+lot 5 à faire.
 Décisions prises en discussion avec le MJ les 2026-10-10 et 2026-10-11.
 
 Cet onglet est aussi la réponse au point resté ouvert du plan des compétences :

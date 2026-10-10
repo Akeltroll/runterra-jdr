@@ -388,6 +388,34 @@ function placeMonster(monster, count) {
   return window.RTDB.updatePath(ENEMIES, patch).then(() => n);
 }
 
+/* Rencontres préparées : { id, name, note, partyLevel, partySize, entries:{ monsterId: effectif } }.
+   Elles RÉFÉRENCENT les fiches (pas de copie) : retoucher une fiche change le bilan. */
+const BESTIARY_ENCOUNTERS = `${BESTIARY}/encounters`;
+function useEncounters() {
+  const [map, setMap] = useState(null);
+  useEffect(() => window.RTDB.subscribePath(BESTIARY_ENCOUNTERS, (v) => setMap(v || {}), () => setMap({})), []);
+  const stamp = (o) => Object.assign({}, o, { updatedAt: Date.now() });
+  const addEncounter = useCallback((enc) => {
+    const e = stamp(Object.assign({}, enc, { id: 'enc_' + Date.now().toString(36) + '_' + (_monsterSeq++) }));
+    return window.RTDB.updatePath(BESTIARY_ENCOUNTERS, { [e.id]: e }).then(() => e);
+  }, []);
+  const patchEncounter = useCallback((id, patch) => window.RTDB.updatePath(`${BESTIARY_ENCOUNTERS}/${id}`, stamp(patch)), []);
+  const removeEncounter = useCallback((id) => window.RTDB.updatePath(BESTIARY_ENCOUNTERS, { [id]: null }), []);
+  return { encounters: map, addEncounter, patchEncounter, removeEncounter };
+}
+/* Pose TOUTE une rencontre dans `combat/enemies` en une écriture. `rows` = lignes de
+   `npcEncounterSummary` ; les fiches supprimées sont ignorées. Plafond de 40 combattants. */
+function placeEncounter(rows) {
+  const patch = {}; let total = 0;
+  (rows || []).forEach((r) => {
+    if (!r || r.missing || !r.monster) return;
+    const n = Math.max(0, Math.min(20, r.count | 0));
+    for (let i = 0; i < n && total < 40; i++, total++) { const id = newEnemyId(); patch[id] = Object.assign({ id }, npcToEnemy(r.monster, i, n)); }
+  });
+  if (!total) return Promise.resolve(0);
+  return window.RTDB.updatePath(ENEMIES, patch).then(() => total);
+}
+
 /* File d'ACTIONS en attente : le joueur PROPOSE (au cast), le MJ résout instance par
    instance. Remplace `combat/pendingHits`, qui ne savait transporter qu'un coup de
    dégâts sur une cible.
@@ -880,6 +908,7 @@ Object.assign(window, {
   useInitiative, INITIATIVE, useAllHp,
   useMJEnemies, makeEnemy, newEnemyId, ENEMIES,
   useBestiary, placeMonster, newMonsterId, BESTIARY, BESTIARY_MONSTERS,
+  useEncounters, placeEncounter, BESTIARY_ENCOUNTERS,
   usePendingActions, applyHitToEnemy, applyHitToCharacter, healCharacter, healEnemy,
   applyStatusToCharacter, refundCast, PENDING_ACTIONS, summonAlly,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
