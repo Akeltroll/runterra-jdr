@@ -1,7 +1,7 @@
 # Rééquilibrage des compétences — patchs à appliquer (état figé au 2026-10-10)
 
 **Ce document est la référence unique pour coder.** Il rassemble les décisions du MJ prises du
-2026-10-06 au 2026-10-10, dans leur **valeur finale**. Seul le **lot A** est dans le code (2026-10-10).
+2026-10-06 au 2026-10-10, dans leur **valeur finale**. **Les lots A à F sont dans le code** (2026-10-10, `docs/journal/2026-10-10.md`) ; seul le lot G reste.
 
 - Le raisonnement, les options écartées et les chiffres intermédiaires sont dans
   `docs/superpowers/specs/2026-10-05-competences-etat-des-lieux.md`. ⚠️ Cette spec est un **journal
@@ -162,6 +162,7 @@ attente, `buildCastPlan`, modes d'attaque de base).
 - **Ne pas** toucher à `skillBaseDamage` ici : les compétences ne passent pas par `basicAttackProfile`.
 
 ### Lot B — Coût en mana par niveau ⚠️ effet en jeu immédiat
+✅ **Codé le 2026-10-10.**
 - Nouveau helper pur `skillManaCost(sk, level)` ; `sk.mana` de `SKILLS` (`data.jsx`) devient le **coût
   du niveau 2** ; un drapeau (ex. `manaFixed: true`) pour les C4.
 - `buildCastPlan` (`game-logic.js:1974`) lit le coût en un seul endroit (`cost.mana`, ligne ~2012) ;
@@ -169,6 +170,7 @@ attente, `buildCastPlan`, modes d'attaque de base).
 - Coût par cible `manaPer` : la Surcharge de Jett (`4 par CN`) suit la même pente.
 
 ### Lot C — Kits rang 1, un perso à la fois ⚠️ effet en jeu immédiat (C1, C2, passifs)
+✅ **Codé le 2026-10-10.** Les noms de fonctions ci-dessous sont ceux d'AVANT : voir le journal (§6).
 Fonctions de `game-logic.js` à réécrire, avec leur note dans `SKILLS` (`data.jsx`) et leurs tests :
 
 | Perso | Fonctions | Points d'attention |
@@ -180,6 +182,7 @@ Fonctions de `game-logic.js` à réécrire, avec leur note dans `SKILLS` (`data.
 | Jett | `dmgJettPoison`, `dmgJettForce`, `dmgJettC2`, `healJettC2` | C1 : trois nouveaux effets de soutien (soin, bouclier, mana) → instances `heal` / `status` de l'action en attente. |
 
 ### Lot D — Passifs
+✅ **Codé le 2026-10-10.**
 - **Elias** : `eliasPassiveAD` devient un % de l'AD de base (`sumPassiveMods`, `game-logic.js:2209`, reçoit
   déjà `base`, comme pour Rathäel) ; `eliasMaxStacks` passe à `/ 4` ; 2 tests. Case à cocher dans le passif
   (compteur ou drapeau dans `state.counters`, remis à zéro par « ⟲ Combat »).
@@ -190,12 +193,16 @@ Fonctions de `game-logic.js` à réécrire, avec leur note dans `SKILLS` (`data.
 - **Rathäel** : l'aura d'Âme fendue reste gérée à la table ; mettre à jour la note du passif.
 
 ### Lot E — C4 une fois par jour (aucun effet en jeu avant le niveau 4)
+✅ **Codé le 2026-10-10** (`kind: 'day'`, `SKILL_CD_DAY`, bouton MJ « ☀ Jour »).
 - `kind: 'combat'` → nouveau `kind` (ex. `'day'`) pour les cinq C4 et l'ultime de Rathäel.
 - La sentinelle `CD_LOCKED` (`pages-competences.jsx:90`) est levée par « Nouveau combat » : il faut un
   verrou **que « ⟲ Combat » ne lève pas**, et un bouton MJ « Nouveau jour ».
 - ⚠️ Ne pas confondre avec `WEAPON_CD_LOCKED` (propriétés d'armes, qui restent 1×/combat).
 
 ### Lot F — C3 et C4 de Jett (aucun effet en jeu avant les niveaux 3 et 4)
+✅ **Codé le 2026-10-10**, sauf ce qui restait à concevoir : attaques du Nano-hex lancées depuis l'onglet
+de Jett, son entrée automatique dans l'initiative, l'exosquelette (ultime, lot G). Le MJ joue le Nano-hex
+avec sa carte de PNJ allié.
 - C3 Surcharge destructrice : dégâts + Hémorragie (débuff déjà dans `BUFFS`) + don de mana, coût par CN.
 - C4 Nano-hex : un compagnon. S'appuyer sur les **PNJ alliés** de l'initiative (2026-09-02). À concevoir
   avant de coder (fiche du compagnon, choix des CN, exosquelette).
@@ -206,7 +213,7 @@ choix, ultime au niveau 6, remise à zéro par le MJ, règle RTDB pour que le jo
 **Bloqué** : le contenu des rangs 2 à 5 et les versions ultimes d'Elias et d'Urskaar ne sont pas conçus.
 
 ### À chaque livraison de code
-- `node --test test/game-logic.test.js` et `node --test test/auth.test.js` (314 tests verts après le lot A).
+- `node --test test/game-logic.test.js` et `node --test test/auth.test.js` (324 tests verts après le lot F).
 - Bumper le jeton de cache d'`index.html` (actuel : `20261010-1`).
 - Une entrée `docs/journal/<date>.md` + une ligne dans l'index de `CLAUDE.md`.
 

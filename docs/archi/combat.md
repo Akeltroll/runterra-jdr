@@ -172,7 +172,9 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   Compteurs/cooldowns en `state/counters`+`state/cooldowns` (cooldown = **`readyAt`** = n° de tour de dispo) ;
   variables d'attaque (1er coup / furtif / cases / cibles) en état local de carte. **Persos câblés** :
   Elias/Smith/Urskaar/Jett + **Rathael (C1 Frappe Irritée → C4 + ultime Souverain Glacial)** ; reste à faire :
-  **Jett C3/C4** (kits pas encore reçus). Passif calculable (Elias +AD/charge plat ; **Rathael +5%/charge Armure+RM de base** via compteur
+rien côté kits (Jett C3/C4 créées le 2026-10-10 ; ⚠️ **toute cette section date d'avant le rééquilibrage du
+  2026-10-10** — coûts par niveau, champs `noCrit`/`critBonus`/`dmgType`/`dmgLabel`/`selfHeal`/`boon`/`summon`,
+  verrou du jour, bienfaits : lire `docs/journal/2026-10-10.md`). Passif calculable (Elias 6 % de l'AD de base par charge ; **Rathael +5%/charge Armure+RM de base** via compteur
   Glaciation — `sumPassiveMods(charId,counters,level,base)`, 4e param `base`) branché via
   `sumPassiveMods`→`computeEffective`. **Glaciation auto-incrémenté** quand Rathael subit une attaque ennemie
   (`glaciationOnHit(counters,turn)`, +1/coup, max 5, tout stackable en 1 tour ; **+2/coup pendant Souverain Glacial**
