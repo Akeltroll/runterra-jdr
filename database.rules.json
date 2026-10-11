@@ -15,6 +15,26 @@
       ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'mj'",
       ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'mj'"
     },
+    "dice": {
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'mj'",
+      "public": {
+        ".read": "auth != null && root.child('users').child(auth.uid).child('role').exists()",
+        "$rollId": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').exists() && !data.exists() && newData.child('uid').val() === auth.uid",
+          ".validate": "newData.hasChildren(['uid', 'who', 'ts']) && newData.child('total').isNumber()"
+        }
+      },
+      "secret": {
+        ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'mj'",
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$rollId": {
+            ".write": "auth != null && auth.uid === $uid && root.child('users').child(auth.uid).child('role').exists() && !data.exists() && newData.child('uid').val() === auth.uid",
+            ".validate": "newData.hasChildren(['uid', 'who', 'ts']) && newData.child('total').isNumber()"
+          }
+        }
+      }
+    },
     "campaign": {
       "runeterra": {
         ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'mj' || root.child('users').child(auth.uid).child('role').val() === 'admin')",

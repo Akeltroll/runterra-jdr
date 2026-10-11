@@ -3305,3 +3305,76 @@ test('visibleCombatants : le staff voit tout, un joueur ne voit pas les masqués
   assert.deepEqual(L.visibleCombatants(null, false), []);
   assert.notEqual(L.visibleCombatants(list, true), list);                     // copie
 });
+
+/* --- Lanceur de dés (2026-10-11) --- */
+// rng scripté : rend les valeurs voulues pour des dés à `sides` faces.
+const diceRng = (sides, values) => { let i = 0; return () => (values[i++ % values.length] - 0.5) / sides; };
+
+test('rollDie reste dans 1..faces, bornes du rng comprises', () => {
+  assert.equal(L.rollDie(20, () => 0), 1);
+  assert.equal(L.rollDie(20, () => 1), 20);
+  assert.equal(L.rollDie(100, () => 0.999), 100);
+  assert.equal(L.rollDie(6, () => NaN), 1);
+});
+
+test('parseDiceFormula lit des combinaisons et refuse le reste', () => {
+  assert.deepEqual(L.parseDiceFormula('d4 + 2D20'), { terms: [{ n: 1, sides: 4, sign: 1 }, { n: 2, sides: 20, sign: 1 }], mods: [] });
+  assert.deepEqual(L.parseDiceFormula('d20-2+5').mods, [{ label: '', value: 3 }]);
+  assert.equal(L.parseDiceFormula('d20 − 1').mods[0].value, -1);
+  for (const bad of ['', '3', 'd', 'd1', '2d', 'd20++2', 'abc', '99d6', 'd5000', '20d6+20d6+d6']) {
+    assert.equal(L.parseDiceFormula(bad), null, bad);
+  }
+});
+
+test('diceFormulaText réécrit la formule lisiblement', () => {
+  assert.equal(L.diceFormulaText(L.parseDiceFormula('d4+2d20-3')), 'd4 + 2d20 − 3');
+  assert.equal(L.diceFormulaText(L.parseDiceFormula('d20-d4')), 'd20 − d4');
+});
+
+test('rollDice additionne dés et modificateurs', () => {
+  const r = L.rollDice(L.parseDiceFormula('2d20+3'), { rng: diceRng(20, [15, 7]) });
+  assert.deepEqual(r.terms[0].rolls, [15, 7]);
+  assert.equal(r.total, 25);
+  assert.equal(r.dropped, null);
+  assert.equal(L.diceRollText(r), '2d20 + 3 : 15 + 7 + 3 = 25');
+});
+
+test('avantage et désavantage : deux d20, le meilleur ou le pire, l autre écarté', () => {
+  const spec = L.diceTestSpec([{ label: 'Force', value: 2 }]);
+  const a = L.rollDice(spec, { adv: 'adv', rng: diceRng(20, [7, 15]) });
+  assert.deepEqual([a.terms[0].rolls[0], a.dropped, a.total, a.adv], [15, 7, 17, 'adv']);
+  const d = L.rollDice(spec, { adv: 'dis', rng: diceRng(20, [7, 15]) });
+  assert.deepEqual([d.terms[0].rolls[0], d.dropped, d.total], [7, 15, 9]);
+  assert.equal(L.diceRollText(a), 'd20 + 2 : 15 (7 écarté) + 2 = 17');
+  assert.deepEqual(L.diceRollTokens(a).map(k => k.dropped ? '~' + k.text : k.text), ['15', '~7', '2']);
+});
+
+test('l avantage est ignoré hors d un lancer à un seul d20', () => {
+  assert.equal(L.diceAdvAllowed(L.parseDiceFormula('d20+d4')), true);
+  assert.equal(L.diceAdvAllowed(L.parseDiceFormula('2d20')), false);
+  assert.equal(L.diceAdvAllowed(L.parseDiceFormula('d6')), false);
+  const r = L.rollDice(L.parseDiceFormula('2d20'), { adv: 'adv', rng: diceRng(20, [3, 9]) });
+  assert.deepEqual([r.adv, r.dropped, r.total], [null, null, 12]);
+});
+
+test('diceNatural signale le 1 et le 20 du d20 gardé seulement', () => {
+  const spec = L.diceTestSpec([]);
+  assert.equal(L.diceNatural(L.rollDice(spec, { rng: diceRng(20, [20]) })), 'crit');
+  assert.equal(L.diceNatural(L.rollDice(spec, { rng: diceRng(20, [1]) })), 'fumble');
+  assert.equal(L.diceNatural(L.rollDice(spec, { adv: 'adv', rng: diceRng(20, [1, 12]) })), null);
+  assert.equal(L.diceNatural(L.rollDice(L.parseDiceFormula('2d20'), { rng: diceRng(20, [20]) })), null);
+});
+
+test('test de caractéristique : d20 + carac / 4 arrondi à l inférieur + bonus', () => {
+  assert.deepEqual([0, 3, 4, 7, 9, 20].map(L.attrTestBonus), [0, 0, 1, 1, 2, 5]);
+  const spec = L.diceTestSpec([{ label: 'Habileté', value: L.attrTestBonus(9) }, { label: 'bonus', value: -1 }, { label: 'rien', value: 0 }]);
+  assert.equal(L.diceFormulaText(spec), 'd20 + 2 − 1');
+  assert.equal(L.rollDice(spec, { rng: diceRng(20, [12]) }).total, 13);
+});
+
+test('diceOutcome : null sans DD, sinon total >= DD', () => {
+  assert.equal(L.diceOutcome(13, ''), null);
+  assert.equal(L.diceOutcome(13, null), null);
+  assert.equal(L.diceOutcome(13, 13), true);
+  assert.equal(L.diceOutcome(12, '13'), false);
+});

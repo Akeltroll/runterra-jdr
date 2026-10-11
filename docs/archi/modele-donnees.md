@@ -99,6 +99,13 @@ vide = non équipable. Renseigné dans l'éditeur d'item quand `cat === 'Équipe
 Amorçage auto si vide (`seedIfEmpty`, conversion ratios → absolu via `buildDefaultState`).
 `mods` = bonus de stats d'item (vide pour l'instant ; **hook futur** vers `computeEffective`).
 ```
+/dice/   ← JOURNAL DE DÉS (2026-10-11), À LA RACINE comme /bestiary (un jet secret du MJ ne doit pas être lu par l'admin)
+    public/{id}          ← lu par tout inscrit
+    secret/{uid}/{id}    ← lu par son auteur et par le rôle `mj` ; ⚠️ le MJ s'abonne à `secret` entier, les autres à LEUR branche
+        id, uid (auteur, vérifié par la règle), ts, who (nom affiché), whoId (charId ou id d'ennemi, ou absent), by (staff qui lance pour un autre)
+        kind ('free'|'attr'|'skill'), label, terms:[{ n, sides, sign, rolls:[…] }], mods:[{ label, value }] (ABSENT = aucun)
+        adv ('adv'|'dis', ABSENT = jet normal), dropped (d20 écarté, hors total), dd (ABSENT = pas de DD), total, secret (true ou absent)
+        ↑ créé par son auteur, jamais modifié ; supprimé par le `mj` seul (purge, élagage à 200 par branche)
 /bestiary/   ← BESTIAIRE (2026-10-11) : lecture + écriture rôle `mj` SEUL — l'admin n'y a pas accès
                 ⚠️ À LA RACINE, pas sous campaign/runeterra (dont le `.read` mj+admin s'hérite et ne se retire pas)
                 ⚠️ donc HORS de la sauvegarde de la page Admin : export/import propre à la page Bestiaire

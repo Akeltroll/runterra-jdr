@@ -368,6 +368,160 @@
     return all.slice(max).map(function (e) { return e.id; });
   }
 
+  /* --- Lanceur de dés (2026-10-11) --------------------------------------------
+     Jets libres (d2 à d100, combinaisons) et tests : d20 + ⌊carac / 4⌋ + bonus pour
+     une caractéristique, d20 + bonus pour une compétence. Tout est INDÉPENDANT du
+     combat : rien ici ne touche une action en attente ni l'initiative.
+     Formes :
+       spec = { terms:[{ n, sides, sign }], mods:[{ label, value }] }
+       roll = { terms:[{ n, sides, sign, rolls:[…] }], mods, adv, dropped, total }
+     `adv` ∈ 'adv' | 'dis' | null ; `dropped` = le d20 ÉCARTÉ (null sans avantage).
+     ⚠️ L'avantage ne vaut que pour un lancer qui contient EXACTEMENT un d20
+     (diceAdvAllowed) — ailleurs il est ignoré, pas refusé. */
+  var DICE_SIDES = [2, 4, 6, 8, 10, 12, 20, 100];
+  var DICE_MAX_COUNT = 20;     // dés d'un même terme
+  var DICE_MAX_TOTAL = 40;     // dés d'un lancer entier
+  var DICE_MAX_SIDES = 1000;
+
+  function rollDie(sides, rng) {
+    var r = typeof rng === 'function' ? rng() : Math.random();
+    if (!(r >= 0)) r = 0;                      // NaN / valeur absurde => borne basse
+    if (r > 0.9999999) r = 0.9999999;          // rng() === 1 ne doit pas donner sides + 1
+    return 1 + Math.floor(r * sides);
+  }
+
+  /* Normalise une spec : entiers bornés, mods nuls retirés. Rend null si elle ne
+     contient aucun dé valide ou trop de dés. */
+  function diceSpec(terms, mods) {
+    var out = [], count = 0;
+    (terms || []).forEach(function (t) {
+      var n = t && (t.n | 0), sides = t && (t.sides | 0);
+      if (!(n >= 1) || !(sides >= 2)) return;
+      if (n > DICE_MAX_COUNT || sides > DICE_MAX_SIDES) { count = Infinity; return; }
+      count += n;
+      out.push({ n: n, sides: sides, sign: t.sign === -1 ? -1 : 1 });
+    });
+    if (!out.length || count > DICE_MAX_TOTAL) return null;
+    var m = [];
+    (mods || []).forEach(function (x) {
+      var v = x && Math.trunc(Number(x.value) || 0);
+      if (v) m.push({ label: String((x && x.label) || ''), value: v });
+    });
+    return { terms: out, mods: m };
+  }
+
+  /* « 2d20+d4-3 » → spec. Insensible à la casse et aux espaces ; null si illisible. */
+  function parseDiceFormula(text) {
+    var s = String(text == null ? '' : text).toLowerCase().replace(/\s+/g, '').replace(/[−–]/g, '-');
+    if (!/^[+-]?(\d*d\d+|\d+)([+-](\d*d\d+|\d+))*$/.test(s)) return null;
+    var re = /([+-]?)(?:(\d*)d(\d+)|(\d+))/g, m, terms = [], mod = 0;
+    while ((m = re.exec(s))) {
+      var sign = m[1] === '-' ? -1 : 1;
+      if (m[3] != null) {
+        var n = m[2] === '' ? 1 : parseInt(m[2], 10), sides = parseInt(m[3], 10);
+        if (n < 1 || n > DICE_MAX_COUNT || sides < 2 || sides > DICE_MAX_SIDES) return null;
+        terms.push({ n: n, sides: sides, sign: sign });
+      } else {
+        mod += sign * parseInt(m[4], 10);
+      }
+    }
+    return diceSpec(terms, [{ label: '', value: mod }]);
+  }
+
+  function diceSignedText(parts) {
+    return parts.map(function (p, i) {
+      return (i === 0 ? (p.sign < 0 ? '−' : '') : (p.sign < 0 ? ' − ' : ' + ')) + p.text;
+    }).join('');
+  }
+
+  /* Partie GAUCHE de l'affichage : « 2d20 + d4 − 3 ». */
+  function diceFormulaText(spec) {
+    var parts = [];
+    ((spec && spec.terms) || []).forEach(function (t) {
+      parts.push({ sign: t.sign, text: (t.n > 1 ? t.n : '') + 'd' + t.sides });
+    });
+    ((spec && spec.mods) || []).forEach(function (m) {
+      if (m.value) parts.push({ sign: m.value < 0 ? -1 : 1, text: String(Math.abs(m.value)) });
+    });
+    return diceSignedText(parts);
+  }
+
+  function diceSingleD20(spec) {
+    var d20 = ((spec && spec.terms) || []).filter(function (t) { return t.sides === 20; });
+    return d20.length === 1 && d20[0].n === 1 && d20[0].sign === 1;
+  }
+  function diceAdvAllowed(spec) { return diceSingleD20(spec); }
+
+  function rollDice(spec, opts) {
+    opts = opts || {};
+    var rng = opts.rng;
+    var adv = (opts.adv === 'adv' || opts.adv === 'dis') && diceAdvAllowed(spec) ? opts.adv : null;
+    var total = 0, dropped = null;
+    var terms = spec.terms.map(function (t) {
+      var rolls = [], sum = 0;
+      for (var i = 0; i < t.n; i++) rolls.push(rollDie(t.sides, rng));
+      if (adv && t.sides === 20) {
+        var other = rollDie(20, rng), first = rolls[0];
+        var keep = adv === 'adv' ? Math.max(first, other) : Math.min(first, other);
+        dropped = first + other - keep;
+        rolls[0] = keep;
+      }
+      rolls.forEach(function (v) { sum += v; });
+      total += t.sign * sum;
+      return { n: t.n, sides: t.sides, sign: t.sign, rolls: rolls };
+    });
+    var mods = (spec.mods || []).map(function (m) { total += m.value; return { label: m.label, value: m.value }; });
+    return { terms: terms, mods: mods, adv: adv, dropped: dropped, total: total };
+  }
+
+  /* Partie DROITE de l'affichage, en jetons : chaque dé, le d20 écarté (`dropped: true`,
+     à barrer, hors total), puis les modificateurs. `sign` = opérateur qui PRÉCÈDE. */
+  function diceRollTokens(roll) {
+    var out = [];
+    ((roll && roll.terms) || []).forEach(function (t) {
+      (t.rolls || []).forEach(function (v) {
+        out.push({ sign: t.sign, text: String(v), sides: t.sides });
+        if (roll.dropped != null && t.sides === 20) out.push({ text: String(roll.dropped), dropped: true });
+      });
+    });
+    ((roll && roll.mods) || []).forEach(function (m) {
+      if (m.value) out.push({ sign: m.value < 0 ? -1 : 1, text: String(Math.abs(m.value)), mod: true, label: m.label });
+    });
+    return out;
+  }
+
+  /* Ligne complète, format demandé par le MJ : « d20 + d4 : 15 + 2 = 17 ». */
+  function diceRollText(roll) {
+    var right = '', first = true;
+    diceRollTokens(roll).forEach(function (k) {
+      if (k.dropped) { right += ' (' + k.text + ' écarté)'; return; }
+      right += (first ? (k.sign < 0 ? '−' : '') : (k.sign < 0 ? ' − ' : ' + ')) + k.text;
+      first = false;
+    });
+    return diceFormulaText(roll) + ' : ' + right + ' = ' + roll.total;
+  }
+
+  /* 1 ou 20 NATUREL sur un lancer à un seul d20 : mise en valeur visuelle seulement,
+     aucune réussite ni aucun échec automatique (décision MJ). */
+  function diceNatural(roll) {
+    if (!diceSingleD20(roll)) return null;
+    var t = roll.terms.filter(function (x) { return x.sides === 20; })[0];
+    var v = t.rolls && t.rolls[0];
+    return v === 20 ? 'crit' : v === 1 ? 'fumble' : null;
+  }
+
+  /* Bonus de caractéristique d'un test : ⌊carac / 4⌋ (même règle que le kit d'Elias). */
+  function attrTestBonus(value) { return Math.floor(Math.max(0, Number(value) || 0) / 4); }
+
+  /* Spec d'un test : un d20 + les modificateurs nommés (bonus de carac, bonus/malus saisi). */
+  function diceTestSpec(mods) { return diceSpec([{ n: 1, sides: 20, sign: 1 }], mods); }
+
+  /* DD optionnel : true/false si un DD est posé, null sinon (le MJ juge). */
+  function diceOutcome(total, dd) {
+    var d = Number(dd);
+    return (dd === '' || dd == null || !isFinite(d)) ? null : total >= d;
+  }
+
   /* --- Système de poids porté (affichage seul ; le MJ arbitre la surcharge) --- */
   var CARRY_BASE = 30;        // capacité de base commune (plancher garanti) — spec poids/encombrement
   var CARRY_PER_FORCE = 5;    // capacité gagnée par point de Force
@@ -3553,6 +3707,8 @@
     COIN_VALUE, planCoinConvert, COIN_PER_WEIGHT, coinsWeight,
     COIN_NAME, coinsAmountText, coinsDeltaText, coinsDeltaValue, LOG_MAX, staleLogIds,
     coinInt, sanitizeCampaignCoins, planCoinMove,
+    DICE_SIDES, DICE_MAX_COUNT, DICE_MAX_TOTAL, rollDie, diceSpec, parseDiceFormula, diceFormulaText,
+    diceAdvAllowed, rollDice, diceRollTokens, diceRollText, diceNatural, attrTestBonus, diceTestSpec, diceOutcome,
     CARRY_BASE, CARRY_PER_FORCE, carriedWeight, carryCapacity, weightStatus, weightStatusPct, comfortPct,
     carryBaseRaw, groupCarryBase, GROUP_CARRY_RATIO, groupCarryCapacity, groupComfortPct,
     TRANSPORT_SLOTS, transportAccepts, sumTransportCarry,

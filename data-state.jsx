@@ -623,6 +623,71 @@ function useEconomyLog() {
   const clearLog = useCallback(() => window.RTDB.setPath(ECONOMY_LOG, null), []);
   return { entries, clearLog };
 }
+/* JOURNAL DE DÉS (2026-10-11) — nœud À LA RACINE (`/dice`), comme `/bestiary` et pour la
+   même raison : `campaign/runeterra` est lisible par l'admin dès sa racine, or un jet
+   secret du MJ ne doit être lu que par le MJ (l'admin est un joueur de la table).
+     dice/public/{id}        lu par tout inscrit
+     dice/secret/{uid}/{id}  lu par son auteur et par le MJ
+   Un jet est créé par son auteur (`uid === auth.uid`) et n'est plus modifiable ; seul le
+   MJ supprime (purge, élagage). ⚠️ Le MJ s'abonne à `dice/secret` ENTIER, un autre compte
+   à SA branche : s'abonner au parent serait refusé à un joueur. */
+const DICE = 'dice';
+const DICE_PUBLIC = `${DICE}/public`;
+const DICE_SECRET = `${DICE}/secret`;
+const DICE_LOG_MAX = 200;    // gardés en base (par branche), élagués côté MJ
+const DICE_LOG_SHOWN = 60;
+function pushDiceRoll(uid, entry, secret) {
+  const id = 'dice_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e4);
+  // JSON aller-retour : Firebase REFUSE un champ `undefined` (il lève), et accepte null.
+  const clean = JSON.parse(JSON.stringify({ ...entry, id, uid, ts: Date.now(), secret: secret ? true : null }));
+  return window.RTDB.updatePath(secret ? `${DICE_SECRET}/${uid}` : DICE_PUBLIC, { [id]: clean });
+}
+function useDiceLog(uid, role) {
+  const isMj = role === 'mj';
+  const [pub, setPub] = useState(null);
+  const [sec, setSec] = useState(null);     // MJ : { uid: { id: jet } } ; sinon { id: jet }
+  useEffect(() => window.RTDB.subscribePath(DICE_PUBLIC, (v) => setPub(v || {}),
+    (e) => { console.error('Journal de dés illisible :', e); setPub({}); }), []);
+  useEffect(() => {
+    if (!uid) return;
+    return window.RTDB.subscribePath(isMj ? DICE_SECRET : `${DICE_SECRET}/${uid}`, (v) => setSec(v || {}),
+      (e) => { console.error('Jets secrets illisibles :', e); setSec({}); });
+  }, [uid, isMj]);
+  // Élagage : seul le MJ peut supprimer, donc seul lui borne la taille du journal.
+  useEffect(() => {
+    if (!isMj) return;
+    const patch = {};
+    staleLogIds(pub || {}, DICE_LOG_MAX).forEach((id) => { patch[`public/${id}`] = null; });
+    Object.keys(sec || {}).forEach((u) =>
+      staleLogIds(sec[u] || {}, DICE_LOG_MAX).forEach((id) => { patch[`secret/${u}/${id}`] = null; }));
+    if (Object.keys(patch).length) window.RTDB.updatePath(DICE, patch);
+  }, [isMj, pub, sec]);
+  const secrets = !sec ? [] : isMj
+    ? Object.values(sec).reduce((all, m) => all.concat(Object.values(m || {})), [])
+    : Object.values(sec);
+  const entries = Object.values(pub || {}).concat(secrets)
+    .filter((e) => e && e.id)
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, DICE_LOG_SHOWN);
+  const clearLog = useCallback(() => window.RTDB.setPath(DICE, null), []);
+  return { entries, loaded: pub !== null, clearLog };
+}
+
+/* Caracs et niveau d'UN perso par leurs chemins FEUILLES, les seuls ouverts à tout inscrit
+   (cf. useGroupCarry) : le lanceur de dés du staff en a besoin pour n'importe quel PJ. */
+function useCharAttrsLevel(charId) {
+  const [live, setLive] = useState({});
+  useEffect(() => {
+    setLive({});
+    if (!charId) return;
+    const a = window.RTDB.subscribePath(`${charPath(charId)}/attrs`, (v) => setLive((p) => ({ ...p, attrs: v })));
+    const l = window.RTDB.subscribePath(`${charPath(charId)}/level`, (v) => setLive((p) => ({ ...p, level: v })));
+    return () => { a(); l(); };
+  }, [charId]);
+  const c = CHARACTERS.find((x) => x.id === charId);
+  if (!c) return null;
+  return { attrs: live.attrs || c.attrs || {}, level: (live.level != null ? live.level : c.level) || 1 };
+}
+
 /* Nom lisible d'une bourse depuis son chemin RTDB (texte de journal). */
 function purseName(path) {
   if (path === SHARED_COINS) return 'coffre commun';
@@ -913,6 +978,7 @@ Object.assign(window, {
   applyStatusToCharacter, refundCast, PENDING_ACTIONS, summonAlly,
   pushLog, useCombatLog, COMBAT_LOG, addXp, removeXp, grantCoins,
   pushEconomyLog, useEconomyLog, ECONOMY_LOG, purseName,
+  pushDiceRoll, useDiceLog, useCharAttrsLevel, DICE, DICE_PUBLIC, DICE_SECRET,
   COIN_KEYS, setCharCoins, setSharedCoins,
   useSharedTransport, SHARED_TRANSPORT, useGroupCarry,
 });

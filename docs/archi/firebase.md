@@ -44,6 +44,12 @@ texte inchangé. Les renvois « voir Décisions » / « Infos MJ » visent les s
   ⚠️ **`/bestiary` (2026-10-11) = lecture + écriture rôle `mj` SEUL**, nœud à la RACINE : c'est le seul
   endroit où l'admin est exclu, et il ne pouvait pas vivre sous `campaign/runeterra` (droit hérité).
   ✅ Publiée et relue le 2026-10-11 (en ligne == dépôt avant ET après, aucune dérive console).
+  ⚠️ **`/dice` (2026-10-11) = journal de dés, à la RACINE lui aussi** : `dice` a un `.write` rôle `mj`
+  (purge et élagage — sur le NŒUD, pas sur ses enfants) ; `dice/public` = lecture tout inscrit ;
+  `dice/secret` = lecture `mj`, `dice/secret/$uid` = lecture de son auteur ; `$rollId` = création par
+  l'auteur seulement (`uid === auth.uid` et `!data.exists()`, donc ni modification ni suppression).
+  L'admin ne lit pas les jets secrets des autres : c'est un joueur de la table.
+  ✅ Publiée et relue le 2026-10-11 (en ligne == dépôt avant ET après).
   Contenu : joueur = sa fiche seule, staff = tout ; **`campaign/runeterra` a un `.write` `mj`+`admin`**
   (ouvert au MJ le 2026-08-21 pour l'import de sauvegarde — `setPath(CAMPAIGN,…)` écrit sur le nœud
   racine ; les `.validate` des descendants continuent de s'appliquer, et `/users` n'est pas
