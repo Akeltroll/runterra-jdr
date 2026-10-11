@@ -17,12 +17,11 @@ const SKILL_VARS = {
   attaque_sournoise: ['furtif', 'marked'],
   frappe_duale: ['melee'],
   remodulation: ['config'],
-  pugilat: ['side', 'moved'],
-  ecrasement: ['moved'],
-  demi_ours: ['moved'],
-  pietinement: ['moved'],
-  pietinement_allie: ['moved'],
+  pugilat: ['side'],
 };
+/* ⚠️ `moved` (cases annoncées d'Urskaar) n'est PLUS une variable de carte : il vient du compteur
+   du passif (`passive.ctx`, data.jsx) par `baseCtx`. Ne pas le remettre dans l'état local d'une
+   carte — `vars` écrase `baseCtx`, et le compteur redeviendrait sans effet. */
 
 /* Couleurs d'effet, partagées carte joueur ↔ carte MJ (cf. INSTANCE_TONE, pages-mj). */
 const EFFECT_TONE = {
@@ -397,6 +396,9 @@ function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
             ) : null}
           </div>
         )}
+        {typeof p.hint === 'function' && (
+          <div className="mono" style={{ marginTop: 8, fontSize: 12.5, color: cur ? 'var(--buff)' : 'var(--faint)' }}>{p.hint(counters)}</div>
+        )}
         {/* Aide-mémoire du passif (Elias : « toutes les cibles touchées ») : un simple drapeau dans
             `counters`, donc remis à zéro par « ⟲ Combat ». AUCUN effet sur le calcul. */}
         {p.flag && (
@@ -416,7 +418,7 @@ function PassiveCard({ kit, eff, base, counters, level, color, setCounter }) {
 function followUpKey(sk) { return 'u_' + sk.id; }
 
 function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, onCast, locked, minLevel, pools, followUpOf, onEndEffect }) {
-  const [vars, setVars] = useState({ firstHit: false, furtif: false, marked: false, melee: false, config: '', alloc: {}, side: 'droite', moved: 0, duration: (sk.duration ? sk.duration.min : 1) });
+  const [vars, setVars] = useState({ firstHit: false, furtif: false, marked: false, melee: false, config: '', alloc: {}, side: 'droite', duration: (sk.duration ? sk.duration.min : 1) });
   /* Sélection de cibles PAR EFFET, état LOCAL et non persisté : c'est un choix par
      lancement, comme les variables d'attaque. Vidée après chaque cast réussi. */
   const [sel, setSel] = useState({});
@@ -510,7 +512,6 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
                 </select>
               </label>
             )}
-            {needed.includes('moved') && <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }} title="Déplacement ANNONCÉ pour ce tour : 1 tranche à 5 cases, +1 par 3 cases">Cases annoncées <input type="number" min="0" value={vars.moved} onChange={e => setVars(s => ({ ...s, moved: Math.max(0, e.target.value | 0) }))} style={{ width: 56, background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }} /></label>}
             {sk.duration && (
               <label className="row gap-1" style={{ fontSize: 12.5, alignItems: 'center' }}>Durée
                 <select value={vars.duration} onChange={e => setVars(s => ({ ...s, duration: Math.max(sk.duration.min, Math.min(sk.duration.max, e.target.value | 0)) }))} style={{ background: 'var(--bg-inset)', color: 'var(--ink)', border: '1px solid var(--line-strong)', borderRadius: 5, padding: '3px 6px' }}>
@@ -793,15 +794,21 @@ function CompetencesBody({ char, staff }) {
      mini-arme, malus de maîtrise, propriétés. `wType` en dérive, et avec lui le type des
      compétences qui frappent « avec l'arme » (Elias C1, Smith C1). */
   const weaponChoice = state.weaponChoice || {};
-  const profile = basicAttackProfile(weaponLoadout(state.equipment, state.inventory),
-    state.masteries, eff, weaponChoice);
+  // Passif à compteur qui pilote les dégâts (Urskaar : tranches annoncées) : bonus d'attaque
+  // de base ici, variables de compétence dans `baseCtx` plus bas.
+  const kitPassive = kit.passive || {};
+  const basicBonusPct = kitPassive.basicBonusPct ? kitPassive.basicBonusPct(counters) : 0;
+  const profile = withBasicBonus(basicAttackProfile(weaponLoadout(state.equipment, state.inventory),
+    state.masteries, eff, weaponChoice), basicBonusPct);
+  const basicBonusNote = basicBonusPct ? ` · ${kitPassive.name} +${basicBonusPct} %` : '';
   const wType = profile.wType;
   // `hpCur` : PV actuels du lanceur, pour la Frappe Irritée de Rathäel (% de PV manquants,
   // rapportés à `eff.hp`). `hpMax` reste le PV de BASE (bouclier d'Urskaar, ultime de Rathäel).
   // `nano` : le Nano-hex de Jett s'il est sur le plateau (PNJ allié posé par le MJ) — ses
   // actions libres lisent SA fiche, pas celle de Jett.
   const nano = enemies.find(e => e.side === 'ally' && e.name === 'Nano-hex' && e.hpCur > 0) || null;
-  const baseCtx = { counters, level, wType, hpMax: base.hp, hpCur: state.hpCur != null ? state.hpCur : null, nano };
+  const baseCtx = Object.assign({ counters, level, wType, hpMax: base.hp, hpCur: state.hpCur != null ? state.hpCur : null, nano },
+    kitPassive.ctx ? kitPassive.ctx(counters) : null);
   // Setters de ressources : même contrat que la fiche (valeur ou updater), pour que
   // ConsumablesRow soit branchable des deux côtés sans variante.
   const setHp   = (v) => setField('hpCur',   typeof v === 'function' ? v(state.hpCur || 0) : v);
@@ -972,7 +979,7 @@ function CompetencesBody({ char, staff }) {
       // ⚠️ Étaler `wCombat` : sinon le candidat de Parade du tour serait effacé.
       setField('weaponCombat', nextCombat);
     }
-    const label = 'Attaque de base' + (plan.label ? ' · ' + plan.label : '');
+    const label = 'Attaque de base' + (plan.label ? ' · ' + plan.label : '') + basicBonusNote;
     addAction(Object.assign({ attackerId: char.id, attackerName: char.name, skillId: 'basic', skillName: label,
       source: 'basic', round: turn, cost: plan.cost }, weaponMeta), plan.instances);
     const sum = instanceSummary(plan.instances, targetName);
@@ -1012,8 +1019,8 @@ function CompetencesBody({ char, staff }) {
     if (fullAttack) { weaponAttack(); return; }
     const check = castSelectionValid(BASIC_TARGETING, basicSel);
     if (!check.ok) { toast(`<b>${char.name}</b> — ${check.reason}`, 'gold'); return; }
-    const label = mode.id === 'normal' ? 'Attaque de base'
-      : `${mode.label} (${Math.round(mode.mult * 100)} %)`;
+    const label = (mode.id === 'normal' ? 'Attaque de base'
+      : `${mode.label} (${Math.round(mode.mult * 100)} %)`) + basicBonusNote;
     // ⚠️ Un mode réduit ne roule PAS le dé de crit (ruling MJ) : on ne neutralise pas
     // le résultat après coup, on ne lance pas — et le %Crit envoyé vaut alors 0, parce
     // que la carte du MJ doit dire la vérité de CE coup, pas la fiche de l'attaquant.

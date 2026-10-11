@@ -970,6 +970,16 @@
       twoHanded: !!loadout.twoHanded, pair: loadout.pair || null, issues: loadout.issues || [],
     };
   }
+  /* Bonus de PASSIF sur l'attaque de base, en % de l'attaque de base (Urskaar, Voie de l'ours).
+     Il monte `power` — donc gestes, propriétés d'arme et Riposte suivent seuls — et `scale`
+     (part réelle de la stat affichée). ⚠️ `ratio` reste RELATIF à une arme normale. */
+  function withBasicBonus(profile, pct) {
+    pct = Math.max(0, pct || 0);
+    if (!profile || !pct) return profile;
+    var k = 1 + pct / 100;
+    return Object.assign({}, profile, { bonusPct: pct, scale: profile.scale * k,
+      power: Math.round((profile.power || 0) * k) });
+  }
 
   /* ============================================================
      ARMES — LIVRAISON 2 : propriétés automatisées (spec §5, lot 2)
@@ -2449,6 +2459,12 @@
     if (moved < 5) return 0;
     return 1 + Math.floor((moved - 5) / 3);
   }
+  /* Le compteur du passif porte des TRANCHES ; les formules prennent des cases. Conversion au
+     minimum de cases de la tranche (1 → 5, 2 → 8, 3 → 11…). */
+  function bearMovedOfTranches(t) {
+    t = Math.max(0, t | 0);
+    return t ? 5 + 3 * (t - 1) : 0;
+  }
   /* C1 : la gauche est le coup de dégâts (72 % AD + 18 %/tranche), la droite le coup de
      contrôle (54 % AD + 6 %/tranche, étourdit à 50 % + 10 %/tranche). */
   function dmgUrskaarC1(eff, side, moved) {
@@ -3739,7 +3755,7 @@
     dmgJettC3, jettC3Boon, NANOHEX_CN_OPTIONS, allocTotal, nanoHexStats, nanoHexSummon,
     healJettC1, shieldJettC1, jettC1ManaPct, JETT_C1_EFFECTS, jettC1Effect, jettC1Roll, jettC1Damage, jettC1Heal, jettC1Boon,
     dmgRathaelC1, rathaelC2Buff, dmgRathaelC3, rathaelUltHpBonus, glaciationOnHit, glaciationDecay,
-    bearBonusPct, bearTranches, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
+    bearBonusPct, bearTranches, bearMovedOfTranches, withBasicBonus, dmgUrskaarC1, dmgUrskaarC2, urskaarC3Shield, dmgUrskaarC4,
     jettEngins, dmgJettPoison, dmgJettForce, dmgJettC2, healJettC2,
     sumPassiveMods, sumSkillBuffs, statBreakdown, parseConsumableEffect, carouselTransforms, planReorder,
     runeRadialLayout,

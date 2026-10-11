@@ -684,6 +684,14 @@ test('Urskaar Voie de l ours', () => {
   assert.equal(L.bearBonusPct(11), 100);
   assert.equal(L.bearTranches(5), 1);
   assert.equal(L.bearTranches(8), 2);
+  // le compteur du passif porte des tranches : conversion en cases, aller-retour exact
+  assert.deepEqual([0, 1, 2, 3, 5].map(L.bearMovedOfTranches), [0, 5, 8, 11, 17]);
+  assert.deepEqual([1, 2, 3, 5].map(t => L.bearTranches(L.bearMovedOfTranches(t))), [1, 2, 3, 5]);
+  // bonus de passif sur l attaque de base : power et scale montent, ratio ne bouge pas
+  const prof = { power: 60, scale: 0.6, ratio: 1 };
+  assert.equal(L.withBasicBonus(prof, 0), prof);
+  assert.deepEqual(L.withBasicBonus(prof, 75), { power: 105, scale: 0.6 * 1.75, ratio: 1, bonusPct: 75 });
+  assert.equal(prof.power, 60);                                   // le profil d origine n est pas modifie
   const eff = { ad: 100, ap: 50 };
   // C1 gauche : 72 % AD + 18 % par tranche ; droite : 54 % + 6 %, etourdit a 50 % + 10 %
   assert.deepEqual([0, 5, 8, 11].map(m => L.dmgUrskaarC1(eff, 'gauche', m)), [72, 90, 108, 126]);

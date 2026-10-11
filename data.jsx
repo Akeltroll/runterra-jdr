@@ -530,6 +530,7 @@ const SKILL_DESC = {
   /* ---------- Urskaar ---------- */
   passif_urskaar: [
     '**La tranche** se compte sur le déplacement que tu **annonces** (« j\'ai l\'intention de parcourir X cases ») : **1 tranche à 5 cases, +1 par 3 cases** en plus (2 tranches à 8 cases, 3 à 11). C\'est la même tranche pour toutes tes compétences.',
+    '- **Règle le compteur « Tranches annoncées » à chaque tour** : il fixe les dégâts de ton attaque de base et de toutes tes compétences.',
     '- **+1 en initiative**, compté automatiquement.',
     '- Quand tu annonces 5 cases : ton attaque de base gagne **+50 % de l\'attaque de base**, puis **+25 % par tranche de 3 cases** en plus.',
     '- **+1 point de mouvement par tranche** pour le combat (maximum 3).',
@@ -691,7 +692,17 @@ const SKILLS = {
     ],
   },
   urskaar: {
-    passive: { name: 'Voie de l\'ours', counter: { key: 'tranches', label: 'PM bonus', max: 3 }, initBonus: 1 },
+    /* Le compteur EST la tranche annoncée pour le tour : il pilote l'attaque de base
+       (`basicBonusPct`) et toutes les compétences (`ctx` → `c.moved`). Max 5 = étourdissement
+       de la droite à 100 % ; le +1 PM par tranche, lui, plafonne à 3. */
+    passive: { name: 'Voie de l\'ours', counter: { key: 'tranches', label: 'Tranches annoncées', max: 5 }, initBonus: 1,
+      ctx: (counters) => ({ moved: bearMovedOfTranches(counters.tranches) }),
+      basicBonusPct: (counters) => bearBonusPct(bearMovedOfTranches(counters.tranches)),
+      hint: (counters) => {
+        const t = Math.max(0, counters.tranches | 0);
+        return t ? `${bearMovedOfTranches(t)} cases ou plus · attaque de base +${bearBonusPct(bearMovedOfTranches(t))} % · +${Math.min(3, t)} PM`
+          : 'Moins de 5 cases annoncées : aucun bonus';
+      } },
     actives: [
       { id: 'pugilat', name: 'Maîtrise du pugilat', mana: 15, cd: 1, kind: 'turn',
         dmg: (eff, c) => dmgUrskaarC1(eff, c.side, c.moved),
