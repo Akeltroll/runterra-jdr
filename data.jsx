@@ -497,6 +497,12 @@ const SKILL_DESC = {
     '- Si tu es invisible d\'au moins la moitié des ennemis : +10 % de chance de critique sur une attaque furtive. Toute attaque furtive donne au minimum +10 % de critique et +2 au jet d\'attaque.',
     '- Tes C1 et C3 peuvent faire un coup critique.',
   ],
+  fletrissement: [
+    'Tu focalises de l\'arcane sur une entité consciente : **50 + 50 % AP** dégâts magiques, sans coup critique.',
+    '- La cible fait un jet de sauvegarde, arbitré par le MJ. **Ratée** : elle est marquée, pense à monter ton compteur de marques.',
+    '- **Réussie** : les dégâts restent, et tu peux retenter au tour suivant.',
+    '- Une fois par combat.',
+  ],
   attaque_sournoise: [
     'Tu vises les points vitaux avec ton arme principale ou secondaire. Avec une arme de mêlée, l\'attaque porte à une case de plus.',
     'Ses dégâts sont un **multiple de l\'attaque de base** (60 % des dégâts d\'arme) :',
@@ -670,7 +676,15 @@ const SKILLS = {
     ],
   },
   smith: {
-    passive: { name: 'Flétrissement de la rose', counter: { key: 'marques', label: 'Marques', max: 9 } },
+    /* `action` : le passif se LANCE (carte à part dans l'onglet Combat, sans mana). Dégâts
+       magiques sans crit + une ligne « Marque » que le MJ valide (sauvegarde ratée) ou retire
+       (réussie : le verrou 1×/combat saute, nouvelle tentative au tour suivant). */
+    passive: { name: 'Flétrissement de la rose', counter: { key: 'marques', label: 'Marques', max: 9 },
+      action: { id: 'fletrissement', name: 'Flétrissement de la rose', mana: 0, manaFixed: true, cd: 0, kind: 'combat', noCrit: true,
+        dmg: (eff) => dmgSmithPassif(eff), dmgType: () => 'magique',
+        targetEffect: () => ({ retry: true,
+          label: 'Marque — jet de sauvegarde de la cible : RATÉ → valider (marquée, perd de vue ses alliés, Smith camouflé à ses yeux) · RÉUSSI → retirer (Smith pourra retenter au tour suivant)' }),
+        info: () => ['Sauvegarde de la cible, arbitrée par le MJ : ratée → marquée', 'Sauvegarde réussie : nouvelle tentative au tour suivant'] } },
     actives: [
       { id: 'attaque_sournoise', name: 'Attaque sournoise', mana: 13, cd: 1, kind: 'turn',
         dmg: (eff, c) => dmgSmithC1(c.wType, eff, c.furtif, c.marked), critBonus: (eff, c) => smithC1CritBonus(c.furtif),

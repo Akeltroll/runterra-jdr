@@ -2244,6 +2244,8 @@
        critBonus(eff,ctx)— points de crit ajoutés pour CE cast (Attaque sournoise camouflée) ;
        dmgType(eff,ctx)  — type de dégâts imposé, sinon celui de l'arme (poison de Jett) ;
        dmgLabel(eff,ctx) — rappel porté par chaque instance de dégâts, lu par le MJ ;
+       targetEffect(eff,ctx) — `{label, retry}` : effet narratif sur chaque cible de dégâts,
+                           soumis au MJ (jet de sauvegarde) ; voir plus bas ;
        selfHeal(eff,ctx,n) — soin du LANCEUR, n = nombre de cibles de dégâts (Salve) ;
        boon(eff,ctx)     — bouclier `{shield}` ou mana `{manaPct, manaFlat}` donné à une cible
                            alliée : instance `status` marquée `boon`, convertie par `resolveBoon` ;
@@ -2279,6 +2281,16 @@
         hpMax: eff.hp || 0 };
       if (dmgLabel) inst.label = dmgLabel;
       instances.push(inst);
+    });
+    /* Effet NARRATIF posé sur chaque cible de dégâts, que le MJ valide ou retire selon le jet
+       de sauvegarde (marque de Smith) : même motif que les débuffs d'arme. Avec `retry`, le
+       retirer rouvre la compétence AU TOUR SUIVANT (`cdKey`/`cdPrev` lus par
+       `actionRefundPlan`), même si les dégâts ont déjà été appliqués. */
+    var tEff = typeof sk.targetEffect === 'function' ? sk.targetEffect(eff, ctx) : null;
+    if (tEff && dmg != null) (selection.damage || []).forEach(function (tid) {
+      var te = { seq: ++seq, kind: 'status', targetId: tid, narrative: true, label: tEff.label || 'Effet' };
+      if (tEff.retry && sk.id) { te.cdKey = sk.id; te.cdPrev = (opts.turn || 1) + 1; }
+      instances.push(te);
     });
     var heal = typeof sk.heal === 'function' ? sk.heal(eff, ctx) : null;
     if (heal != null) (selection.heal || []).forEach(function (tid) {

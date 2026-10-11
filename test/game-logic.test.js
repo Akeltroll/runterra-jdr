@@ -676,6 +676,27 @@ test('Smith, rang 1 du 2026-10-10 : Attaque sournoise en multiple de l attaque d
   assert.equal(L.smithBleedPct, undefined);                               // l ancien pourcentage est abandonne
 });
 
+test('Fletrissement de Smith : degats magiques + marque soumise au MJ, retentable', () => {
+  const sk = { id: 'fletrissement', name: 'F', mana: 0, manaFixed: true, kind: 'combat', noCrit: true,
+    dmg: (eff) => L.dmgSmithPassif(eff), dmgType: () => 'magique',
+    targetEffect: () => ({ retry: true, label: 'Marque' }) };
+  const p = L.buildCastPlan(sk, { ap: 100, crit: 100 }, {}, { damage: ['g1'] }, { turn: 4, selfId: 'smith', wType: 'Physique' });
+  assert.equal(p.cost.mana, 0);
+  assert.deepEqual(p.instances.map(i => [i.kind, i.targetId]), [['damage', 'g1'], ['status', 'g1']]);
+  assert.deepEqual([p.instances[0].computedDmg, p.instances[0].type, p.instances[0].didCrit], [100, 'magique', false]);
+  assert.deepEqual([p.instances[1].narrative, p.instances[1].label, p.instances[1].cdKey, p.instances[1].cdPrev],
+    [true, 'Marque', 'fletrissement', 5]);
+  assert.equal(L.skillLockValue(sk, 4), L.SKILL_CD_COMBAT);
+  // le MJ retire la marque (sauvegarde reussie) alors que les degats sont deja appliques :
+  // le verrou saute et la competence revient au tour suivant
+  const action = { attackerId: 'smith', skillId: 'fletrissement', appliedCount: 1, cost: p.cost, instances: { b: p.instances[1] } };
+  const r = L.actionRefundPlan(action, 'instance', p.instances[1]);
+  assert.deepEqual([r.restoreCd, r.cdKey, r.cdPrev, r.mana], [true, 'fletrissement', 5, 0]);
+  // sans `targetEffect`, rien ne change pour les autres competences
+  const q = L.buildCastPlan({ id: 'x', mana: 0, dmg: () => 10 }, {}, {}, { damage: ['g1'] }, { turn: 1 });
+  assert.equal(q.instances.length, 1);
+});
+
 /* --- Task 4 : Urskaar (Baptiste.gs + kit C3/C4) --- */
 test('Urskaar Voie de l ours', () => {
   assert.equal(L.bearBonusPct(4), 0);

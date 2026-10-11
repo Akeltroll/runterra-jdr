@@ -479,8 +479,8 @@ function ActiveCard({ sk, eff, baseCtx, color, ready, readyAt, turn, manaCur, on
             style={{ background: 'var(--bg-inset)', color: 'var(--skillbuff)' }}>action libre · {followUpOf.name}</span>
         ) : (
         <span className="row gap-2" style={{ alignItems: 'center' }}>
-          <span className="badge" style={{ background: 'var(--bg-inset)' }}
-            title={sk.manaFixed ? 'Coût fixe, à tout niveau' : `Coût au niveau ${baseCtx.level} : ${sk.mana} au niveau 2, +8 % par niveau`}>{manaCost} mana</span>
+          {manaCost > 0 && <span className="badge" style={{ background: 'var(--bg-inset)' }}
+            title={sk.manaFixed ? 'Coût fixe, à tout niveau' : `Coût au niveau ${baseCtx.level} : ${sk.mana} au niveau 2, +8 % par niveau`}>{manaCost} mana</span>}
           <span className="badge" title="Cooldown de la compétence" style={{ background: 'var(--bg-inset)', color: 'var(--gold-pale)' }}>{cdInfo}</span>
           <span className="badge" style={{ background: ready ? 'var(--bg-inset)' : 'var(--bg-panel-2)', color: ready ? 'var(--buff)' : 'var(--gold-pale)' }}>{cdLabel}</span>
         </span>
@@ -1202,6 +1202,13 @@ function CompetencesBody({ char, staff }) {
       </div>
       <PassiveCard kit={kitWithId} eff={eff} base={base} counters={counters} level={level} color={color} setCounter={setCounter} />
       <div className="comp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+        {/* Passif qui se LANCE (Flétrissement de Smith) : même carte et même file qu'une compétence. */}
+        {kitPassive.action && (
+          <ActiveCard sk={kitPassive.action} eff={eff} baseCtx={baseCtx} color={color}
+            ready={cooldownReady(cooldowns[kitPassive.action.id], turn)} readyAt={cooldowns[kitPassive.action.id]} turn={turn}
+            manaCur={state.manaCur || 0} onCast={(ctx, selection) => cast(kitPassive.action, ctx, selection)}
+            pools={pools} locked={false} />
+        )}
         {kit.actives.map((sk, i) => (
           <React.Fragment key={sk.id}>
             <ActiveCard sk={sk} eff={eff} baseCtx={baseCtx} color={color}
